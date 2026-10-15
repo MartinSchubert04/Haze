@@ -92,7 +92,7 @@ impl Shortcuts {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HomeAssistant {
     pub enabled: bool,
@@ -181,12 +181,30 @@ impl Default for HomeAssistant {
             port: 1883,
             username: String::new(),
             password: String::new(),
-            // Con el nombre de la PC: dos computadoras con Haze no se pisan en HA.
-            device_name: std::env::var("COMPUTERNAME")
-                .map(|n| format!("Haze {}", n.to_uppercase()))
-                .unwrap_or_else(|_| "Haze PC".into()),
+            device_name: default_device_name(),
         }
     }
+}
+
+/// Con el nombre de la PC o el modelo del telefono: dos aparatos con Haze no se pisan
+/// en HA.
+#[cfg(not(target_os = "android"))]
+fn default_device_name() -> String {
+    std::env::var("COMPUTERNAME")
+        .map(|n| format!("Haze {}", n.to_uppercase()))
+        .unwrap_or_else(|_| "Haze PC".into())
+}
+
+#[cfg(target_os = "android")]
+fn default_device_name() -> String {
+    std::process::Command::new("getprop")
+        .arg("ro.product.model")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|m| !m.is_empty())
+        .map(|m| format!("Haze {m}"))
+        .unwrap_or_else(|| "Haze Android".into())
 }
 
 fn dirs_music() -> Option<String> {

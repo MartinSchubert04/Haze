@@ -1,34 +1,70 @@
 //! Home Assistant por MQTT. Con MQTT discovery las entidades aparecen solas en HA,
 //! agrupadas en un dispositivo: estado, cancion, artista, caratula, botones de
 //! anterior/play/siguiente, volumen, aleatorio, repetir y "reproducir carpeta".
+//!
+//! Lo usan las dos apps: cada una pone en [`Hooks`] como obedecer las ordenes, de donde
+//! salen las carpetas y las tapas, y donde mostrar si esta conectado.
 
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use haze_core::settings::HomeAssistant;
 use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
 use serde_json::json;
-use tauri::async_runtime::JoinHandle;
+use tokio::runtime::Handle;
 use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
 use crate::player::PlayerState;
-use crate::Control;
+use crate::settings::HomeAssistant;
+use crate::song::Song;
 
 const REPEAT: &[(&str, &str)] = &[("off", "No"), ("all", "Todo"), ("one", "Una")];
+
+/// La opcion del selector de carpetas que reproduce toda la biblioteca.
+pub const ALL_SONGS: &str = "Todas las canciones";
+
+/// Lo que se puede pedir desde HA.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Command {
+    Toggle,
+    Play,
+    Pause,
+    Next,
+    Previous,
+    Seek(f64),
+    Volume(f64),
+    Shuffle(bool),
+    Repeat(String),
+    /// La ruta de la carpeta, o [`ALL_SONGS`].
+    PlayFolder(String),
+}
+
+/// Lo que pone cada app.
+pub trait Hooks: Send + Sync + 'static {
+    /// Carpetas para el selector: (nombre visible, ruta). Ver [`folder_options`].
+    fn folders(&self) -> Vec<(String, String)>;
+    fn command(&self, c: Command);
+    /// "off", "connected" o "error".
+    fn status(&self, s: &str);
+    /// La tapa en JPEG. Puede bloquear: se llama fuera del runtime.
+    fn cover(&self, song: &Song) -> Option<Vec<u8>>;
+}
+
+/// Como se presenta el dispositivo en HA.
+pub struct Device {
+    pub model: &'static str,
+    pub version: String,
+}
 
 pub struct Bridge {
     task: Option<JoinHandle<()>>,
 }
 
-fn slug(s: &str) -> String {
-    let mut out = String::new();
-    for c in s.to_lowercase().chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c);
-        } else if !out.ends_with('_') {
-            out.push('_');
-        }
+impl Default for Bridge {
+    fn default() -> Self {
+        Self::new()
     }
-    out.trim_matches('_').to_string()
 }
 
 impl Bridge {
@@ -45,28 +81,79 @@ impl Bridge {
     /// (Re)conecta con la configuracion nueva.
     pub fn restart(
         &mut self,
+        rt: &Handle,
         cfg: HomeAssistant,
+        device: Device,
         rx: watch::Receiver<PlayerState>,
-        folders: impl Fn() -> Vec<(String, String)> + Send + Sync + 'static,
-        control: impl Fn(Control) + Send + Sync + 'static,
-        status: impl Fn(&str) + Send + Sync + 'static,
+        hooks: Arc<dyn Hooks>,
     ) {
         self.stop();
         if !cfg.enabled || cfg.host.trim().is_empty() {
-            status("off");
+            hooks.status("off");
             return;
         }
-        self.task = Some(tauri::async_runtime::spawn(run(cfg, rx, folders, control, status)));
+        self.task = Some(rt.spawn(run(cfg, device, rx, hooks)));
     }
 }
 
-async fn run(
-    cfg: HomeAssistant,
-    mut rx: watch::Receiver<PlayerState>,
-    folders: impl Fn() -> Vec<(String, String)> + Send + Sync + 'static,
-    control: impl Fn(Control) + Send + Sync + 'static,
-    status: impl Fn(&str) + Send + Sync + 'static,
-) {
+fn slug(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    out.trim_matches('_').to_string()
+}
+
+fn folder_name(path: &str) -> String {
+    path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+/// Carpetas para el selector de HA a partir de las de la biblioteca (con `/`).
+pub fn folder_options<'a>(folders: impl IntoIterator<Item = &'a str>) -> Vec<(String, String)> {
+    let mut paths: Vec<&str> = folders.into_iter().collect();
+    paths.sort();
+    paths.dedup();
+    let mut out = vec![(ALL_SONGS.to_string(), ALL_SONGS.to_string())];
+    let mut used = HashSet::new();
+    for p in paths {
+        let mut name = folder_name(p);
+        // Dos carpetas con el mismo nombre: se distinguen por la de arriba.
+        if !used.insert(name.to_lowercase()) {
+            let parts: Vec<&str> = p.rsplit('/').take(2).collect();
+            name = format!("{} / {}", parts.get(1).unwrap_or(&""), parts[0]);
+            used.insert(name.to_lowercase());
+        }
+        out.push((name, p.to_string()));
+    }
+    out.truncate(150);
+    out
+}
+
+/// Traduce un mensaje entrante. `topic` viene sin el `haze/<nodo>/` del principio.
+fn parse(topic: &str, payload: &str, folders: &[(String, String)]) -> Option<Command> {
+    match topic {
+        "cmd" => match payload {
+            "toggle" => Some(Command::Toggle),
+            "play" => Some(Command::Play),
+            "pause" => Some(Command::Pause),
+            "next" => Some(Command::Next),
+            "previous" => Some(Command::Previous),
+            _ => None,
+        },
+        "volume/set" => payload.parse().ok().map(Command::Volume),
+        "seek/set" => payload.parse().ok().map(Command::Seek),
+        "shuffle/set" => Some(Command::Shuffle(payload == "ON")),
+        "repeat/set" => REPEAT.iter().find(|(_, l)| *l == payload).map(|(k, _)| Command::Repeat(k.to_string())),
+        "folder/set" => folders.iter().find(|(name, _)| name == payload).map(|(_, path)| Command::PlayFolder(path.clone())),
+        _ => None,
+    }
+}
+
+async fn run(cfg: HomeAssistant, device: Device, mut rx: watch::Receiver<PlayerState>, hooks: Arc<dyn Hooks>) {
     let node = slug(&cfg.device_name);
     let base = format!("haze/{node}");
     let avail = format!("{base}/availability");
@@ -89,13 +176,14 @@ async fn run(
     let c2 = client.clone();
     let base2 = base.clone();
     let (online_tx, mut online_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let folder_list = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(String, String)>::new()));
+    let folder_list = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
     let folder_list2 = folder_list.clone();
-    let poll = tauri::async_runtime::spawn(async move {
+    let h2 = hooks.clone();
+    let poll = tokio::spawn(async move {
         loop {
             match events.poll().await {
                 Ok(Event::Incoming(Packet::ConnAck(_))) => {
-                    status("connected");
+                    h2.status("connected");
                     let _ = c2.subscribe(format!("{base2}/+/set"), QoS::AtLeastOnce).await;
                     let _ = c2.subscribe(format!("{base2}/cmd"), QoS::AtLeastOnce).await;
                     let _ = c2.subscribe("homeassistant/status", QoS::AtLeastOnce).await;
@@ -103,38 +191,22 @@ async fn run(
                 }
                 Ok(Event::Incoming(Packet::Publish(p))) => {
                     let payload = String::from_utf8_lossy(&p.payload).trim().to_string();
-                    let topic = p.topic.strip_prefix(&format!("{base2}/")).unwrap_or(&p.topic).to_string();
-                    let c = match topic.as_str() {
-                        "cmd" => match payload.as_str() {
-                            "toggle" => Some(Control::Toggle),
-                            "play" => Some(Control::Play),
-                            "pause" => Some(Control::Pause),
-                            "next" => Some(Control::Next),
-                            "previous" => Some(Control::Previous),
-                            _ => None,
-                        },
-                        "volume/set" => payload.parse().ok().map(Control::Volume),
-                        "seek/set" => payload.parse().ok().map(Control::Seek),
-                        "shuffle/set" => Some(Control::Shuffle(payload == "ON")),
-                        "repeat/set" => REPEAT.iter().find(|(_, l)| *l == payload).map(|(k, _)| Control::Repeat(k.to_string())),
-                        "folder/set" => {
-                            let list = folder_list2.lock().unwrap();
-                            list.iter().find(|(name, _)| *name == payload).map(|(_, path)| Control::PlayFolder(path.clone()))
-                        }
-                        "homeassistant/status" if payload == "online" => {
-                            // HA se reinicio: hay que volver a anunciar las entidades.
+                    if p.topic == "homeassistant/status" {
+                        // HA se reinicio: hay que volver a anunciar las entidades.
+                        if payload == "online" {
                             let _ = online_tx.send(());
-                            None
                         }
-                        _ => None,
-                    };
+                        continue;
+                    }
+                    let topic = p.topic.strip_prefix(&format!("{base2}/")).unwrap_or(&p.topic);
+                    let c = parse(topic, &payload, &folder_list2.lock().unwrap());
                     if let Some(c) = c {
-                        control(c);
+                        h2.command(c);
                     }
                 }
                 Ok(_) => {}
                 Err(_) => {
-                    status("error");
+                    h2.status("error");
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
@@ -145,8 +217,8 @@ async fn run(
         "identifiers": [format!("haze_{node}")],
         "name": cfg.device_name,
         "manufacturer": "Haze",
-        "model": "Haze (escritorio)",
-        "sw_version": env!("CARGO_PKG_VERSION"),
+        "model": device.model,
+        "sw_version": device.version,
     });
     let state_topic = format!("{base}/state");
 
@@ -158,7 +230,7 @@ async fn run(
             r = rx.changed() => { if r.is_err() { break; } }
             Some(()) = online_rx.recv() => {
                 // Anuncio (o re-anuncio) de las entidades.
-                last_folders = folders();
+                last_folders = hooks.folders();
                 *folder_list.lock().unwrap() = last_folders.clone();
                 announce(&client, &base, &avail, &state_topic, &device, &last_folders).await;
                 let _ = client.publish(&avail, QoS::AtLeastOnce, true, "online").await;
@@ -167,7 +239,7 @@ async fn run(
         }
         let s = rx.borrow_and_update().clone();
 
-        let f = folders();
+        let f = hooks.folders();
         if f != last_folders {
             last_folders = f;
             *folder_list.lock().unwrap() = last_folders.clone();
@@ -195,8 +267,8 @@ async fn run(
             last_cover = id;
             let bytes = match song {
                 Some(x) => {
-                    let x = x.clone();
-                    tauri::async_runtime::spawn_blocking(move || crate::media_keys::cover_bytes(&x)).await.ok().flatten()
+                    let (x, h) = (x.clone(), hooks.clone());
+                    tokio::task::spawn_blocking(move || h.cover(&x)).await.ok().flatten()
                 }
                 None => None,
             };
@@ -272,10 +344,41 @@ async fn announce_folders(client: &AsyncClient, base: &str, device: &serde_json:
     let avail = format!("{base}/availability");
     let mut options: Vec<&str> = folders.iter().map(|(n, _)| n.as_str()).collect();
     if options.is_empty() {
-        options.push("Todas las canciones");
+        options.push(ALL_SONGS);
     }
     publish_config(client, "select", &format!("haze_{node}_carpeta"), json!({
         "name": "Reproducir carpeta", "icon": "mdi:folder-music",
         "options": options, "command_topic": format!("{base}/folder/set"),
     }), device, &avail).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slug_for_entity_ids() {
+        assert_eq!(slug("Haze PIXEL 8"), "haze_pixel_8");
+        assert_eq!(slug("  Haze -- Living "), "haze_living");
+    }
+
+    #[test]
+    fn folders_with_the_same_name_get_their_parent() {
+        let opts = folder_options(["Music/Rock", "Download/Rock", "Music/Jazz", "Music/Rock"]);
+        let names: Vec<&str> = opts.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, [ALL_SONGS, "Rock", "Jazz", "Music / Rock"]);
+        assert_eq!(opts[3].1, "Music/Rock");
+    }
+
+    #[test]
+    fn incoming_messages() {
+        let folders = folder_options(["Music/Rock"]);
+        assert_eq!(parse("cmd", "next", &folders), Some(Command::Next));
+        assert_eq!(parse("volume/set", "40", &folders), Some(Command::Volume(40.0)));
+        assert_eq!(parse("repeat/set", "Una", &folders), Some(Command::Repeat("one".into())));
+        assert_eq!(parse("shuffle/set", "OFF", &folders), Some(Command::Shuffle(false)));
+        assert_eq!(parse("folder/set", "Rock", &folders), Some(Command::PlayFolder("Music/Rock".into())));
+        assert_eq!(parse("folder/set", "Pop", &folders), None);
+        assert_eq!(parse("cmd", "dance", &folders), None);
+    }
 }

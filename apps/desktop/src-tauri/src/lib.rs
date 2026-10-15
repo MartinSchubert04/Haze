@@ -7,7 +7,6 @@
 mod library;
 mod media_keys;
 mod mpv;
-mod mqtt;
 mod player;
 mod tools;
 mod updater;
@@ -16,6 +15,7 @@ mod youtube;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::settings::Settings;
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -58,8 +58,6 @@ pub enum Control {
     Repeat(String),
     PlayFolder(String),
 }
-
-pub const ALL_SONGS: &str = "Todas las canciones";
 
 fn songs_sorted(mut songs: Vec<Arc<Song>>) -> Vec<Arc<Song>> {
     songs.sort_by_cached_key(|s| s.title.to_lowercase());
@@ -108,27 +106,40 @@ fn folder_name(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
-/// Carpetas para el selector de HA: (nombre visible, ruta).
-fn folder_options(app: &AppHandle) -> Vec<(String, String)> {
-    let state = app.state::<AppState>();
-    let lib = state.library.read().unwrap();
-    let mut paths: Vec<String> = lib.songs.iter().map(|s| s.folder.clone()).collect();
-    paths.sort();
-    paths.dedup();
-    let mut out = vec![(ALL_SONGS.to_string(), ALL_SONGS.to_string())];
-    let mut used = std::collections::HashSet::new();
-    for p in paths {
-        let mut name = folder_name(&p);
-        // Dos carpetas con el mismo nombre: se distinguen por la de arriba.
-        if !used.insert(name.to_lowercase()) {
-            let parts: Vec<&str> = p.rsplit('/').take(2).collect();
-            name = format!("{} / {}", parts.get(1).unwrap_or(&""), parts[0]);
-            used.insert(name.to_lowercase());
-        }
-        out.push((name, p));
+/// Home Assistant le habla al reproductor de escritorio.
+struct Ha(AppHandle);
+
+impl mqtt::Hooks for Ha {
+    fn folders(&self) -> Vec<(String, String)> {
+        let state = self.0.state::<AppState>();
+        let lib = state.library.read().unwrap();
+        mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
     }
-    out.truncate(150);
-    out
+
+    fn command(&self, c: mqtt::Command) {
+        use mqtt::Command as C;
+        control(&self.0, match c {
+            C::Toggle => Control::Toggle,
+            C::Play => Control::Play,
+            C::Pause => Control::Pause,
+            C::Next => Control::Next,
+            C::Previous => Control::Previous,
+            C::Seek(s) => Control::Seek(s),
+            C::Volume(v) => Control::Volume(v),
+            C::Shuffle(on) => Control::Shuffle(on),
+            C::Repeat(m) => Control::Repeat(m),
+            C::PlayFolder(p) => Control::PlayFolder(p),
+        });
+    }
+
+    fn status(&self, s: &str) {
+        *self.0.state::<AppState>().ha_status.lock().unwrap() = s.to_string();
+        let _ = self.0.emit("ha://status", s);
+    }
+
+    fn cover(&self, song: &Song) -> Option<Vec<u8>> {
+        media_keys::cover_bytes(song)
+    }
 }
 
 // --------------------------------------------------------------------- comandos
@@ -658,18 +669,13 @@ fn start_scan(app: &AppHandle) {
 fn start_mqtt(app: &AppHandle) {
     let state = app.state::<AppState>();
     let cfg = state.settings.lock().unwrap().ha.clone();
-    let a1 = app.clone();
-    let a2 = app.clone();
-    let a3 = app.clone();
+    let device = mqtt::Device { model: "Haze (escritorio)", version: app.package_info().version.to_string() };
     state.mqtt.lock().unwrap().restart(
+        tauri::async_runtime::handle().inner(),
         cfg,
+        device,
         state.player_rx.clone(),
-        move || folder_options(&a1),
-        move |c| control(&a2, c),
-        move |s| {
-            *a3.state::<AppState>().ha_status.lock().unwrap() = s.to_string();
-            let _ = a3.emit("ha://status", s);
-        },
+        Arc::new(Ha(app.clone())),
     );
 }
 

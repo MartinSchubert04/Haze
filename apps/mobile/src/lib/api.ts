@@ -15,6 +15,8 @@ export type Bootstrap = {
   /** El motor ya esta conectado. */
   ready: boolean;
   version: string;
+  /** Home Assistant: "off", "connected", "error" o "network" (falta el permiso de red local). */
+  haStatus: string;
 };
 
 export type Control =
@@ -38,6 +40,8 @@ export const api = {
   queueAction: (action: "jump" | "remove" | "move" | "clear", index = 0, to?: number) =>
     invoke("queue_action", { action, index, to }),
   saveSettings: (settings: Settings) => invoke("settings_set", { settings }),
+  /** Android 17 pide permiso para hablar con la red local (el broker de HA). */
+  requestLocalNetwork: () => invoke<boolean>("request_local_network"),
 };
 
 /** URL de la tapa: la miniatura remota o la del archivo (la sirve Rust desde MediaStore). */

@@ -16,6 +16,18 @@ body {
   background: #12171b;
 }
 
+/* Lo que se scrollea no pasa por debajo de la hora y la bateria. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--safe-top);
+  z-index: 100;
+  background: rgba(14, 18, 21, 0.86);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
 button {
   touch-action: manipulation;
 }

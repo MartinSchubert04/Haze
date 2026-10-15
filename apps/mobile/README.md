@@ -7,8 +7,8 @@ El plan, qué se reusa de escritorio y en qué fase va cada cosa está en
 
 | Parte | Qué hace |
 |---|---|
-| `src-tauri/` (Rust) | Biblioteca, cola y reproductor (los de `crates/haze-core`), comandos para la interfaz. |
-| `plugins/haze-player/` (Kotlin + Rust) | Media3/ExoPlayer en un servicio en primer plano, la biblioteca de MediaStore, las tapas y el permiso de audio. |
+| `src-tauri/` (Rust) | Biblioteca, cola, reproductor y Home Assistant (los de `crates/haze-core`), comandos para la interfaz. |
+| `plugins/haze-player/` (Kotlin + Rust) | Media3/ExoPlayer en un servicio en primer plano, la biblioteca de MediaStore, las tapas y los permisos de audio y de red local. |
 | `src/` (Svelte 5) | La interfaz: pestañas abajo, mini reproductor, "Reproduciendo" a pantalla completa. Tipos, formato y tema salen de `packages/ui`. |
 | `src-tauri/gen/android/` | El proyecto de Gradle que generó `tauri android init`. |
 

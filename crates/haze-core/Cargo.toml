@@ -9,3 +9,9 @@ edition = "2021"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync"] }
+# Sin TLS: la conexion es TCP plana y rustls con aws-lc no compila facil para Android.
+rumqttc = { version = "0.25", default-features = false, optional = true }
+
+[features]
+# Home Assistant por MQTT.
+mqtt = ["dep:rumqttc", "tokio/rt", "tokio/time", "tokio/macros"]

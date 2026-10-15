@@ -12,7 +12,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-haze-core = { path = "../../../crates/haze-core" }
+haze-core = { path = "../../../crates/haze-core", features = ["mqtt"] }
 tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-autostart = "2"
@@ -25,7 +25,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["net", "io-util", "sync", "time", "macros", "rt", "process"] }
 lofty = "0.25"
 walkdir = "2"
-rumqttc = "0.25"
 ureq = "3"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 sevenz-rust2 = "0.24"

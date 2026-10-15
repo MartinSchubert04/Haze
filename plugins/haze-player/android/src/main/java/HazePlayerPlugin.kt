@@ -17,6 +17,9 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.util.concurrent.Executors
 
+/** `Manifest.permission.ACCESS_LOCAL_NETWORK`, que aparece recien en el SDK 37. */
+private const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+
 @InvokeArg
 class ListenArgs {
   lateinit var channel: Channel
@@ -62,6 +65,7 @@ class CoverArgs {
   permissions = [
     Permission(strings = [Manifest.permission.READ_MEDIA_AUDIO], alias = "audio"),
     Permission(strings = [Manifest.permission.READ_EXTERNAL_STORAGE], alias = "storage"),
+    Permission(strings = [LOCAL_NETWORK], alias = "network"),
   ]
 )
 class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
@@ -132,6 +136,37 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
   private fun resolveAccess(invoke: Invoke) {
     val result = JSObject()
     result.put("granted", getPermissionState(accessAlias) == PermissionState.GRANTED)
+    invoke.resolve(result)
+  }
+
+  /**
+   * Android 17 corta las conexiones a la red local (el broker de Home Assistant) si no
+   * esta este permiso. Antes no existia: se da por concedido.
+   */
+  private fun networkGranted() = Build.VERSION.SDK_INT < 37 || getPermissionState("network") == PermissionState.GRANTED
+
+  @Command
+  fun checkNetwork(invoke: Invoke) {
+    resolveNetwork(invoke)
+  }
+
+  @Command
+  fun requestNetwork(invoke: Invoke) {
+    if (networkGranted()) {
+      resolveNetwork(invoke)
+    } else {
+      requestPermissionForAlias("network", invoke, "networkResult")
+    }
+  }
+
+  @PermissionCallback
+  fun networkResult(invoke: Invoke) {
+    resolveNetwork(invoke)
+  }
+
+  private fun resolveNetwork(invoke: Invoke) {
+    val result = JSObject()
+    result.put("granted", networkGranted())
     invoke.resolve(result)
   }
 

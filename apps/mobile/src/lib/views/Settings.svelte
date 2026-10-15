@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Ajustes del telefono: acento, fondo y reproduccion. Home Assistant llega en la fase 2.
+  // Ajustes del telefono: acento, fondo, reproduccion y Home Assistant.
   import { ChevronLeft, Check, RefreshCw } from "@lucide/svelte";
   import { plural } from "@haze/ui/format";
   import { api } from "../api";
@@ -13,6 +13,21 @@
 
   const s = $derived(store.settings!);
   const a = $derived(s.appearance);
+
+  // Home Assistant se edita en un borrador y se guarda con un boton: si no, cada letra
+  // reconectaria al broker.
+  let ha = $state({ ...store.settings!.ha });
+  const haDirty = $derived(JSON.stringify(ha) !== JSON.stringify(s.ha));
+  const haLabel = $derived(
+    ({ connected: "Conectado", error: "Sin conexión", network: "Falta permiso" } as Record<string, string>)[store.haStatus] ??
+      "Conectando…",
+  );
+
+  async function saveHa() {
+    await store.saveSettings((x) => (x.ha = { ...ha, port: Number(ha.port) || 1883 }));
+    // Despues de guardar: si dan el permiso, Rust reconecta con lo nuevo.
+    if (ha.enabled) await api.requestLocalNetwork();
+  }
 </script>
 
 <section class="layer">
@@ -95,6 +110,31 @@
         }}
       />
     </label>
+
+    <h2>Home Assistant</h2>
+    <p class="hint">Por MQTT. Las entidades aparecen solas en HA, en el dispositivo "{s.ha.deviceName}".</p>
+    <label class="row">
+      <span>Conectar con Home Assistant</span>
+      {#if s.ha.enabled}
+        <span class="status" class:ok={store.haStatus === "connected"}>{haLabel}</span>
+      {/if}
+      <input type="checkbox" bind:checked={ha.enabled} />
+    </label>
+    <div class="form" class:off={!ha.enabled}>
+      <label>Servidor MQTT<input type="text" inputmode="url" bind:value={ha.host} placeholder="192.168.1.10" /></label>
+      <label>Puerto<input type="number" inputmode="numeric" bind:value={ha.port} /></label>
+      <label>Usuario<input type="text" bind:value={ha.username} autocomplete="off" autocapitalize="off" /></label>
+      <label>Contraseña<input type="password" bind:value={ha.password} autocomplete="off" /></label>
+      <label>
+        Nombre del dispositivo<input type="text" bind:value={ha.deviceName} />
+        <span class="hint">Si usás Haze en más de un aparato, poné un nombre distinto en cada uno.</span>
+      </label>
+      {#if s.ha.enabled && store.haStatus === "network"}
+        <span class="hint">Android pide permiso para que Haze llegue a la red local (lo muestra como "dispositivos cercanos").</span>
+        <button class="pill save" onclick={() => api.requestLocalNetwork()}>Dar permiso</button>
+      {/if}
+      <button class="pill primary save" disabled={!haDirty} onclick={saveHa}>Guardar</button>
+    </div>
 
     <h2>Biblioteca</h2>
     <div class="row">
@@ -191,6 +231,53 @@
     flex: 1;
     max-width: 50%;
     accent-color: var(--accent);
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--text-3);
+    margin: 0 0 4px;
+  }
+  .row .status {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .row .status.ok {
+    color: #a6e3a1;
+  }
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .form.off {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--text-2);
+  }
+  .form input {
+    height: 46px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font: inherit;
+    font-size: 16px;
+  }
+  .form input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .save {
+    align-self: flex-end;
   }
   .version {
     margin-top: 32px;

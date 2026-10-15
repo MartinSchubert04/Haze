@@ -1,12 +1,13 @@
 //! Haze para Android. La cola y el reproductor son los de `haze-core`, igual que en
 //! escritorio; el motor es Media3 (plugin `haze-player`) y la biblioteca sale de
-//! MediaStore.
+//! MediaStore. Home Assistant usa el mismo puente MQTT que escritorio.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::player::{Listener, Player, PlayerState, QueueView, SharedPlayer};
 use haze_core::settings::Settings;
 use haze_core::song::Song;
@@ -14,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_haze_player::{HazePlayerExt, PlayerEvent};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 #[derive(Default)]
 struct Library {
@@ -38,6 +39,10 @@ struct AppState {
     settings_path: PathBuf,
     library: RwLock<Library>,
     player: SharedPlayer,
+    player_rx: watch::Receiver<PlayerState>,
+    mqtt: Mutex<mqtt::Bridge>,
+    /// "off", "connected" o "error".
+    ha_status: Mutex<String>,
     /// Hay permiso para leer la musica.
     access: Mutex<bool>,
     scanning: Mutex<bool>,
@@ -67,8 +72,11 @@ enum Control {
     Next,
     Previous,
     Seek(f64),
+    Volume(f64),
     Shuffle(bool),
     Repeat(String),
+    /// La ruta de la carpeta, o "Todas las canciones".
+    PlayFolder(String),
 }
 
 // --------------------------------------------------------------------- comandos
@@ -84,6 +92,7 @@ struct Bootstrap {
     scanning: bool,
     ready: bool,
     version: String,
+    ha_status: String,
 }
 
 #[tauri::command]
@@ -102,6 +111,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         scanning: *state.scanning.lock().unwrap(),
         ready: *state.ready.lock().unwrap(),
         version: app.package_info().version.to_string(),
+        ha_status: state.ha_status.lock().unwrap().clone(),
     };
     boot
 }
@@ -140,7 +150,16 @@ async fn play_ids(app: AppHandle, ids: Vec<u64>, start: usize, context: String) 
 
 #[tauri::command]
 async fn player_control(app: AppHandle, control: Control) {
+    run_control(&app, control).await;
+}
+
+/// Lo que piden la pantalla y Home Assistant.
+async fn run_control(app: &AppHandle, control: Control) {
     let state = app.state::<AppState>();
+    let folder_songs = match &control {
+        Control::PlayFolder(path) => Some(folder_songs(&state.library.read().unwrap(), path)),
+        _ => None,
+    };
     let mut p = state.player.lock().await;
     match control {
         Control::Toggle => p.toggle(),
@@ -149,15 +168,27 @@ async fn player_control(app: AppHandle, control: Control) {
         Control::Next => p.next(),
         Control::Previous => p.previous(),
         Control::Seek(s) => p.seek(s),
+        Control::Volume(v) => p.set_volume(v),
         Control::Shuffle(on) => {
             p.set_shuffle(on);
-            save_playback(&app, &p.state());
+            save_playback(app, &p.state());
         }
         Control::Repeat(mode) => {
             p.set_repeat(mode);
-            save_playback(&app, &p.state());
+            save_playback(app, &p.state());
+        }
+        Control::PlayFolder(path) => {
+            let name = if path == ALL_SONGS { path } else { path.rsplit('/').next().unwrap_or(&path).to_string() };
+            p.play_context(folder_songs.unwrap_or_default(), 0, name);
         }
     }
+}
+
+/// Las canciones de una carpeta (o todas), por titulo, como las muestra la pantalla.
+fn folder_songs(lib: &Library, path: &str) -> Vec<Arc<Song>> {
+    let mut songs: Vec<_> = lib.songs.iter().filter(|s| path == ALL_SONGS || s.folder == path).cloned().collect();
+    songs.sort_by_cached_key(|s| s.title.to_lowercase());
+    songs
 }
 
 /// Aleatorio y repetir se recuerdan para la proxima vez.
@@ -200,16 +231,103 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 }
 
 #[tauri::command]
-fn settings_set(app: AppHandle, settings: Settings) {
+async fn settings_set(app: AppHandle, settings: Settings) {
+    let ha_changed = {
+        let state = app.state::<AppState>();
+        let mut cur = state.settings.lock().unwrap();
+        let mut new = settings;
+        // Aleatorio y repetir los maneja el reproductor: la copia de la pantalla puede
+        // estar vieja.
+        new.playback.shuffle = cur.playback.shuffle;
+        new.playback.repeat = cur.playback.repeat.clone();
+        let changed = new.ha != cur.ha;
+        *cur = new;
+        cur.save(&state.settings_path);
+        changed
+    };
+    if ha_changed {
+        start_mqtt(&app).await;
+    }
+}
+
+/// Pide el permiso de red local (Android 17) y, si lo dan, reconecta con HA.
+#[tauri::command]
+async fn request_local_network(app: AppHandle) -> bool {
+    let granted = local_network(&app, true).await;
+    if granted {
+        start_mqtt(&app).await;
+    }
+    granted
+}
+
+async fn local_network(app: &AppHandle, request: bool) -> bool {
+    let h = app.clone();
+    tauri::async_runtime::spawn_blocking(move || h.haze_player().local_network(request))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .unwrap_or(false)
+}
+
+// --------------------------------------------------------------------- home assistant
+
+/// Home Assistant le habla al reproductor del telefono. Vive lo que vive el proceso: con
+/// musica sonando lo sostiene el servicio en primer plano; si Android lo mata, el broker
+/// marca a Haze como desconectado (last will).
+struct Ha(AppHandle);
+
+impl mqtt::Hooks for Ha {
+    fn folders(&self) -> Vec<(String, String)> {
+        let state = self.0.state::<AppState>();
+        let lib = state.library.read().unwrap();
+        mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
+    }
+
+    fn command(&self, c: mqtt::Command) {
+        use mqtt::Command as C;
+        let control = match c {
+            C::Toggle => Control::Toggle,
+            C::Play => Control::Play,
+            C::Pause => Control::Pause,
+            C::Next => Control::Next,
+            C::Previous => Control::Previous,
+            C::Seek(s) => Control::Seek(s),
+            C::Volume(v) => Control::Volume(v),
+            C::Shuffle(on) => Control::Shuffle(on),
+            C::Repeat(m) => Control::Repeat(m),
+            C::PlayFolder(p) => Control::PlayFolder(p),
+        };
+        let app = self.0.clone();
+        tauri::async_runtime::spawn(async move { run_control(&app, control).await });
+    }
+
+    fn status(&self, s: &str) {
+        *self.0.state::<AppState>().ha_status.lock().unwrap() = s.to_string();
+        let _ = self.0.emit("ha://status", s);
+    }
+
+    fn cover(&self, song: &Song) -> Option<Vec<u8>> {
+        self.0.haze_player().cover(&song.path, 512).ok().flatten()
+    }
+}
+
+async fn start_mqtt(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let mut cur = state.settings.lock().unwrap();
-    let mut new = settings;
-    // Aleatorio y repetir los maneja el reproductor: la copia de la pantalla puede estar
-    // vieja.
-    new.playback.shuffle = cur.playback.shuffle;
-    new.playback.repeat = cur.playback.repeat.clone();
-    *cur = new;
-    cur.save(&state.settings_path);
+    let cfg = state.settings.lock().unwrap().ha.clone();
+    // Sin el permiso, Android corta la conexion y solo se veria un timeout.
+    if cfg.enabled && !local_network(app, false).await {
+        state.mqtt.lock().unwrap().stop();
+        mqtt::Hooks::status(&Ha(app.clone()), "network");
+        return;
+    }
+    let device = mqtt::Device { model: "Haze (Android)", version: app.package_info().version.to_string() };
+    state.mqtt.lock().unwrap().restart(
+        tauri::async_runtime::handle().inner(),
+        cfg,
+        device,
+        state.player_rx.clone(),
+        Arc::new(Ha(app.clone())),
+    );
 }
 
 // --------------------------------------------------------------------- arranque
@@ -313,6 +431,8 @@ async fn start(app: AppHandle) {
     }
     *state.ready.lock().unwrap() = true;
     let _ = app.emit("app://ready", granted);
+    // Despues de la biblioteca: asi el primer anuncio ya trae las carpetas.
+    start_mqtt(&app).await;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -346,7 +466,7 @@ pub fn run() {
             let settings_path = config_dir.join("settings.json");
             let settings = Settings::load(&settings_path);
             // En el telefono el volumen es el del sistema: Haze suena siempre entero.
-            let (player, _) = Player::new(
+            let (player, player_rx) = Player::new(
                 Screen(handle.clone()),
                 100.0,
                 settings.playback.shuffle,
@@ -359,6 +479,9 @@ pub fn run() {
                 settings_path,
                 library: RwLock::new(Library::default()),
                 player: Arc::new(tokio::sync::Mutex::new(player)),
+                player_rx,
+                mqtt: Mutex::new(mqtt::Bridge::new()),
+                ha_status: Mutex::new("off".into()),
                 access: Mutex::new(false),
                 scanning: Mutex::new(false),
                 ready: Mutex::new(false),
@@ -377,6 +500,7 @@ pub fn run() {
             queue_get,
             queue_action,
             settings_set,
+            request_local_network,
         ])
         .run(tauri::generate_context!())
         .expect("no se pudo arrancar Haze");

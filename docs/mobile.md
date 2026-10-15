@@ -1,7 +1,8 @@
 # Haze para Android
 
 Plan para la versión de celular: dónde va a vivir, qué se reusa de escritorio y en qué
-orden se hace. Las fases 0 (núcleo compartido) y 1 (reproductor local) ya están; lo siguiente es la fase 2.
+orden se hace. Las fases 0 (núcleo compartido), 1 (reproductor local) y 2 (Home Assistant) ya están; lo
+siguiente es la fase 3.
 
 Solo Android. En iOS no se puede instalar por fuera de la App Store, la App Store no
 acepta una app que baja de YouTube y yt-dlp no corre ahí.
@@ -16,7 +17,7 @@ apps/
     src-tauri/      shell de Tauri para Android
       gen/android/  proyecto de Gradle que genera `tauri android init`
 crates/
-  haze-core/        lo que comparten las dos: biblioteca, cola, ajustes, lógica del reproductor
+  haze-core/        lo que comparten las dos: cola, ajustes, lógica del reproductor y MQTT
 plugins/
   haze-player/      plugin de Tauri en Kotlin: Media3/ExoPlayer + servicio en primer plano
 packages/
@@ -37,7 +38,7 @@ simple que parametrizarlos.
 | `queue.rs`, `settings.rs` | Pasan a `haze-core` sin cambios. |
 | `player.rs` | La lógica (contexto, encolados, aleatorio, repetir) va a `haze-core` detrás de un trait `Engine`. Escritorio lo implementa con mpv y Android con el plugin. |
 | `library.rs` | La lectura de tags con lofty se reusa. Recorrer carpetas no: Android lista la música con MediaStore. |
-| `mqtt.rs` | Se reusa. Solo vive mientras corre el servicio de reproducción. |
+| `mqtt.rs` | Está en `haze-core` (feature `mqtt`) y lo usan las dos. |
 | Svelte (vistas, store, componentes) | Se reusan las vistas y el store; cambia el armado de la pantalla. |
 | `mpv.rs`, `tools.rs` | No. mpv como proceso con un named pipe no existe en Android. |
 | `youtube.rs` | Con otro motor: `youtubedl-android` (la librería de Seal), que trae Python y yt-dlp. |
@@ -74,9 +75,8 @@ mantener apretado y el botón atrás del sistema cierra lo que esté abierto.
 Quedó pendiente:
 
 - La pestaña YouTube llega con la fase 3.
-- Los valores por defecto de `settings` siguen siendo de Windows (`USERPROFILE\Music`,
-  `COMPUTERNAME`). Android no los usa todavía; hay que separarlos en la fase 2, cuando lea
-  el nombre del dispositivo para Home Assistant.
+- Las carpetas de música por defecto de `settings` siguen siendo las de Windows. En Android
+  quedan vacías y no se usan: la biblioteca sale de MediaStore.
 - Si Android destruye la actividad mientras el servicio sigue sonando, los eventos del
   plugin llegan a un canal sin interfaz. La cola sigue en Rust, pero hay que probarlo en
   un celular real con poca memoria.
@@ -84,7 +84,16 @@ Quedó pendiente:
   enlaces simbólicos). Sin eso falla al final, después de compilar Rust; el CI corre en
   Linux y no tiene el problema.
 
-**2. Home Assistant.** `mqtt.rs` atado al ciclo de vida del servicio de reproducción.
+**2. Home Assistant. Hecho.** `mqtt.rs` pasó a `haze-core` detrás de un trait `Hooks`:
+cada app dice cómo obedecer las órdenes, de dónde salen las carpetas y las tapas, y dónde
+mostrar si está conectado. Las entidades son las mismas que en escritorio; el nombre por
+defecto del dispositivo es "Haze" más el modelo del teléfono. El puente vive lo que vive
+el proceso: mientras suena música lo sostiene el servicio en primer plano y, si Android
+mata la app, el broker marca a Haze como desconectado (last will).
+
+Android 17 corta las conexiones a la red local si la app no tiene `ACCESS_LOCAL_NETWORK`
+(el sistema lo muestra como "dispositivos cercanos"). Haze lo pide al guardar la
+configuración de HA; sin él, Ajustes muestra "Falta permiso" en vez de un timeout.
 
 **3. YouTube.** Buscar, escuchar y bajar con `youtubedl-android`. Es lo más frágil y lo que
 más agranda el APK (unos 30 a 60 MB).

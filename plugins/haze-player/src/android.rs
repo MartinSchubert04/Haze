@@ -79,6 +79,17 @@ impl<R: Runtime> HazePlayer<R> {
         Ok(self.call::<Access>(command, ())?.granted)
     }
 
+    /// Si se puede hablar con la red local (el broker de HA). Con `request`, lo pide si
+    /// falta.
+    pub fn local_network(&self, request: bool) -> Result<bool, PluginInvokeError> {
+        #[derive(Deserialize)]
+        struct Access {
+            granted: bool,
+        }
+        let command = if request { "requestNetwork" } else { "checkNetwork" };
+        Ok(self.call::<Access>(command, ())?.granted)
+    }
+
     pub fn library(&self) -> Result<Vec<Track>, PluginInvokeError> {
         #[derive(Deserialize)]
         struct Library {

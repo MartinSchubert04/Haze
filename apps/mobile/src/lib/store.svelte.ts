@@ -39,6 +39,7 @@ class Store {
   engineReady = $state(false);
   access = $state(true);
   version = $state("");
+  haStatus = $state("off");
   songs = $state.raw<Song[]>([]);
   settings = $state<Settings | null>(null);
   player = $state<PlayerState>(emptyState);
@@ -66,6 +67,7 @@ class Store {
     this.scanning = b.scanning;
     this.engineReady = b.ready;
     this.version = b.version;
+    this.haStatus = b.haStatus;
     this.ready = true;
 
     listen<PlayerState>("player://state", (e) => {
@@ -77,6 +79,7 @@ class Store {
     listen<{ position: number; duration: number }>("player://position", (e) => this.setPosition(e.payload.position));
     listen<Song[]>("library://changed", (e) => (this.songs = e.payload));
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
+    listen<string>("ha://status", (e) => (this.haStatus = e.payload));
     listen<string>("app://error", (e) => this.toast(e.payload, "error"));
     listen<boolean>("app://ready", (e) => {
       this.engineReady = true;
