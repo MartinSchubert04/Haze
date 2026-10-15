@@ -1,0 +1,14 @@
+# Workspace de Rust: por ahora solo la app de escritorio. Cuando exista el nucleo
+# compartido (ver docs/mobile.md) se suma aca como crates/haze-core.
+[workspace]
+resolver = "2"
+members = ["apps/desktop/src-tauri"]
+
+[profile.release]
+# Binario chico (es lo que queda corriendo de fondo) sin que compilar tarde una
+# eternidad: LTO "thin" en paralelo en vez de "fat" en un solo hilo.
+codegen-units = 16
+lto = "thin"
+opt-level = "s"
+panic = "abort"
+strip = true

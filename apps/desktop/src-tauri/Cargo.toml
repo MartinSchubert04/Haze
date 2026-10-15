@@ -45,12 +45,3 @@ windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Security",
 ] }
-
-[profile.release]
-# Binario chico (es lo que queda corriendo de fondo) sin que compilar tarde una
-# eternidad: LTO "thin" en paralelo en vez de "fat" en un solo hilo.
-codegen-units = 16
-lto = "thin"
-opt-level = "s"
-panic = "abort"
-strip = true

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Grafito: vidrio esmerilado en grises con el play y el anillo a tres cuartos. -->
+  <defs>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.22"/>
+      <stop offset="0.35" stop-color="#fff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.2"/>
+    </linearGradient>
+    <filter id="frost" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur stdDeviation="80"/>
+    </filter>
+    <filter id="grain" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.09 0"/>
+    </filter>
+    <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="squircle"><rect x="64" y="64" width="896" height="896" rx="220"/></clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect x="64" y="64" width="896" height="896" fill="#15181c"/>
+    <g filter="url(#frost)">
+      <circle cx="300" cy="290" r="250" fill="#7a818a"/>
+      <circle cx="760" cy="400" r="230" fill="#3b4047"/>
+      <circle cx="560" cy="790" r="290" fill="#5a6068"/>
+      <circle cx="200" cy="760" r="170" fill="#24282d"/>
+    </g>
+    <rect x="64" y="64" width="896" height="896" fill="#0d0f12" opacity="0.3"/>
+    <rect x="64" y="64" width="896" height="896" filter="url(#grain)"/>
+    <rect x="64" y="64" width="896" height="420" fill="url(#sheen)"/>
+  </g>
+  <rect x="66" y="66" width="892" height="892" rx="218" fill="none" stroke="url(#rim)" stroke-width="6"/>
+  <g filter="url(#glow)">
+    <circle cx="512" cy="512" r="250" fill="none" stroke="#f1f3f5" stroke-width="50" stroke-linecap="round" stroke-dasharray="1178 393" transform="rotate(-90 512 512)"/>
+    <path d="M462 412 L630 512 L462 612 Z" fill="#f1f3f5" stroke="#f1f3f5" stroke-width="36" stroke-linejoin="round"/>
+  </g>
+</svg>

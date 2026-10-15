@@ -20,6 +20,16 @@ ventana cerrada.
 
 ## Cómo está hecho
 
+Es un monorepo. Por ahora tiene una sola app:
+
+| Carpeta | Qué es |
+|---|---|
+| `apps/desktop/` | La app de Windows. |
+| `apps/mobile/` | La futura app de Android. El plan está en [docs/mobile.md](docs/mobile.md). |
+| `assets/` | Fuente del ícono. |
+
+Dentro de `apps/desktop/`:
+
 | Parte | Qué hace |
 |---|---|
 | `src-tauri/` (Rust, Tauri 2) | Biblioteca, cola, reproductor, YouTube, MQTT, bandeja. Es lo único que queda vivo de fondo. |
@@ -35,12 +45,24 @@ actualiza solo cada tres días, porque YouTube cambia seguido.
 
 Requiere Rust (con las Build Tools de Visual Studio) y Node 24.
 
+Todo se corre desde la raíz:
+
 ```
 npm install
-npm run tauri dev      # con recarga en vivo
+npm run dev            # la app de escritorio con recarga en vivo
 npm run check          # tipos
-cd src-tauri && cargo test
+cargo test
 ```
+
+Para regenerar los íconos después de cambiar `assets/icon.svg`:
+
+```
+cd apps/desktop
+npx tauri icon ../../assets/icon.svg
+```
+
+Ese comando también genera íconos de Android, iOS y la Store de Windows: de
+`src-tauri/icons/` se conservan solo los que lista `tauri.conf.json`.
 
 Para depurar sin pantalla (por ejemplo, desde un servicio):
 
