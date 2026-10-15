@@ -1,5 +1,7 @@
 # Haze
 
+<img width="1919" height="1130" alt="image" src="https://github.com/user-attachments/assets/8663b5e9-3b7b-46bb-8735-a18497115f2c" />
+
 Reproductor de música para Windows: liviano, queda en la bandeja y sigue sonando con la
 ventana cerrada.
 
