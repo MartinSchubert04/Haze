@@ -1,8 +1,8 @@
 // Llamadas al backend de Rust (apps/mobile/src-tauri). Los tipos son los de escritorio.
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import type { PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
+import type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
 
-export type { PlayerState, QueueEntry, QueueView, Settings, Song };
+export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song };
 
 export type Bootstrap = {
   settings: Settings;
@@ -17,6 +17,7 @@ export type Bootstrap = {
   version: string;
   /** Home Assistant: "off", "connected", "error" o "network" (falta el permiso de red local). */
   haStatus: string;
+  downloads: DownloadJob[];
 };
 
 export type Control =
@@ -34,14 +35,21 @@ export const api = {
   requestAccess: () => invoke<boolean>("request_access"),
   rescan: () => invoke("rescan"),
   playIds: (ids: number[], start: number, context: string) => invoke("play_ids", { ids, start, context }),
+  /** Para listas con canciones de YouTube, que no estan en la biblioteca. */
+  playSongs: (songs: Song[], start: number, context: string) => invoke("play_songs", { songs, start, context }),
   control: (control: Control) => invoke("player_control", { control }),
-  enqueue: (id: number, next: boolean) => invoke("enqueue", { id, next }),
+  enqueue: (song: Song, next: boolean) => invoke("enqueue", { song, next }),
   queue: () => invoke<QueueView>("queue_get"),
   queueAction: (action: "jump" | "remove" | "move" | "clear", index = 0, to?: number) =>
     invoke("queue_action", { action, index, to }),
   saveSettings: (settings: Settings) => invoke("settings_set", { settings }),
   /** Android 17 pide permiso para hablar con la red local (el broker de HA). */
   requestLocalNetwork: () => invoke<boolean>("request_local_network"),
+  ytSearch: (query: string) => invoke<Song[]>("yt_search", { query }),
+  ytInspect: (url: string) => invoke<LinkInfo>("yt_inspect", { url }),
+  ytDownload: (url: string, title: string, thumb: string | null, playlist: boolean) =>
+    invoke<number>("yt_download", { url, title, thumb, playlist }),
+  clearDownloads: () => invoke("downloads_clear"),
 };
 
 /** URL de la tapa: la miniatura remota o la del archivo (la sirve Rust desde MediaStore). */

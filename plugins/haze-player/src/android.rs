@@ -2,7 +2,7 @@ use std::sync::mpsc;
 
 use base64::Engine as _;
 use haze_core::player::Engine;
-use haze_core::song::Song;
+use haze_core::song::{Song, SongKind};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -98,6 +98,25 @@ impl<R: Runtime> HazePlayer<R> {
         Ok(self.call::<Library>("library", ())?.songs)
     }
 
+    /// Corre yt-dlp y devuelve lo que imprimio. Tarda: llamar fuera del runtime.
+    pub fn yt_run(&self, args: &[&str]) -> Result<String, PluginInvokeError> {
+        #[derive(Deserialize)]
+        struct Out {
+            out: String,
+        }
+        Ok(self.call::<Out>("ytRun", json!({ "args": args }))?.out)
+    }
+
+    /// Baja con yt-dlp y guarda en Music/Haze. El progreso llega como
+    /// `PlayerEvent::Download`. Devuelve cuantos archivos guardo.
+    pub fn yt_download(&self, id: u64, args: &[&str]) -> Result<usize, PluginInvokeError> {
+        #[derive(Deserialize)]
+        struct Saved {
+            saved: usize,
+        }
+        Ok(self.call::<Saved>("ytDownload", json!({ "id": id, "args": args }))?.saved)
+    }
+
     /// La tapa en JPEG, si el archivo trae una.
     pub fn cover(&self, uri: &str, size: u32) -> Result<Option<Vec<u8>>, PluginInvokeError> {
         #[derive(Deserialize)]
@@ -138,6 +157,7 @@ impl Engine for AndroidEngine {
                 "artist": song.artist,
                 "album": song.album,
                 "artwork": artwork,
+                "stream": song.kind == SongKind::Stream,
             }),
         );
     }

@@ -9,3 +9,4 @@ pub mod player;
 pub mod queue;
 pub mod settings;
 pub mod song;
+pub mod youtube;

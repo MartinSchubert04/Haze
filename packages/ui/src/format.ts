@@ -37,3 +37,8 @@ export function normalizeSearch(text: string): string {
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 }
+
+/** Si lo escrito es un link (para abrirlo en vez de buscarlo). */
+export function isUrl(text: string): boolean {
+  return /^https?:\/\/\S+$/i.test(text.trim());
+}

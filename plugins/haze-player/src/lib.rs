@@ -26,6 +26,8 @@ pub enum PlayerEvent {
     /// auriculares. La cola es de Rust: lo resuelve el reproductor.
     Next,
     Previous,
+    /// Una linea de yt-dlp mientras baja (ver `haze_core::youtube::parse_progress`).
+    Download { id: u64, line: String },
 }
 
 /// Una cancion de MediaStore.
@@ -45,11 +47,19 @@ pub struct Track {
 
 impl Track {
     pub fn into_song(self) -> Song {
+        // Sin tags (lo bajado sin ffmpeg), MediaStore usa el nombre del archivo como
+        // titulo: "Artista - Tema".
+        let (title, artist) = match self.title.split_once(" - ") {
+            Some((a, t)) if self.artist.is_empty() && !a.trim().is_empty() && !t.trim().is_empty() => {
+                (t.trim().to_string(), a.trim().to_string())
+            }
+            _ => (self.title, self.artist),
+        };
         Song {
             id: id_for(&self.uri),
             path: self.uri,
-            title: self.title,
-            artist: self.artist,
+            title,
+            artist,
             album: self.album,
             duration_ms: self.duration_ms,
             mtime: self.mtime,
@@ -76,6 +86,7 @@ enum Raw {
     Failed(String),
     Next,
     Previous,
+    Download { id: u64, line: String },
 }
 
 impl From<Raw> for PlayerEvent {
@@ -90,6 +101,7 @@ impl From<Raw> for PlayerEvent {
             Raw::Failed(e) => Self::Engine(EngineEvent::Failed(e)),
             Raw::Next => Self::Next,
             Raw::Previous => Self::Previous,
+            Raw::Download { id, line } => Self::Download { id, line },
         }
     }
 }
@@ -134,6 +146,10 @@ mod tests {
         assert_eq!(parse(r#"{"type":"ended"}"#), engine(EngineEvent::Ended));
         assert_eq!(parse(r#"{"type":"failed","value":"404"}"#), engine(EngineEvent::Failed("404".into())));
         assert_eq!(parse(r#"{"type":"next"}"#), Some(PlayerEvent::Next));
+        assert_eq!(
+            parse(r#"{"type":"download","value":{"id":3,"line":"DL 50%"}}"#),
+            Some(PlayerEvent::Download { id: 3, line: "DL 50%".into() })
+        );
         assert_eq!(parse(r#"{"type":"bogus"}"#), None);
     }
 
@@ -152,5 +168,23 @@ mod tests {
         let s = t.into_song();
         assert_eq!(s.id, id_for(uri));
         assert_eq!(s.path, uri);
+    }
+
+    #[test]
+    fn untagged_titles_give_the_artist() {
+        let track = |title: &str, artist: &str| Track {
+            uri: "content://x".into(),
+            title: title.into(),
+            artist: artist.into(),
+            album: String::new(),
+            duration_ms: 0,
+            mtime: 0,
+            folder: String::new(),
+        };
+        let s = track("jawed - Me at the zoo", "").into_song();
+        assert_eq!((s.title.as_str(), s.artist.as_str()), ("Me at the zoo", "jawed"));
+        // Con artista en los tags, el titulo queda como esta.
+        let s = track("Tema - En vivo", "Banda").into_song();
+        assert_eq!((s.title.as_str(), s.artist.as_str()), ("Tema - En vivo", "Banda"));
     }
 }

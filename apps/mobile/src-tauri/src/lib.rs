@@ -1,6 +1,9 @@
 //! Haze para Android. La cola y el reproductor son los de `haze-core`, igual que en
 //! escritorio; el motor es Media3 (plugin `haze-player`) y la biblioteca sale de
-//! MediaStore. Home Assistant usa el mismo puente MQTT que escritorio.
+//! MediaStore. Home Assistant usa el mismo puente MQTT que escritorio y YouTube, el
+//! mismo yt-dlp (con `youtubedl-android`).
+
+mod youtube;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -41,8 +44,9 @@ struct AppState {
     player: SharedPlayer,
     player_rx: watch::Receiver<PlayerState>,
     mqtt: Mutex<mqtt::Bridge>,
-    /// "off", "connected" o "error".
+    /// "off", "connected", "error" o "network".
     ha_status: Mutex<String>,
+    downloads: Mutex<youtube::Downloads>,
     /// Hay permiso para leer la musica.
     access: Mutex<bool>,
     scanning: Mutex<bool>,
@@ -93,6 +97,7 @@ struct Bootstrap {
     ready: bool,
     version: String,
     ha_status: String,
+    downloads: Vec<youtube::DownloadJob>,
 }
 
 #[tauri::command]
@@ -112,6 +117,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         ready: *state.ready.lock().unwrap(),
         version: app.package_info().version.to_string(),
         ha_status: state.ha_status.lock().unwrap().clone(),
+        downloads: state.downloads.lock().unwrap().jobs.clone(),
     };
     boot
 }
@@ -146,6 +152,19 @@ async fn play_ids(app: AppHandle, ids: Vec<u64>, start: usize, context: String) 
         ids.iter().filter_map(|id| lib.get(*id)).collect()
     };
     state.player.lock().await.play_context(songs, start, context);
+}
+
+/// Las de la biblioteca se usan tal cual; las de YouTube llegan enteras de la pantalla.
+fn resolve(app: &AppHandle, songs: Vec<Song>) -> Vec<Arc<Song>> {
+    let state = app.state::<AppState>();
+    let lib = state.library.read().unwrap();
+    songs.into_iter().map(|s| lib.get(s.id).unwrap_or_else(|| Arc::new(s))).collect()
+}
+
+#[tauri::command]
+async fn play_songs(app: AppHandle, songs: Vec<Song>, start: usize, context: String) {
+    let songs = resolve(&app, songs);
+    app.state::<AppState>().player.lock().await.play_context(songs, start, context);
 }
 
 #[tauri::command]
@@ -201,9 +220,9 @@ fn save_playback(app: &AppHandle, s: &PlayerState) {
 }
 
 #[tauri::command]
-async fn enqueue(app: AppHandle, id: u64, next: bool) {
+async fn enqueue(app: AppHandle, song: Song, next: bool) {
+    let song = resolve(&app, vec![song]).remove(0);
     let state = app.state::<AppState>();
-    let Some(song) = state.library.read().unwrap().get(id) else { return };
     let mut p = state.player.lock().await;
     if next {
         p.play_next(song);
@@ -394,6 +413,7 @@ async fn start(app: AppHandle) {
     state.player.lock().await.attach(app.haze_player().engine());
 
     let player = state.player.clone();
+    let h = app.clone();
     tauri::async_runtime::spawn(async move {
         // Cada tanto se guarda la sesion: Android puede matar la app sin avisar.
         let mut save = tokio::time::interval(Duration::from_secs(15));
@@ -401,11 +421,16 @@ async fn start(app: AppHandle) {
             tokio::select! {
                 ev = rx.recv() => {
                     let Some(ev) = ev else { return };
+                    if let PlayerEvent::Download { id, line } = &ev {
+                        youtube::on_line(&h, *id, line);
+                        continue;
+                    }
                     let mut p = player.lock().await;
                     match ev {
                         PlayerEvent::Engine(e) => p.on_event(e),
                         PlayerEvent::Next => p.next(),
                         PlayerEvent::Previous => p.previous(),
+                        PlayerEvent::Download { .. } => {}
                     }
                 }
                 _ = save.tick() => {
@@ -482,6 +507,7 @@ pub fn run() {
                 player_rx,
                 mqtt: Mutex::new(mqtt::Bridge::new()),
                 ha_status: Mutex::new("off".into()),
+                downloads: Mutex::new(Default::default()),
                 access: Mutex::new(false),
                 scanning: Mutex::new(false),
                 ready: Mutex::new(false),
@@ -495,12 +521,17 @@ pub fn run() {
             request_access,
             rescan,
             play_ids,
+            play_songs,
             player_control,
             enqueue,
             queue_get,
             queue_action,
             settings_set,
             request_local_network,
+            youtube::yt_search,
+            youtube::yt_inspect,
+            youtube::yt_download,
+            youtube::downloads_clear,
         ])
         .run(tauri::generate_context!())
         .expect("no se pudo arrancar Haze");

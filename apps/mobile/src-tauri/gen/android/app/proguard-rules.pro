@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# youtubedl-android lee la respuesta de yt-dlp con Jackson por reflexion.
+-keep class com.yausername.** { *; }
+-keep class com.fasterxml.jackson.databind.** { *; }
+-dontwarn com.fasterxml.jackson.databind.**

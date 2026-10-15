@@ -11,16 +11,27 @@
   import Folders from "./lib/views/Folders.svelte";
   import FolderDetail from "./lib/views/FolderDetail.svelte";
   import Queue from "./lib/views/Queue.svelte";
+  import YouTube from "./lib/views/YouTube.svelte";
+  import LinkSheet from "./lib/components/LinkSheet.svelte";
   import Settings from "./lib/views/Settings.svelte";
   import NowPlaying from "./lib/views/NowPlaying.svelte";
 
   let fatal = $state<string | null>(null);
 
   onMount(async () => {
-    try {
-      await store.init();
-    } catch (e) {
-      fatal = String(e);
+    // Justo despues de instalar, el WebView a veces llama antes de que Rust registre los
+    // comandos ("not allowed"): se reintenta un par de veces antes de dar error.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await store.init();
+        return;
+      } catch (e) {
+        if (attempt >= 4) {
+          fatal = String(e);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
     }
   });
 
@@ -41,6 +52,7 @@
     <main>
       {#if store.tab === "songs"}<Songs />
       {:else if store.tab === "folders"}<Folders />
+      {:else if store.tab === "youtube"}<YouTube />
       {:else}<Queue />
       {/if}
     </main>
@@ -55,6 +67,7 @@
 
     {#if store.isOpen("nowPlaying") && store.player.song}<NowPlaying />{/if}
     {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />{/if}
+    {#if sheet?.kind === "link"}<LinkSheet url={sheet.url} />{/if}
   </div>
 {/if}
 

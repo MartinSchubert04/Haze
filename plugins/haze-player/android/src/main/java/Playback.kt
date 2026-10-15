@@ -17,6 +17,7 @@ import app.tauri.Logger
 import app.tauri.plugin.Channel
 import app.tauri.plugin.JSObject
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.Executors
 
 /**
  * El lado de la app: un MediaController conectado a [PlaybackService]. Vive mientras
@@ -36,6 +37,11 @@ internal object Playback {
 
   /** Ya se aviso "loaded" del tema actual: READY vuelve a llegar despues de cada buffer. */
   private var loadedSent = false
+
+  /** Sube con cada carga: si llega otra mientras yt-dlp busca la URL, la vieja se descarta. */
+  private var loadSeq = 0
+
+  private val resolver = Executors.newSingleThreadExecutor()
 
   fun connect(context: Context) {
     if (controller != null || connecting != null) return
@@ -78,7 +84,23 @@ internal object Playback {
     }
   }
 
-  fun load(context: Context, args: LoadArgs) = run(context) { c ->
+  fun load(context: Context, args: LoadArgs) {
+    val seq = ++loadSeq
+    if (!args.stream) return play(context, args, args.uri)
+    // yt-dlp tarda unos segundos en dar la URL del audio: mientras, "cargando".
+    emit("buffering", true)
+    resolver.execute {
+      val url = try {
+        Youtube.streamUrl(context, args.uri)
+      } catch (e: Exception) {
+        main.post { if (seq == loadSeq) emit("failed", e.message ?: "No se pudo abrir el link") }
+        return@execute
+      }
+      main.post { if (seq == loadSeq) play(context, args, url) }
+    }
+  }
+
+  private fun play(context: Context, args: LoadArgs, url: String) = run(context) { c ->
     loadedSent = false
     val meta = MediaMetadata.Builder()
       .setTitle(args.title)
@@ -87,7 +109,7 @@ internal object Playback {
       .apply { args.artwork?.let { setArtworkUri(Uri.parse(it)) } }
       .build()
     val item = MediaItem.Builder()
-      .setUri(args.uri)
+      .setUri(url)
       .setMediaId(args.uri)
       .setMediaMetadata(meta)
       .build()
@@ -102,13 +124,24 @@ internal object Playback {
 
   fun setVolume(context: Context, volume: Double) = run(context) { it.volume = (volume / 100).toFloat() }
 
-  fun stop(context: Context) = run(context) {
-    it.stop()
-    it.clearMediaItems()
+  fun stop(context: Context) {
+    loadSeq++
+    run(context) {
+      it.stop()
+      it.clearMediaItems()
+    }
   }
 
   /** "Anterior" o "siguiente" desde la notificacion, la pantalla de bloqueo o auriculares. */
   fun remote(type: String) = emit(type)
+
+  /** Una linea de yt-dlp mientras baja. Llega desde otro hilo. */
+  fun download(id: Long, line: String) = main.post {
+    val o = JSObject()
+    o.put("id", id)
+    o.put("line", line)
+    emit("download", o)
+  }
 
   private fun emit(type: String, value: Any? = null) {
     val ch = channel ?: return

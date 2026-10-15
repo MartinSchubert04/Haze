@@ -34,6 +34,19 @@ class LoadArgs {
   var artist: String? = null
   var album: String? = null
   var artwork: String? = null
+  /** Es un link (YouTube...): hay que sacar la URL del audio con yt-dlp. */
+  var stream: Boolean = false
+}
+
+@InvokeArg
+class YtRunArgs {
+  lateinit var args: List<String>
+}
+
+@InvokeArg
+class YtDownloadArgs {
+  var id: Long = 0
+  lateinit var args: List<String>
 }
 
 @InvokeArg
@@ -73,6 +86,9 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Leer MediaStore o una tapa puede tardar: fuera del hilo principal. */
   private val io = Executors.newSingleThreadExecutor()
+
+  /** yt-dlp: una busqueda no espera a que termine una descarga. */
+  private val yt = Executors.newCachedThreadPool()
 
   /** Android 13 separo el permiso de audio del de almacenamiento. */
   private val accessAlias get() = if (Build.VERSION.SDK_INT >= 33) "audio" else "storage"
@@ -168,6 +184,37 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
     val result = JSObject()
     result.put("granted", networkGranted())
     invoke.resolve(result)
+  }
+
+  /** Corre yt-dlp y devuelve lo que imprimio (el JSON de una busqueda o un link). */
+  @Command
+  fun ytRun(invoke: Invoke) {
+    val args = invoke.parseArgs(YtRunArgs::class.java).args
+    yt.execute {
+      try {
+        val result = JSObject()
+        result.put("out", Youtube.run(context, args))
+        invoke.resolve(result)
+      } catch (e: Exception) {
+        invoke.reject(e.message ?: "yt-dlp fallo")
+      }
+    }
+  }
+
+  /** Baja y guarda en Music/Haze. Cada linea de yt-dlp va por el canal como "download". */
+  @Command
+  fun ytDownload(invoke: Invoke) {
+    val a = invoke.parseArgs(YtDownloadArgs::class.java)
+    yt.execute {
+      try {
+        val saved = Youtube.download(context, a.id, a.args) { line -> Playback.download(a.id, line) }
+        val result = JSObject()
+        result.put("saved", saved)
+        invoke.resolve(result)
+      } catch (e: Exception) {
+        invoke.reject(e.message ?: "yt-dlp fallo")
+      }
+    }
   }
 
   @Command

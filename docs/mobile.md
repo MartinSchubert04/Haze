@@ -1,8 +1,8 @@
 # Haze para Android
 
 Plan para la versión de celular: dónde va a vivir, qué se reusa de escritorio y en qué
-orden se hace. Las fases 0 (núcleo compartido), 1 (reproductor local) y 2 (Home Assistant) ya están; lo
-siguiente es la fase 3.
+orden se hace. Las fases 0 a 3 (núcleo compartido, reproductor local, Home Assistant y YouTube) ya están;
+lo siguiente es la fase 4 (actualizaciones y publicación).
 
 Solo Android. En iOS no se puede instalar por fuera de la App Store, la App Store no
 acepta una app que baja de YouTube y yt-dlp no corre ahí.
@@ -17,7 +17,7 @@ apps/
     src-tauri/      shell de Tauri para Android
       gen/android/  proyecto de Gradle que genera `tauri android init`
 crates/
-  haze-core/        lo que comparten las dos: cola, ajustes, lógica del reproductor y MQTT
+  haze-core/        lo que comparten las dos: cola, ajustes, reproductor, MQTT y YouTube
 plugins/
   haze-player/      plugin de Tauri en Kotlin: Media3/ExoPlayer + servicio en primer plano
 packages/
@@ -41,7 +41,7 @@ simple que parametrizarlos.
 | `mqtt.rs` | Está en `haze-core` (feature `mqtt`) y lo usan las dos. |
 | Svelte (vistas, store, componentes) | Se reusan las vistas y el store; cambia el armado de la pantalla. |
 | `mpv.rs`, `tools.rs` | No. mpv como proceso con un named pipe no existe en Android. |
-| `youtube.rs` | Con otro motor: `youtubedl-android` (la librería de Seal), que trae Python y yt-dlp. |
+| `youtube.rs` | Leer el JSON de yt-dlp y los argumentos de descarga están en `haze-core`. Escritorio corre yt-dlp como programa; Android, con `youtubedl-android`. |
 | Bandeja, atajos globales, autostart, single-instance, mini ventana, vidrio de Windows | Se sacan. |
 | `media_keys.rs` | Lo reemplaza la sesión de medios de Media3: notificación, pantalla de bloqueo, auriculares. |
 | `updater.rs` | Updater propio con `PackageInstaller` (ver abajo). |
@@ -74,7 +74,6 @@ mantener apretado y el botón atrás del sistema cierra lo que esté abierto.
 
 Quedó pendiente:
 
-- La pestaña YouTube llega con la fase 3.
 - Las carpetas de música por defecto de `settings` siguen siendo las de Windows. En Android
   quedan vacías y no se usan: la biblioteca sale de MediaStore.
 - Si Android destruye la actividad mientras el servicio sigue sonando, los eventos del
@@ -95,8 +94,19 @@ Android 17 corta las conexiones a la red local si la app no tiene `ACCESS_LOCAL_
 (el sistema lo muestra como "dispositivos cercanos"). Haze lo pide al guardar la
 configuración de HA; sin él, Ajustes muestra "Falta permiso" en vez de un timeout.
 
-**3. YouTube.** Buscar, escuchar y bajar con `youtubedl-android`. Es lo más frágil y lo que
-más agranda el APK (unos 30 a 60 MB).
+**3. YouTube. Hecho.** Pestaña YouTube: buscar, escuchar sin bajar, pegar un link (video o
+playlist) y bajar. yt-dlp corre con `youtubedl-android` (la librería de Seal), que trae
+Python, ffmpeg y QuickJS; Haze actualiza yt-dlp la primera vez y después cada tres días,
+porque el que viene adentro queda viejo enseguida. Para escuchar, Kotlin le pide a yt-dlp
+la URL del audio y se la pasa a ExoPlayer. Lo bajado se guarda en `Music/Haze` por
+MediaStore, así aparece en la biblioteca y en otras apps de música. El APK crece unos 50 MB
+por arquitectura.
+
+El ffmpeg de `youtubedl-android` 0.18.1 está alineado a páginas de 4 KB y no carga en
+celulares con páginas de 16 KB (algunos con Android 15 o más nuevo, y el emulador de 16 KB).
+Ahí Haze se da cuenta en la primera descarga y baja el audio tal cual lo da YouTube (m4a),
+sin tags ni tapa: el nombre queda "Artista - Tema" y la biblioteca separa el artista del
+nombre. Cuando la librería publique un ffmpeg de 16 KB, alcanza con subir la versión.
 
 **4. Actualizaciones.** Ver la sección siguiente.
 

@@ -4,12 +4,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use haze_core::youtube::{self as yt, Progress};
+pub use haze_core::youtube::LinkInfo;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::library::{self, Song, SongKind};
+use crate::library::{self, Song};
 use crate::tools::{self, Tool};
 use crate::AppState;
 
@@ -28,95 +30,27 @@ pub async fn ensure_tool(app: &AppHandle, tool: Tool) -> Result<std::path::PathB
     .map_err(|e| e.to_string())?
 }
 
-fn thumb_for(id: &str) -> String {
-    format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg")
-}
-
-fn stream_song(v: &Value) -> Option<Song> {
-    let id = v["id"].as_str()?;
-    let url = v["webpage_url"]
-        .as_str()
-        .or_else(|| v["url"].as_str().filter(|u| u.starts_with("http")))
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("https://www.youtube.com/watch?v={id}"));
-    let is_youtube = url.contains("youtube.com") || url.contains("youtu.be");
-    let thumb = if is_youtube {
-        Some(thumb_for(id))
-    } else {
-        v["thumbnail"].as_str().map(str::to_string).or_else(|| {
-            v["thumbnails"].as_array().and_then(|t| t.last()).and_then(|t| t["url"].as_str()).map(str::to_string)
-        })
-    };
-    let artist = v["artist"]
-        .as_str()
-        .or_else(|| v["channel"].as_str())
-        .or_else(|| v["uploader"].as_str())
-        .unwrap_or_default()
-        .trim_end_matches(" - Topic")
-        .to_string();
-    Some(Song {
-        id: library::id_for(&url),
-        path: url,
-        title: v["title"].as_str().unwrap_or_default().to_string(),
-        artist,
-        album: String::new(),
-        duration_ms: (v["duration"].as_f64().unwrap_or(0.0) * 1000.0) as u64,
-        mtime: 0,
-        folder: "YouTube".into(),
-        kind: SongKind::Stream,
-        thumb,
-        has_cover: false,
-    })
-}
-
 async fn ytdlp_json(app: &AppHandle, args: &[&str]) -> Result<Value, String> {
     let ytdlp = ensure_tool(app, Tool::YtDlp).await?;
     let out = tools::async_command(&ytdlp)
-        .args(["--ignore-config", "--no-warnings", "-J", "--flat-playlist"])
+        .args(yt::JSON_ARGS)
         .args(args)
         .output()
         .await
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        let line = err.lines().rev().find(|l| l.contains("ERROR")).unwrap_or("yt-dlp fallo");
-        return Err(line.replace("ERROR: ", ""));
+        return Err(yt::error_line(&String::from_utf8_lossy(&out.stderr)).unwrap_or_else(|| "yt-dlp fallo".into()));
     }
     serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())
 }
 
 pub async fn search(app: &AppHandle, query: &str) -> Result<Vec<Song>, String> {
-    let q = format!("ytsearch25:{query}");
-    let v = ytdlp_json(app, &[&q]).await?;
-    Ok(v["entries"].as_array().into_iter().flatten().filter_map(stream_song).collect())
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LinkInfo {
-    pub title: String,
-    pub is_playlist: bool,
-    pub count: usize,
-    pub thumb: Option<String>,
-    pub songs: Vec<Song>,
+    Ok(yt::search_results(&ytdlp_json(app, &[&yt::search_query(query)]).await?))
 }
 
 /// Que hay detras de un link pegado: un video o una playlist.
 pub async fn inspect(app: &AppHandle, url: &str) -> Result<LinkInfo, String> {
-    let v = ytdlp_json(app, &[url]).await?;
-    if v["_type"].as_str() == Some("playlist") {
-        let songs: Vec<Song> = v["entries"].as_array().into_iter().flatten().filter_map(stream_song).collect();
-        Ok(LinkInfo {
-            title: v["title"].as_str().unwrap_or("Playlist").to_string(),
-            is_playlist: true,
-            count: songs.len(),
-            thumb: songs.first().and_then(|s| s.thumb.clone()),
-            songs,
-        })
-    } else {
-        let song = stream_song(&v).ok_or("No encontre nada para reproducir en ese link")?;
-        Ok(LinkInfo { title: song.title.clone(), is_playlist: false, count: 1, thumb: song.thumb.clone(), songs: vec![song] })
-    }
+    yt::link_info(&ytdlp_json(app, &[url]).await?)
 }
 
 // ------------------------------------------------------------------ descargas
@@ -234,50 +168,9 @@ async fn run_job(app: &AppHandle, job: &DownloadJob) -> Result<(), String> {
     // yt-dlp necesita un motor de JavaScript para sacar los formatos de YouTube.
     ensure_tool(app, Tool::Deno).await?;
 
-    let output = if job.playlist {
-        "%(playlist_title)s/%(artist,uploader)s - %(title)s.%(ext)s"
-    } else {
-        "%(artist,uploader)s - %(title)s.%(ext)s"
-    };
-    // Tapas cuadradas, como las de un disco: se recorta el centro de la miniatura.
-    let crop = r#"ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 2 -vf crop="'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'""#;
     let mut child = tools::async_command(&ytdlp)
-        .args([
-            "--ignore-config",
-            "--no-warnings",
-            "--newline",
-            "--windows-filenames",
-            "-x",
-            "--audio-format",
-            "mp3",
-            "--audio-quality",
-            "0",
-            "--embed-metadata",
-            "--embed-thumbnail",
-            "--convert-thumbnails",
-            "jpg",
-            "--ppa",
-            crop,
-            "--replace-in-metadata",
-            "uploader,channel,artist",
-            " - Topic$",
-            "",
-            // "Artista - Tema (Official Video)" -> titulo "Tema", artista "Artista".
-            "--parse-metadata",
-            "title:(?P<artist>.+?) - (?P<title>.+)",
-            "--replace-in-metadata",
-            "title",
-            r"\s*[\(\[][^\)\]]*\b(?i:official|video|audio|lyrics?|letra|visuali[sz]er|hd|hq|4k|remaster(?:ed)?)\b[^\)\]]*[\)\]]",
-            "",
-            "--progress-template",
-            "download:DL %(progress._percent_str)s",
-            "--print",
-            "after_move:FILE %(filepath)s",
-            "-P",
-            &job.folder,
-            "-o",
-            output,
-        ])
+        .args(yt::DOWNLOAD_ARGS)
+        .args(["--windows-filenames", "-P", &job.folder, "-o", yt::output_template(job.playlist)])
         .arg(if job.playlist { "--yes-playlist" } else { "--no-playlist" })
         .arg(&job.url)
         .stdout(std::process::Stdio::piped())
@@ -300,23 +193,18 @@ async fn run_job(app: &AppHandle, job: &DownloadJob) -> Result<(), String> {
 
     let mut lines = BufReader::new(stdout).lines();
     while let Ok(Some(line)) = lines.next_line().await {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("DL ") {
-            if let Ok(p) = rest.trim().trim_end_matches('%').trim().parse::<f32>() {
-                update_job(app, job.id, |j| {
-                    j.status = "downloading".into();
-                    j.progress = p / 100.0;
-                });
+        match yt::parse_progress(&line) {
+            Some(Progress::Downloading(p)) => update_job(app, job.id, |j| {
+                j.status = "downloading".into();
+                j.progress = p;
+            }),
+            Some(Progress::Converting) => update_job(app, job.id, |j| j.status = "converting".into()),
+            Some(Progress::Item(item)) => update_job(app, job.id, |j| j.item = Some(item)),
+            Some(Progress::File(path)) => {
+                add_to_library(app, Path::new(&path));
+                update_job(app, job.id, |j| j.files.push(path.replace('\\', "/")));
             }
-        } else if line.contains("[ExtractAudio]") || line.contains("[EmbedThumbnail]") {
-            update_job(app, job.id, |j| j.status = "converting".into());
-        } else if let Some(rest) = line.strip_prefix("[download] Downloading item ") {
-            let item = rest.replace(" of ", " de ");
-            update_job(app, job.id, |j| j.item = Some(item));
-        } else if let Some(path) = line.strip_prefix("FILE ") {
-            let path = path.to_string();
-            add_to_library(app, Path::new(&path));
-            update_job(app, job.id, |j| j.files.push(path.replace('\\', "/")));
+            None => {}
         }
     }
 

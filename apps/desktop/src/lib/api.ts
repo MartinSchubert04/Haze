@@ -1,26 +1,10 @@
 // Tipos y llamadas al backend de Rust.
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import type { PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
+import type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
 
-export type { PlayerState, QueueEntry, QueueView, Settings, Song };
-
-export type DownloadJob = {
-  id: number;
-  url: string;
-  title: string;
-  thumb: string | null;
-  folder: string;
-  playlist: boolean;
-  status: "queued" | "downloading" | "converting" | "done" | "error";
-  progress: number;
-  item: string | null;
-  error: string | null;
-  files: string[];
-};
+export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song };
 
 export type UpdateInfo = { version: string; status: "downloading" | "ready" };
-
-export type LinkInfo = { title: string; isPlaylist: boolean; count: number; thumb: string | null; songs: Song[] };
 
 export type Bootstrap = {
   settings: Settings;
@@ -85,6 +69,4 @@ export function fileUrl(path: string): string {
   return convertFileSrc(path);
 }
 
-export function isUrl(text: string): boolean {
-  return /^https?:\/\/\S+$/i.test(text.trim());
-}
+export { isUrl } from "@haze/ui/format";

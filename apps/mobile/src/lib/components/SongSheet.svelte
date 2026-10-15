@@ -1,6 +1,6 @@
 <script lang="ts">
   // Opciones de una cancion: se abre al mantenerla apretada.
-  import { ListPlus, ListEnd, FolderOpen, Trash2 } from "@lucide/svelte";
+  import { ListPlus, ListEnd, FolderOpen, Trash2, Download } from "@lucide/svelte";
   import { folderName } from "@haze/ui/format";
   import { api, type Song } from "../api";
   import { store } from "../store.svelte";
@@ -11,6 +11,11 @@
   async function enqueue(next: boolean) {
     store.close();
     await store.enqueue(song, next);
+  }
+
+  function download() {
+    store.close();
+    store.download(song.path, song.title, song.thumb);
   }
 
   function remove() {
@@ -31,7 +36,9 @@
   </div>
   <button class="opt press" onclick={() => enqueue(true)}><ListPlus size={20} /> Reproducir a continuación</button>
   <button class="opt press" onclick={() => enqueue(false)}><ListEnd size={20} /> Agregar a la cola</button>
-  {#if store.openFolder !== song.folder}
+  {#if song.kind === "stream"}
+    <button class="opt press" onclick={download}><Download size={20} /> Bajar como MP3</button>
+  {:else if store.openFolder !== song.folder}
     <button class="opt press" onclick={() => store.goToFolder(song.folder)}>
       <FolderOpen size={20} /> Ir a {folderName(song.folder) || "la carpeta"}
     </button>

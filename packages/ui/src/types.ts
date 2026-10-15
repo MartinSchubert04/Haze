@@ -52,3 +52,21 @@ export type Settings = {
   songSort: string;
   folderSort: string;
 };
+
+/** Una descarga de yt-dlp. */
+export type DownloadJob = {
+  id: number;
+  url: string;
+  title: string;
+  thumb: string | null;
+  folder: string;
+  playlist: boolean;
+  status: "queued" | "downloading" | "converting" | "done" | "error";
+  progress: number;
+  item: string | null;
+  error: string | null;
+  files: string[];
+};
+
+/** Lo que hay detras de un link pegado: un video o una playlist. */
+export type LinkInfo = { title: string; isPlaylist: boolean; count: number; thumb: string | null; songs: Song[] };

@@ -25,6 +25,10 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    // youtubedl-android carga Python desde las .so: tienen que quedar descomprimidas.
+    packaging {
+        jniLibs.useLegacyPackaging = true
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
