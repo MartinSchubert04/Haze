@@ -234,7 +234,11 @@ async fn run_job(app: &AppHandle, job: &DownloadJob) -> Result<(), String> {
     // yt-dlp necesita un motor de JavaScript para sacar los formatos de YouTube.
     ensure_tool(app, Tool::Deno).await?;
 
-    let output = if job.playlist { "%(playlist_title)s/%(title)s.%(ext)s" } else { "%(title)s.%(ext)s" };
+    let output = if job.playlist {
+        "%(playlist_title)s/%(artist,uploader)s - %(title)s.%(ext)s"
+    } else {
+        "%(artist,uploader)s - %(title)s.%(ext)s"
+    };
     // Tapas cuadradas, como las de un disco: se recorta el centro de la miniatura.
     let crop = r#"ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 2 -vf crop="'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'""#;
     let mut child = tools::async_command(&ytdlp)
@@ -257,6 +261,13 @@ async fn run_job(app: &AppHandle, job: &DownloadJob) -> Result<(), String> {
             "--replace-in-metadata",
             "uploader,channel,artist",
             " - Topic$",
+            "",
+            // "Artista - Tema (Official Video)" -> titulo "Tema", artista "Artista".
+            "--parse-metadata",
+            "title:(?P<artist>.+?) - (?P<title>.+)",
+            "--replace-in-metadata",
+            "title",
+            r"\s*[\(\[][^\)\]]*\b(?i:official|video|audio|lyrics?|letra|visuali[sz]er|hd|hq|4k|remaster(?:ed)?)\b[^\)\]]*[\)\]]",
             "",
             "--progress-template",
             "download:DL %(progress._percent_str)s",

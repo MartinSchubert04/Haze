@@ -27,7 +27,7 @@ pub struct Mpv {
 
 /// Propiedades que mpv avisa solo cuando cambian.
 const OBSERVED: &[&str] =
-    &["pause", "time-pos", "duration", "volume", "idle-active", "media-title", "paused-for-cache", "metadata"];
+    &["pause", "time-pos", "duration", "volume", "idle-active", "media-title", "paused-for-cache", "current-ao"];
 
 impl Mpv {
     pub async fn spawn(mpv: &Path, volume: f64, events: mpsc::UnboundedSender<MpvEvent>) -> Result<Self, String> {
@@ -50,6 +50,10 @@ impl Mpv {
             "--demuxer-max-bytes=32MiB",
         ]);
         cmd.arg(format!("--volume={volume}"));
+        // Para probar sin parlantes: REPRODUCTOR_MPV_ARGS="--ao=null".
+        if let Ok(extra) = std::env::var("REPRODUCTOR_MPV_ARGS") {
+            cmd.args(extra.split_whitespace());
+        }
         cmd.arg(format!("--input-ipc-server={pipe}"));
         if let Some(ytdlp) = tools::find(tools::Tool::YtDlp) {
             cmd.arg(format!("--script-opts=ytdl_hook-ytdl_path={}", ytdlp.to_string_lossy()));

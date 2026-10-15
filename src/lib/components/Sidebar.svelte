@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Music2, Folder, Youtube, Download, ListMusic, Settings, Star } from "@lucide/svelte";
+  import { Music2, Folder, TvMinimalPlay, Download, ListMusic, Settings, Star } from "@lucide/svelte";
   import { store, type View } from "../store.svelte";
   import { folderName } from "../format";
 
   const items: { view: View["name"]; label: string; icon: typeof Music2 }[] = [
     { view: "songs", label: "Canciones", icon: Music2 },
     { view: "folders", label: "Carpetas", icon: Folder },
-    { view: "youtube", label: "YouTube", icon: Youtube },
+    { view: "youtube", label: "YouTube", icon: TvMinimalPlay },
     { view: "downloads", label: "Descargas", icon: Download },
     { view: "queue", label: "Cola", icon: ListMusic },
   ];

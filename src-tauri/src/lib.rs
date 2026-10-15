@@ -335,6 +335,16 @@ fn apply_effects(app: &AppHandle) {
     }
 }
 
+/// Para depurar sin pantalla: `REPRODUCTOR_DEVTOOLS_PORT=9333` abre el protocolo de
+/// DevTools del WebView en ese puerto. Hay que repetir los argumentos que Tauri pone
+/// por defecto, porque este los reemplaza.
+fn browser_args() -> Option<String> {
+    let port = std::env::var("REPRODUCTOR_DEVTOOLS_PORT").ok()?;
+    Some(format!(
+        "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+    ))
+}
+
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
@@ -351,6 +361,9 @@ pub fn show_main(app: &AppHandle) {
         .shadow(true)
         .visible(false)
         .center();
+    if let Some(args) = browser_args() {
+        b = b.additional_browser_args(&args);
+    }
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }
@@ -390,6 +403,9 @@ pub fn open_mini(app: &AppHandle) {
         .always_on_top(on_top)
         .skip_taskbar(true)
         .visible(false);
+    if let Some(args) = browser_args() {
+        b = b.additional_browser_args(&args);
+    }
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }

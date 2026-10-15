@@ -79,6 +79,10 @@ pub struct Player {
     session_path: PathBuf,
     /// Se cargo un tema pero no tiene que arrancar solo (al retomar la sesion).
     start_paused: bool,
+    /// mpv logro abrir la salida de audio. Solo se sabe cuando algo suena.
+    has_audio_out: bool,
+    /// Segundos seguidos "sonando" sin salida de audio.
+    silent_ticks: u32,
 }
 
 pub type SharedPlayer = Arc<Mutex<Player>>;
@@ -107,6 +111,8 @@ impl Player {
                 rng: seed,
                 session_path,
                 start_paused: false,
+                has_audio_out: false,
+                silent_ticks: 0,
             },
             rx,
         )
@@ -471,6 +477,7 @@ impl Player {
                     self.publish();
                 }
             }
+            "current-ao" => self.has_audio_out = !v.is_null(),
             "media-title" => {
                 // Los streams traen el titulo real recien al cargar.
                 if let (Some(t), Some(song)) = (v.as_str(), self.state.song.clone()) {
@@ -483,6 +490,17 @@ impl Player {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Cada segundo: si hace rato que deberia sonar y mpv no tiene salida de audio
+    /// (no hay parlantes, o se desconectaron los auriculares), se avisa una vez.
+    pub fn check_audio(&mut self) {
+        let silent = self.state.playing && !self.state.buffering && self.state.song.is_some() && !self.has_audio_out;
+        self.silent_ticks = if silent { self.silent_ticks + 1 } else { 0 };
+        if self.silent_ticks == 3 {
+            self.state.error = Some("No hay salida de audio: revisá que haya parlantes o auriculares conectados.".into());
+            self.publish();
         }
     }
 
@@ -548,8 +566,15 @@ impl Player {
 /// Procesa los eventos de mpv en orden, del lado del reproductor.
 pub fn pump(player: SharedPlayer, mut rx: mpsc::UnboundedReceiver<MpvEvent>) {
     tauri::async_runtime::spawn(async move {
-        while let Some(ev) = rx.recv().await {
-            player.lock().await.on_event(ev);
+        let mut tick = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                ev = rx.recv() => match ev {
+                    Some(ev) => player.lock().await.on_event(ev),
+                    None => return,
+                },
+                _ = tick.tick() => player.lock().await.check_audio(),
+            }
         }
     });
 }
