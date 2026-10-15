@@ -244,7 +244,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 #[tauri::command]
 fn settings_set(app: AppHandle, settings: Settings) {
     let state = app.state::<AppState>();
-    let (sources_changed, ha_changed, bg_changed) = {
+    let (sources_changed, ha_changed, bg_changed, keys_changed) = {
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
         // Lo que se baja tiene que aparecer en la biblioteca: las carpetas de descarga
@@ -263,6 +263,7 @@ fn settings_set(app: AppHandle, settings: Settings) {
             new.sources != cur.sources,
             serde_json::to_string(&new.ha).ok() != serde_json::to_string(&cur.ha).ok(),
             new.appearance.background != cur.appearance.background,
+            new.shortcuts != cur.shortcuts,
         );
         *cur = new;
         cur.save(&state.settings_path);
@@ -278,6 +279,9 @@ fn settings_set(app: AppHandle, settings: Settings) {
     }
     if bg_changed {
         apply_effects(&app);
+    }
+    if keys_changed {
+        apply_shortcuts(&app);
     }
 }
 
@@ -340,6 +344,12 @@ async fn quit(app: AppHandle) {
 #[tauri::command]
 fn update_status(app: AppHandle) -> Option<updater::UpdateInfo> {
     app.state::<AppState>().update.lock().unwrap().info.clone()
+}
+
+/// Busca una version nueva en el momento y, si hay, la empieza a bajar.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<String>, String> {
+    updater::check_now(&app).await
 }
 
 /// "Actualizar" en la interfaz: instala ya y vuelve tal cual estaba.
@@ -544,14 +554,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 // --------------------------------------------------------------------- atajos globales
 
 /// Atajos que andan desde cualquier programa, con la app en segundo plano o con la
-/// ventana cerrada. Todos con Ctrl+Alt+Shift: Ctrl+Alt solo es AltGr en teclados en
-/// espanol (robaria caracteres como la @) y Ctrl+Alt+flechas rota la pantalla con
-/// algunos drivers de Intel. La lista visible esta en src/lib/shortcuts.ts.
+/// ventana cerrada. Las teclas salen de los ajustes (por defecto, Ctrl+Alt+Shift+...).
 fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
-    use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-
-    let mods = Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT);
-    let keys = [Code::Space, Code::ArrowRight, Code::ArrowLeft, Code::ArrowUp, Code::ArrowDown, Code::KeyM];
+    use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 
     app.plugin(
         tauri_plugin_global_shortcut::Builder::new()
@@ -559,13 +564,21 @@ fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
                 if event.state() != ShortcutState::Pressed {
                     return;
                 }
-                match shortcut.key {
-                    Code::Space => control(app, Control::Toggle),
-                    Code::ArrowRight => control(app, Control::Next),
-                    Code::ArrowLeft => control(app, Control::Previous),
-                    Code::ArrowUp => control(app, Control::VolumeBy(5.0)),
-                    Code::ArrowDown => control(app, Control::VolumeBy(-5.0)),
-                    Code::KeyM => {
+                let shortcuts = app.state::<AppState>().settings.lock().unwrap().shortcuts.clone();
+                let action = {
+                    shortcuts
+                        .list()
+                        .into_iter()
+                        .find(|(_, acc)| acc.parse::<Shortcut>().is_ok_and(|sc| sc.id() == shortcut.id()))
+                        .map(|(name, _)| name)
+                };
+                match action {
+                    Some("toggle") => control(app, Control::Toggle),
+                    Some("next") => control(app, Control::Next),
+                    Some("previous") => control(app, Control::Previous),
+                    Some("volumeUp") => control(app, Control::VolumeBy(5.0)),
+                    Some("volumeDown") => control(app, Control::VolumeBy(-5.0)),
+                    Some("mini") => {
                         if app.get_webview_window("mini").is_some() {
                             show_main(app);
                         } else {
@@ -577,13 +590,41 @@ fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
             })
             .build(),
     )?;
-    for key in keys {
+    apply_shortcuts(app);
+    Ok(())
+}
+
+/// Registra los atajos de los ajustes, reemplazando los que hubiera.
+fn apply_shortcuts(app: &AppHandle) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+
+    let gs = app.global_shortcut();
+    let _ = gs.unregister_all();
+    let shortcuts = app.state::<AppState>().settings.lock().unwrap().shortcuts.clone();
+    let mut taken = Vec::new();
+    for (_, acc) in shortcuts.list() {
+        let Ok(sc) = acc.parse::<Shortcut>() else { continue };
         // Si otro programa ya lo tiene tomado, ese atajo no anda pero los demas si.
-        if let Err(e) = app.global_shortcut().register(Shortcut::new(mods, key)) {
-            log::warn!("atajo {key:?} ocupado: {e}");
+        if let Err(e) = gs.register(sc) {
+            log::warn!("atajo {acc} ocupado: {e}");
+            taken.push(acc.to_string());
         }
     }
-    Ok(())
+    if !taken.is_empty() {
+        let _ = app.emit("shortcuts://taken", taken);
+    }
+}
+
+/// Mientras se elige un atajo nuevo en Ajustes se sueltan todos: si no, Windows se
+/// come la combinacion y la ventana nunca la ve.
+#[tauri::command]
+fn shortcuts_pause(app: AppHandle, paused: bool) {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    if paused {
+        let _ = app.global_shortcut().unregister_all();
+    } else {
+        apply_shortcuts(&app);
+    }
 }
 
 // --------------------------------------------------------------------- arranque
@@ -827,6 +868,8 @@ pub fn run() {
             main_show,
             quit,
             update_status,
+            check_update,
+            shortcuts_pause,
             update_now,
             window_ready,
         ])

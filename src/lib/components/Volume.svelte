@@ -47,7 +47,7 @@
   }
 </script>
 
-<div class="vol" onwheel={wheel} title="Volumen (Ctrl+Alt+Shift+↑ / ↓)">
+<div class="vol" onwheel={wheel} title={`${tip("Subir volumen", "volumeUp")} · ${tip("Bajar", "volumeDown")}`}>
   <button class="icon-btn" title="Silenciar" onclick={toggleMute}>
     {#if vol === 0}<VolumeX size={18} />{:else if vol < 34}<Volume size={18} />{:else if vol < 67}<Volume1 size={18} />{:else}<Volume2 size={18} />{/if}
   </button>

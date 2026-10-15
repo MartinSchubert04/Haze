@@ -21,6 +21,7 @@ pub struct Settings {
     pub playback: Playback,
     pub behavior: Behavior,
     pub ha: HomeAssistant,
+    pub shortcuts: Shortcuts,
     pub song_sort: String,
     pub folder_sort: String,
 }
@@ -66,6 +67,31 @@ pub struct Behavior {
     pub mini_position: Option<(i32, i32)>,
 }
 
+/// Atajos globales, como acelerador de Tauri ("Ctrl+Alt+Shift+Space"). Vacio = sin atajo.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Shortcuts {
+    pub toggle: String,
+    pub next: String,
+    pub previous: String,
+    pub volume_up: String,
+    pub volume_down: String,
+    pub mini: String,
+}
+
+impl Shortcuts {
+    pub fn list(&self) -> [(&'static str, &str); 6] {
+        [
+            ("toggle", &self.toggle),
+            ("next", &self.next),
+            ("previous", &self.previous),
+            ("volumeUp", &self.volume_up),
+            ("volumeDown", &self.volume_down),
+            ("mini", &self.mini),
+        ]
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HomeAssistant {
@@ -89,6 +115,7 @@ impl Default for Settings {
             playback: Playback::default(),
             behavior: Behavior::default(),
             ha: HomeAssistant::default(),
+            shortcuts: Shortcuts::default(),
             song_sort: "title_asc".into(),
             folder_sort: "name_asc".into(),
         }
@@ -127,6 +154,22 @@ impl Default for Playback {
 impl Default for Behavior {
     fn default() -> Self {
         Self { close_to_tray: true, start_hidden: false, mini_on_top: true, mini_position: None }
+    }
+}
+
+// Todos con Ctrl+Alt+Shift: Ctrl+Alt solo es AltGr en teclados en espanol (robaria
+// caracteres como la @) y Ctrl+Alt+flechas rota la pantalla con algunos drivers de Intel.
+impl Default for Shortcuts {
+    fn default() -> Self {
+        let k = |key: &str| format!("Ctrl+Alt+Shift+{key}");
+        Self {
+            toggle: k("Space"),
+            next: k("ArrowRight"),
+            previous: k("ArrowLeft"),
+            volume_up: k("ArrowUp"),
+            volume_down: k("ArrowDown"),
+            mini: k("KeyM"),
+        }
     }
 }
 

@@ -84,6 +84,13 @@ pub fn start(app: AppHandle) {
     });
 }
 
+/// "Buscar actualizaciones" en Ajustes: lo mismo que el chequeo periodico, pero ya.
+/// Devuelve la version nueva (que queda bajandose o lista) o None si esta al dia.
+pub async fn check_now(app: &AppHandle) -> Result<Option<String>, String> {
+    check_and_download(app).await?;
+    Ok(app.state::<AppState>().update.lock().unwrap().info.as_ref().map(|i| i.version.clone()))
+}
+
 async fn check_and_download(app: &AppHandle) -> Result<(), String> {
     if app.state::<AppState>().update.lock().unwrap().info.is_some() {
         return Ok(());

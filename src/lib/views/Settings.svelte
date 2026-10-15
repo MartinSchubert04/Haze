@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { shortcutList } from "../shortcuts";
+  import { shortcutList, defaultShortcuts, prettyShortcut, shortcutFromEvent, type ShortcutKey } from "../shortcuts";
   import { open } from "@tauri-apps/plugin-dialog";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown } from "@lucide/svelte";
+  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "../format";
@@ -71,31 +71,69 @@
     }
   }
 
+  let checking = $state(false);
+  let upToDate = $state(false);
+
+  async function checkUpdate() {
+    checking = true;
+    upToDate = false;
+    try {
+      upToDate = !(await api.checkUpdate());
+    } catch (e) {
+      store.toast(`No se pudo buscar actualizaciones: ${e}`, "error");
+    } finally {
+      checking = false;
+    }
+  }
+
+  // Atajo que se esta eligiendo: la proxima combinacion que se apriete lo reemplaza.
+  let editing = $state<ShortcutKey | null>(null);
+
+  function editShortcut(key: ShortcutKey) {
+    editing = key;
+    api.pauseShortcuts(true);
+  }
+
+  function stopEditing() {
+    if (!editing) return;
+    editing = null;
+    api.pauseShortcuts(false);
+  }
+
+  function setShortcut(key: ShortcutKey, acc: string) {
+    store.saveSettings((x) => {
+      // Una combinacion es de un solo atajo: si ya la tenia otro, se la saca.
+      for (const [k] of shortcutList) if (k !== key && x.shortcuts[k] === acc) x.shortcuts[k] = "";
+      x.shortcuts[key] = acc;
+    });
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (!editing) return;
+    // Captura: que no le llegue a los atajos de la ventana (espacio = play, etc.).
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.code === "Escape") return stopEditing();
+    if (e.code === "Backspace" || e.code === "Delete") {
+      setShortcut(editing, "");
+      return stopEditing();
+    }
+    const acc = shortcutFromEvent(e);
+    if (!acc) return;
+    setShortcut(editing, acc);
+    stopEditing();
+  }
+
+  $effect(() => stopEditing);
+
   const count = (dir: string) => store.songs.filter((x) => x.path.toLowerCase().startsWith(dir.toLowerCase() + "/")).length;
 </script>
+
+<svelte:window onkeydowncapture={onKey} />
 
 <div class="scroll">
   <div class="page">
     <h1 class="page-title">Ajustes</h1>
-    <div class="page-sub">Versión {store.version}</div>
-
-    {#if store.update}
-      <div class="update">
-        <Download size={18} />
-        <div class="grow">
-          {#if store.update.status === "ready"}
-            <div>Haze {store.update.version} está lista</div>
-            <div class="hint">Se instala sola cuando no estés escuchando nada. Si actualizás ahora, vuelve igual que estaba, con la música sonando.</div>
-          {:else}
-            <div>Bajando Haze {store.update.version}…</div>
-            <div class="hint">Es de fondo, no hace falta hacer nada.</div>
-          {/if}
-        </div>
-        {#if store.update.status === "ready"}
-          <button class="pill primary" onclick={() => api.updateNow()}>Actualizar ahora</button>
-        {/if}
-      </div>
-    {/if}
 
     <!-- ------------------------------------------------------------ biblioteca -->
     <section>
@@ -281,10 +319,21 @@
     <!-- ------------------------------------------------------------ atajos -->
     <section>
       <h2>Atajos de teclado</h2>
-      <p>Andan desde cualquier programa, también con Haze en segundo plano o con la ventana cerrada.</p>
+      <p>Andan desde cualquier programa. Tocá uno para cambiarlo; Esc cancela y Borrar lo deja sin atajo.</p>
       <div class="keys">
-        {#each shortcutList as [label, keys]}
-          <div class="key-row"><span>{label}</span><kbd>{keys}</kbd></div>
+        {#each shortcutList as [key, label]}
+          {@const acc = s.shortcuts[key]}
+          <div class="key-row">
+            <span class="grow">{label}</span>
+            {#if acc !== defaultShortcuts[key] && editing !== key}
+              <button class="icon-btn sm" title="Volver al original" onclick={() => setShortcut(key, defaultShortcuts[key])}>
+                <RotateCcw size={14} />
+              </button>
+            {/if}
+            <button class="kbd" class:rec={editing === key} class:none={!acc} onclick={() => (editing === key ? stopEditing() : editShortcut(key))} onblur={stopEditing}>
+              {editing === key ? "Apretá la combinación…" : prettyShortcut(acc)}
+            </button>
+          </div>
         {/each}
       </div>
     </section>
@@ -324,6 +373,33 @@
         </button>
       </div>
     </details>
+
+    <!-- ------------------------------------------------------------ actualizaciones -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <h2>Actualizaciones</h2>
+          <p>Versión {store.version}</p>
+        </div>
+        {#if store.update?.status === "ready"}
+          <button class="pill primary" onclick={() => api.updateNow()}>Actualizar ahora</button>
+        {:else}
+          <button class="pill" onclick={checkUpdate} disabled={checking || !!store.update}>
+            <RefreshCw size={15} class={checking || store.update ? "spin" : ""} /> {checking ? "Buscando…" : "Buscar actualizaciones"}
+          </button>
+        {/if}
+      </div>
+      {#if store.update}
+        <div class="update">
+          <Download size={18} />
+          <div class="grow">
+            {store.update.status === "ready" ? `Haze ${store.update.version} está lista` : `Bajando Haze ${store.update.version}…`}
+          </div>
+        </div>
+      {:else if upToDate}
+        <div class="update ok"><Check size={18} /> Estás en la última versión</div>
+      {/if}
+    </section>
 
     <section>
       <h2>Salir</h2>
@@ -389,14 +465,33 @@
   .key-row:first-child {
     border-top: 0;
   }
-  kbd {
-    font: inherit;
+  .key-row {
+    gap: 8px;
+  }
+  .kbd {
     font-size: 12px;
     color: var(--text-2);
     padding: 3px 8px;
     border-radius: 6px;
     border: 1px solid var(--line-strong);
     background: rgba(255, 255, 255, 0.04);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .kbd:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--text);
+  }
+  .kbd.none {
+    color: var(--text-3);
+    border-style: dashed;
+  }
+  .kbd.rec {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .icon-btn.sm {
+    color: var(--text-3);
   }
   .update {
     display: flex;
@@ -404,12 +499,18 @@
     gap: 14px;
     width: 100%;
     text-align: left;
-    padding: 14px 18px;
-    border-radius: var(--radius-lg);
+    padding: 12px 16px;
+    border-radius: var(--radius);
     background: color-mix(in srgb, var(--accent) 16%, transparent);
     border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
     color: var(--accent);
     font-weight: 580;
+  }
+  .update.ok {
+    gap: 10px;
+    background: rgba(130, 200, 150, 0.12);
+    border-color: rgba(130, 200, 150, 0.3);
+    color: #a6e3a1;
   }
   section {
     margin-top: 18px;

@@ -49,6 +49,7 @@ export type Settings = {
   playback: { volume: number; shuffle: boolean; repeat: string; resume: boolean };
   behavior: { closeToTray: boolean; startHidden: boolean; miniOnTop: boolean; miniPosition: [number, number] | null };
   ha: { enabled: boolean; host: string; port: number; username: string; password: string; deviceName: string };
+  shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string };
   songSort: string;
   folderSort: string;
 };
@@ -117,6 +118,8 @@ export const api = {
   showMain: () => invoke("main_show"),
   windowReady: (label: "main" | "mini") => invoke("window_ready", { label }),
   quit: () => invoke("quit"),
+  pauseShortcuts: (paused: boolean) => invoke("shortcuts_pause", { paused }),
+  checkUpdate:() => invoke<string | null>("check_update"),
   updateNow: () => invoke("update_now"),
 };
 

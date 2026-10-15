@@ -3,6 +3,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 import { folderName, sortKey } from "./format";
+import { prettyShortcut } from "./shortcuts";
 
 export type View =
   | { name: "songs" }
@@ -96,6 +97,7 @@ class Store {
     listen<string>("app://error", (e) => this.toast(e.payload, "error"));
     listen("app://ready", () => (this.engineReady = true));
     listen<UpdateInfo | null>("update://status", (e) => (this.update = e.payload));
+    listen<string[]>("shortcuts://taken", (e) => this.toast(`Otro programa ya usa ${e.payload.map(prettyShortcut).join(", ")}`, "error"));
 
     setInterval(() => this.tick(), 250);
   }
