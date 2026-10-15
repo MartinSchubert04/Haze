@@ -313,11 +313,11 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
-/// Ultima version de escritorio publicada en GitHub, si es mas nueva que esta.
+/// Ultima version publicada en GitHub, si es mas nueva que esta.
 #[tauri::command]
 async fn check_update() -> Option<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(|| {
-        let body = ureq::get("https://api.github.com/repos/MartinSchubert04/music-player/releases?per_page=30")
+        let body = ureq::get("https://api.github.com/repos/MartinSchubert04/Haze/releases?per_page=30")
             .header("User-Agent", "Haze-desktop")
             .header("Accept", "application/vnd.github+json")
             .call()
@@ -327,11 +327,11 @@ async fn check_update() -> Option<serde_json::Value> {
             .ok()?;
         let list: Vec<serde_json::Value> = serde_json::from_str(&body).ok()?;
         let latest = list.iter().find(|r| {
-            r["tag_name"].as_str().is_some_and(|t| t.starts_with("desktop-v"))
+            r["tag_name"].as_str().is_some_and(|t| t.starts_with('v'))
                 && !r["draft"].as_bool().unwrap_or(false)
                 && !r["prerelease"].as_bool().unwrap_or(false)
         })?;
-        let version = latest["tag_name"].as_str()?.trim_start_matches("desktop-v").to_string();
+        let version = latest["tag_name"].as_str()?.trim_start_matches('v').to_string();
         is_newer(env!("CARGO_PKG_VERSION"), &version)
             .then(|| serde_json::json!({ "version": version, "url": latest["html_url"] }))
     })

@@ -1,0 +1,87 @@
+name: CI
+
+# - En cada push y PR: tests de Rust y chequeo de tipos de la interfaz.
+# - Al etiquetar vX.Y.Z: compila el instalador de Windows y lo publica en Releases.
+#
+#     git tag v0.2.0
+#     git push origin v0.2.0
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests y build
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Chequeo de tipos
+        run: npm run check
+
+      - name: Tests de Rust
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Version desde el tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: version
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "El tag '$GITHUB_REF_NAME' no tiene la forma vMAYOR.MENOR.PARCHE" >&2
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Instalador
+        if: steps.version.outputs.version
+        shell: bash
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          # La version sale del tag: se escribe en los dos lugares donde vive.
+          sed -i "s/^version = \".*\"/version = \"$V\"/" src-tauri/Cargo.toml
+          npx tauri build --config "{\"version\":\"$V\"}"
+
+      - name: Publicar el Release
+        if: steps.version.outputs.version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          SETUP=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe)
+          cp "$SETUP" "Haze-$V-setup.exe"
+          cat > notas.md <<NOTAS
+          Bajá \`Haze-$V-setup.exe\` y abrilo. Se instala solo para tu usuario, sin pedir permisos de administrador.
+
+          La primera vez baja el motor de audio (mpv, ~30 MB). yt-dlp, deno y ffmpeg se bajan recién la primera vez que usás YouTube.
+
+          Si ya la tenías, se actualiza encima sin perder la biblioteca ni los ajustes.
+          NOTAS
+          gh release create "$GITHUB_REF_NAME" "Haze-$V-setup.exe" --title "Haze $V" --notes-file notas.md

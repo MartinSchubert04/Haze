@@ -1,10 +1,11 @@
-# Haze (escritorio)
+# Haze
 
 Reproductor de música para Windows: liviano, queda en la bandeja y sigue sonando con la
-ventana cerrada.
+ventana cerrada. Es la versión de escritorio del
+[reproductor de Android](https://github.com/MartinSchubert04/music-player).
 
 - **Biblioteca local:** varias carpetas fuente, búsqueda, orden y el índice A-Z del celu.
-- **Cola como en Android:** el contexto (carpeta, todas las canciones) y lo que encolás a
+- **Cola como en el celu:** el contexto (carpeta, todas las canciones) y lo que encolás a
   mano son cosas distintas. La lógica es un port de `PlayQueue.kt`, con los mismos tests.
 - **YouTube:** buscar y escuchar sin bajar, o pegar un link (Ctrl V en cualquier lado, o
   arrastrarlo a la ventana) y bajarlo como MP3 con título, artista y tapa cuadrada.
@@ -49,11 +50,11 @@ Para depurar sin pantalla (por ejemplo, desde un servicio):
 ## Publicar una versión
 
 ```
-git tag desktop-v0.2.0
-git push origin desktop-v0.2.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-El workflow `Desktop` compila el instalador y lo sube a Releases. La app avisa en Ajustes
+El workflow `CI` compila el instalador y lo sube a Releases. La app avisa en Ajustes
 cuando hay una versión nueva.
 
 ## Datos
