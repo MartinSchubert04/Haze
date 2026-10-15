@@ -12,9 +12,13 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
 
-  // Arranca con lo que se escribio arriba (Enter en la busqueda general).
+  // Arranca con lo que se escribio arriba (Enter en la busqueda general). Solo reacciona
+  // cuando cambia `query`: si dependiera de `searched`, cada busqueda nueva desde esta
+  // pantalla volvia a poner la primera.
+  let applied = "";
   $effect(() => {
-    if (query && query !== searched) {
+    if (query && query !== applied) {
+      applied = query;
       text = query;
       run();
     }
