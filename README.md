@@ -78,7 +78,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-El workflow `CI` compila el instalador y lo sube a Releases. La app avisa en Ajustes
+El workflow `Escritorio` compila el instalador y lo sube a Releases. La app avisa en Ajustes
 cuando hay una versión nueva.
 
 ## Datos
