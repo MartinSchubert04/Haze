@@ -3,7 +3,7 @@
   import { ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Download } from "@lucide/svelte";
   import { api, coverUrl, type QueueView } from "../api";
   import { store } from "../store.svelte";
-  import { dominantColor } from "../color";
+  import { dominantColor } from "@haze/ui/color";
   import Cover from "../components/Cover.svelte";
   import PlayButton from "../components/PlayButton.svelte";
   import Seek from "../components/Seek.svelte";

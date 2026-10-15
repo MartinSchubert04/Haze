@@ -1720,6 +1720,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "haze-mobile"
+version = "0.1.0"
+dependencies = [
+ "haze-core",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-haze-player",
+ "tokio",
+]
+
+[[package]]
 name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4443,6 +4457,19 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tauri-plugin-haze-player"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "haze-core",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

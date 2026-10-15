@@ -3,7 +3,7 @@
   import { api, type QueueEntry, type QueueView } from "../api";
   import { store } from "../store.svelte";
   import { songMenu } from "../menu.svelte";
-  import { time } from "../format";
+  import { time } from "@haze/ui/format";
   import Cover from "../components/Cover.svelte";
 
   const LIMIT = 200;

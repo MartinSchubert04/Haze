@@ -3,7 +3,7 @@
   import { openPath } from "@tauri-apps/plugin-opener";
   import { api } from "../api";
   import { store } from "../store.svelte";
-  import { folderName } from "../format";
+  import { folderName } from "@haze/ui/format";
 
   const finished = $derived(store.downloads.filter((d) => d.status === "done" || d.status === "error").length);
 

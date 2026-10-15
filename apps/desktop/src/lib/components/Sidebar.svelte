@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Music2, Folder, TvMinimalPlay, Download, ListMusic, Settings, Star } from "@lucide/svelte";
   import { store, type View } from "../store.svelte";
-  import { folderName } from "../format";
+  import { folderName } from "@haze/ui/format";
 
   const items: { view: View["name"]; label: string; icon: typeof Music2 }[] = [
     { view: "songs", label: "Canciones", icon: Music2 },

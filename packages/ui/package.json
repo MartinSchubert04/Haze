@@ -1,0 +1,13 @@
+{
+  "name": "@haze/ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lo que comparten las interfaces de escritorio y Android: tipos, formato, colores y el tema",
+  "exports": {
+    "./types": "./src/types.ts",
+    "./format": "./src/format.ts",
+    "./color": "./src/color.ts",
+    "./theme.css": "./src/theme.css"
+  }
+}

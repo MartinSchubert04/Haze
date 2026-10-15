@@ -2,7 +2,7 @@
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
 import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
-import { folderName, sortKey } from "./format";
+import { folderName, sortKey } from "@haze/ui/format";
 import { prettyShortcut } from "./shortcuts";
 
 export type View =

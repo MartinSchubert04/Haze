@@ -3,12 +3,15 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev": "npm run tauri -w @haze/desktop -- dev",
     "build": "npm run tauri -w @haze/desktop -- build",
     "check": "npm run check --workspaces --if-present",
-    "tauri": "npm run tauri -w @haze/desktop --"
+    "tauri": "npm run tauri -w @haze/desktop --",
+    "android": "npm run tauri -w @haze/mobile -- android dev",
+    "android:apk": "npm run tauri -w @haze/mobile -- android build --debug --target aarch64 --apk"
   }
 }

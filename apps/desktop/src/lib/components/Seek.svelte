@@ -3,7 +3,7 @@
   // recien al soltar se salta, asi mpv no recibe cien seeks.
   import { api } from "../api";
   import { store } from "../store.svelte";
-  import { time } from "../format";
+  import { time } from "@haze/ui/format";
 
   let { showTimes = true, thin = false }: { showTimes?: boolean; thin?: boolean } = $props();
 

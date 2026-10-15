@@ -20,13 +20,15 @@ ventana cerrada.
 
 ## Cómo está hecho
 
-Es un monorepo. Por ahora tiene una sola app:
+Es un monorepo con dos apps:
 
 | Carpeta | Qué es |
 |---|---|
 | `apps/desktop/` | La app de Windows. |
-| `apps/mobile/` | La futura app de Android. El plan está en [docs/mobile.md](docs/mobile.md). |
+| `apps/mobile/` | La app de Android. El plan y lo que falta están en [docs/mobile.md](docs/mobile.md). |
 | `crates/haze-core/` | Cola, ajustes y reproductor, sin Tauri ni mpv. Lo comparten las dos apps. |
+| `plugins/haze-player/` | Plugin de Tauri en Kotlin: Media3/ExoPlayer y MediaStore para Android. |
+| `packages/ui/` | Tipos, formato, colores y tema que usan las dos interfaces. |
 | `assets/` | Fuente del ícono. |
 
 Dentro de `apps/desktop/`:
@@ -55,6 +57,8 @@ npm run check          # tipos
 cargo test
 ```
 
+Para Android, ver [apps/mobile/README.md](apps/mobile/README.md).
+
 Para regenerar los íconos después de cambiar `assets/icon.svg`:
 
 ```
@@ -80,6 +84,9 @@ git push origin v0.2.0
 
 El workflow `Escritorio` compila el instalador y lo sube a Releases. La app avisa en Ajustes
 cuando hay una versión nueva.
+
+Cada app tiene su workflow (`desktop.yml` y `android.yml`) y cada uno corre solo si el
+push toca algo que le afecta. `Android` deja un APK de debug como artefacto.
 
 ## Datos
 

@@ -4,7 +4,7 @@
   import { X, Download, Play, FolderPlus, Star, LoaderCircle, ListVideo } from "@lucide/svelte";
   import { api, type LinkInfo } from "../api";
   import { store } from "../store.svelte";
-  import { folderName } from "../format";
+  import { folderName } from "@haze/ui/format";
 
   let info = $state<LinkInfo | null>(null);
   let error = $state<string | null>(null);

@@ -1,5 +1,5 @@
 import { mount } from "svelte";
-import "./app.css";
+import "@haze/ui/theme.css";
 import App from "./App.svelte";
 import Mini from "./Mini.svelte";
 

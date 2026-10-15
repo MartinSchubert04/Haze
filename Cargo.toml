@@ -1,8 +1,11 @@
-# Workspace de Rust: la app de escritorio y el nucleo que va a compartir con Android
-# (ver docs/mobile.md).
+# Workspace de Rust: las dos apps, el nucleo que comparten y el plugin de Android (ver
+# docs/mobile.md).
 [workspace]
 resolver = "2"
-members = ["apps/desktop/src-tauri", "crates/haze-core"]
+members = ["apps/desktop/src-tauri", "apps/mobile/src-tauri", "crates/haze-core", "plugins/haze-player"]
+# La app de Android solo compila para Android (la arma `tauri android build`): un
+# `cargo test` comun no la toca.
+default-members = ["apps/desktop/src-tauri", "crates/haze-core", "plugins/haze-player"]
 
 [profile.release]
 # Binario chico (es lo que queda corriendo de fondo) sin que compilar tarde una

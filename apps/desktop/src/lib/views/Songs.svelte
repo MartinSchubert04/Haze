@@ -1,7 +1,7 @@
 <script lang="ts">
   import { FolderPlus, TvMinimalPlay } from "@lucide/svelte";
   import { store } from "../store.svelte";
-  import { normalizeSearch, plural } from "../format";
+  import { normalizeSearch, plural } from "@haze/ui/format";
   import SongList from "../components/SongList.svelte";
   import ListHeader from "../components/ListHeader.svelte";
 

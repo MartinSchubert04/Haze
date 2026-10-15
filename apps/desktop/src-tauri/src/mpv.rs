@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use haze_core::player::{Engine, EngineEvent, SharedPlayer};
+use haze_core::song::Song;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -110,7 +111,8 @@ impl Mpv {
 }
 
 impl Engine for Mpv {
-    fn load(&self, path: &str, start: f64, paused: bool) {
+    fn load(&self, song: &Song, start: f64, paused: bool) {
+        let path = &song.path;
         self.set("pause", json!(paused));
         if start > 0.0 {
             self.command(json!(["loadfile", path, "replace", -1, format!("start={start}")]));

@@ -3,7 +3,7 @@
   import { ArrowUpDown } from "@lucide/svelte";
   import { store, type Folder } from "../store.svelte";
   import { menu } from "../menu.svelte";
-  import { normalizeSearch, plural, sortKey } from "../format";
+  import { normalizeSearch, plural, sortKey } from "@haze/ui/format";
   import Cover from "../components/Cover.svelte";
 
   const q = $derived(normalizeSearch(store.search.trim()));

@@ -6,7 +6,7 @@
   import type { Song } from "../api";
   import { store } from "../store.svelte";
   import { songMenu } from "../menu.svelte";
-  import { time, indexLetter } from "../format";
+  import { time, indexLetter } from "@haze/ui/format";
   import Cover from "./Cover.svelte";
 
   let {

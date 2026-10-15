@@ -5,7 +5,7 @@
   import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
-  import { folderName, plural } from "../format";
+  import { folderName, plural } from "@haze/ui/format";
 
   const ACCENTS = [
     "#ffffff", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387",

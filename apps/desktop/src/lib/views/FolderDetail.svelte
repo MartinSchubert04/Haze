@@ -2,7 +2,7 @@
   import { Star, FolderOpen } from "@lucide/svelte";
   import { openPath } from "@tauri-apps/plugin-opener";
   import { store } from "../store.svelte";
-  import { folderName, normalizeSearch, plural } from "../format";
+  import { folderName, normalizeSearch, plural } from "@haze/ui/format";
   import SongList from "../components/SongList.svelte";
   import ListHeader from "../components/ListHeader.svelte";
 

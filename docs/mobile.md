@@ -1,7 +1,7 @@
 # Haze para Android
 
 Plan para la versión de celular: dónde va a vivir, qué se reusa de escritorio y en qué
-orden se hace. La fase 0 (núcleo compartido) ya está; lo siguiente es la fase 1.
+orden se hace. Las fases 0 (núcleo compartido) y 1 (reproductor local) ya están; lo siguiente es la fase 2.
 
 Solo Android. En iOS no se puede instalar por fuera de la App Store, la App Store no
 acepta una app que baja de YouTube y yt-dlp no corre ahí.
@@ -25,8 +25,10 @@ assets/
   icon.svg          fuente del ícono, de acá salen los de escritorio y Android
 ```
 
-`crates/haze-core` ya existe. `packages/ui` se crea recién cuando mobile lo necesite, no
-antes: mientras la interfaz viva en una sola app, separarla es costo sin beneficio.
+`packages/ui` por ahora tiene lo que de verdad comparten las dos interfaces: los tipos que
+devuelve Rust, el formato de tiempos, los colores de acento y el tema (con la fuente). Los
+componentes no se comparten: el armado de cada pantalla es distinto y copiarlos salió más
+simple que parametrizarlos.
 
 ## Qué se reusa
 
@@ -60,13 +62,27 @@ avisa los cambios a un `Listener`. En escritorio, `mpv.rs` implementa `Engine` y
 el IPC de mpv a `EngineEvent`, y `player.rs` es el `Listener` que emite a las ventanas.
 En Android, el plugin `haze-player` va a ser otro `Engine`.
 
-Pendiente para la fase 1: los valores por defecto de `settings` son de Windows
-(`USERPROFILE\Music`, `COMPUTERNAME`) y `Behavior` y `Shortcuts` solo tienen sentido en
-escritorio. Hay que separar eso cuando Android lea sus ajustes.
+**1. Reproductor local. Hecho.** `apps/mobile` es la app de Tauri para Android y
+`plugins/haze-player` es el plugin: un `MediaSessionService` con ExoPlayer (notificación,
+pantalla de bloqueo, auriculares y reproducción con la pantalla apagada), la biblioteca por
+MediaStore, las tapas y el permiso de audio. Del lado de Rust, `AndroidEngine` implementa
+`Engine` y el mismo `Player` de `haze-core` maneja la cola; anterior y siguiente desde la
+notificación vuelven a Rust como `PlayerEvent::Previous`/`Next`. La interfaz tiene pestañas
+Canciones, Carpetas y Cola, mini reproductor, "Reproduciendo" a pantalla completa, hoja al
+mantener apretado y el botón atrás del sistema cierra lo que esté abierto.
 
-**1. Reproductor local.** `tauri android init` en `apps/mobile`, el plugin `haze-player`
-con Media3 y servicio en primer plano, la biblioteca por MediaStore y la interfaz con
-pestañas. Con esto ya es una app usable.
+Quedó pendiente:
+
+- La pestaña YouTube llega con la fase 3.
+- Los valores por defecto de `settings` siguen siendo de Windows (`USERPROFILE\Music`,
+  `COMPUTERNAME`). Android no los usa todavía; hay que separarlos en la fase 2, cuando lea
+  el nombre del dispositivo para Home Assistant.
+- Si Android destruye la actividad mientras el servicio sigue sonando, los eventos del
+  plugin llegan a un canal sin interfaz. La cola sigue en Rust, pero hay que probarlo en
+  un celular real con poca memoria.
+- En Windows, `tauri android build` necesita el modo de desarrollador activado (crea
+  enlaces simbólicos). Sin eso falla al final, después de compilar Rust; el CI corre en
+  Linux y no tiene el problema.
 
 **2. Home Assistant.** `mqtt.rs` atado al ciclo de vida del servicio de reproducción.
 
@@ -98,7 +114,8 @@ escritorio.
 
 - Tags separados por app: `v*` sigue siendo escritorio; Android usa `mobile-v*`.
 - El APK se sube al mismo Release de GitHub con su propio `latest-android.json`.
-- Job aparte en el CI, en `ubuntu-latest` con el SDK y el NDK de Android.
+- Workflow aparte en el CI (`android.yml`), en `ubuntu-latest` con el SDK y el NDK de
+  Android. Hoy compila un APK de debug en cada push que toque algo de Android.
 
 ## Antes de arrancar
 

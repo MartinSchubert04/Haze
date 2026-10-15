@@ -1,4 +1,5 @@
 node_modules/
 dist/
 target/
-apps/*/src-tauri/gen/
+apps/desktop/src-tauri/gen/
+apps/mobile/src-tauri/gen/schemas/

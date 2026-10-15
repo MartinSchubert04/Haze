@@ -1,0 +1,83 @@
+name: Android
+
+# En cada push y PR que toque algo de Android: tests de Rust del nucleo y del plugin,
+# chequeo de tipos y un APK de debug para celulares (arm64), que queda como artefacto.
+#
+# Escritorio tiene su propio workflow (desktop.yml). Cada uno corre solo si cambio algo
+# que le afecta, y tienen grupos de concurrencia separados: no se cancelan entre si.
+# Publicar el APK firmado con un tag mobile-v* llega con la fase 4 (docs/mobile.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'plugins/**'
+      - 'crates/**'
+      - 'packages/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'plugins/**'
+      - 'crates/**'
+      - 'packages/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests y APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - run: npm ci
+
+      - name: Chequeo de tipos
+        run: npm run check -w @haze/mobile
+
+      - name: Tests de Rust
+        run: cargo test -p haze-core -p tauri-plugin-haze-player
+
+      - name: APK de debug
+        working-directory: apps/mobile
+        # El runner trae el SDK y el NDK de Android instalados.
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npx tauri android build --debug --target aarch64 --apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: haze-android-debug
+          path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 7

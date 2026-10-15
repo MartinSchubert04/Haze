@@ -22,8 +22,10 @@ use crate::song::{Song, SongKind};
 /// Lo que el reproductor le pide al motor de audio. Los comandos no esperan respuesta:
 /// lo que pasa despues vuelve como [`EngineEvent`].
 pub trait Engine: Send {
-    /// Carga el archivo o la URL desde `start` segundos, sonando o en pausa.
-    fn load(&self, path: &str, start: f64, paused: bool);
+    /// Carga la cancion (`song.path`: archivo, URL o `content://`) desde `start`
+    /// segundos, sonando o en pausa. El resto de la cancion sirve para mostrarla afuera
+    /// de la app (la notificacion de Android, por ejemplo).
+    fn load(&self, song: &Song, start: f64, paused: bool);
     fn set_paused(&self, paused: bool);
     fn seek(&self, seconds: f64);
     /// De 0 a 100.
@@ -242,7 +244,7 @@ impl Player {
         self.state.error = None;
         self.state.buffering = entry.song.kind == SongKind::Stream;
         if let Some(e) = &self.engine {
-            e.load(&entry.song.path, start, self.start_paused);
+            e.load(&entry.song, start, self.start_paused);
         }
         self.state.playing = !self.start_paused;
         self.start_paused = false;
@@ -294,7 +296,7 @@ impl Player {
             // Si el motor quedo parado (fin de la lista), "play" vuelve a cargar el tema.
             if !paused && !self.state.playing && self.position == 0.0 {
                 if let Some(entry) = self.queue.current() {
-                    e.load(&entry.song.path, 0.0, false);
+                    e.load(&entry.song, 0.0, false);
                 }
             } else {
                 e.set_paused(paused);
@@ -612,8 +614,8 @@ mod tests {
     }
 
     impl Engine for Log {
-        fn load(&self, path: &str, start: f64, paused: bool) {
-            self.0.lock().unwrap().push(format!("load {path} {start} {paused}"));
+        fn load(&self, song: &Song, start: f64, paused: bool) {
+            self.0.lock().unwrap().push(format!("load {} {start} {paused}", song.path));
         }
         fn set_paused(&self, paused: bool) {
             self.0.lock().unwrap().push(format!("pause {paused}"));
