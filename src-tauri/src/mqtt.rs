@@ -71,7 +71,10 @@ async fn run(
     let base = format!("haze/{node}");
     let avail = format!("{base}/availability");
 
-    let mut opts = MqttOptions::new(format!("haze-{node}"), cfg.host.trim(), cfg.port);
+    // ID unico por proceso: si dos Haze usan el mismo ID, el broker echa a una cada vez
+    // que entra la otra y las entidades quedan saltando entre "unavailable" y lo demas.
+    let client_id = format!("haze-{node}-{}", std::process::id());
+    let mut opts = MqttOptions::new(client_id, cfg.host.trim(), cfg.port);
     opts.set_keep_alive(Duration::from_secs(30));
     // Las caratulas pesan bastante mas que el limite por defecto.
     opts.set_max_packet_size(256 * 1024, 4 * 1024 * 1024);

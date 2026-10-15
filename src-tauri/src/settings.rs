@@ -138,7 +138,10 @@ impl Default for HomeAssistant {
             port: 1883,
             username: String::new(),
             password: String::new(),
-            device_name: "Haze PC".into(),
+            // Con el nombre de la PC: dos computadoras con Haze no se pisan en HA.
+            device_name: std::env::var("COMPUTERNAME")
+                .map(|n| format!("Haze {}", n.to_uppercase()))
+                .unwrap_or_else(|_| "Haze PC".into()),
         }
     }
 }
