@@ -21,7 +21,7 @@
   });
 
   const image = $derived(
-    a?.background === "kiosk" ? "/kiosk-bg.webp" : a?.background === "image" && a.backgroundImage ? fileUrl(a.backgroundImage) : null,
+    a?.background === "image" && a.backgroundImage ? fileUrl(a.backgroundImage) : null,
   );
 </script>
 
@@ -29,6 +29,8 @@
   <div class="bg" aria-hidden="true">
     {#if a.background === "color"}
       <div class="layer" style:background={a.backgroundColor}></div>
+    {:else if a.background === "haze"}
+      <div class="layer haze" style:filter={a.blur ? `blur(${a.blur}px)` : undefined}></div>
     {:else if image}
       <div class="layer img" style:background-image={`url("${image}")`} style:filter={a.blur ? `blur(${a.blur}px)` : undefined}></div>
     {:else}
@@ -51,6 +53,10 @@
   .layer {
     position: absolute;
     inset: 0;
+  }
+  .haze {
+    inset: -40px;
+    background: var(--haze-bg);
   }
   .img {
     inset: -40px;

@@ -38,7 +38,7 @@ export type Settings = {
   defaultDownloadFolder: string | null;
   appearance: {
     accent: string;
-    background: "glass" | "kiosk" | "image" | "color";
+    background: "glass" | "haze" | "image" | "color";
     backgroundColor: string;
     backgroundImage: string | null;
     dim: number;

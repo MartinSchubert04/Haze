@@ -1,12 +1,11 @@
 # Haze
 
 Reproductor de música para Windows: liviano, queda en la bandeja y sigue sonando con la
-ventana cerrada. Es la versión de escritorio del
-[reproductor de Android](https://github.com/MartinSchubert04/music-player).
+ventana cerrada.
 
-- **Biblioteca local:** varias carpetas fuente, búsqueda, orden y el índice A-Z del celu.
-- **Cola como en el celu:** el contexto (carpeta, todas las canciones) y lo que encolás a
-  mano son cosas distintas. La lógica es un port de `PlayQueue.kt`, con los mismos tests.
+- **Biblioteca local:** varias carpetas fuente, búsqueda, orden y un índice A-Z.
+- **Cola de verdad:** el contexto (carpeta, todas las canciones) y lo que encolás a mano
+  son cosas distintas; lo encolado suena antes y después se retoma el contexto.
 - **YouTube:** buscar y escuchar sin bajar, o pegar un link (Ctrl V en cualquier lado, o
   arrastrarlo a la ventana) y bajarlo como MP3 con título, artista y tapa cuadrada.
   Sirven también las playlists y los links de SoundCloud o Bandcamp.
@@ -15,7 +14,7 @@ ventana cerrada. Es la versión de escritorio del
 - **Home Assistant por MQTT:** las entidades aparecen solas (estado, canción, tapa, botones,
   volumen, aleatorio, repetir y "reproducir carpeta").
 - **Teclas multimedia** y el panel de medios de Windows.
-- **Personalización:** acento pastel, fondo de vidrio, el del kiosco, una imagen o un color.
+- **Personalización:** acento pastel, fondo de vidrio, bruma, una imagen o un color.
 
 ## Cómo está hecho
 
@@ -27,7 +26,7 @@ ventana cerrada. Es la versión de escritorio del
 | `src/` (Svelte 5) | La interfaz. Al cerrar la ventana se destruye el WebView entero, por eso de fondo pesa poco. |
 
 Los programas externos no vienen en el instalador: se bajan solos a
-`%LOCALAPPDATA%\com.mrtn.haze\bin` la primera vez que hacen falta. yt-dlp se
+`%LOCALAPPDATA%\app.haze.player\bin` la primera vez que hacen falta. yt-dlp se
 actualiza solo cada tres días, porque YouTube cambia seguido.
 
 ## Desarrollo
@@ -59,6 +58,6 @@ cuando hay una versión nueva.
 
 ## Datos
 
-- Ajustes: `%APPDATA%\com.mrtn.haze\settings.json`. La clave de MQTT queda ahí en
+- Ajustes: `%APPDATA%\app.haze.player\settings.json`. La clave de MQTT queda ahí en
   texto plano.
-- Cache de la biblioteca y sesión: `%LOCALAPPDATA%\com.mrtn.haze\`.
+- Cache de la biblioteca y sesión: `%LOCALAPPDATA%\app.haze.player\`.

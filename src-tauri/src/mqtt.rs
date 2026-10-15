@@ -141,7 +141,7 @@ async fn run(
     let device = json!({
         "identifiers": [format!("haze_{node}")],
         "name": cfg.device_name,
-        "manufacturer": "MRTN",
+        "manufacturer": "Haze",
         "model": "Haze (escritorio)",
         "sw_version": env!("CARGO_PKG_VERSION"),
     });

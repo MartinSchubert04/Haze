@@ -1,5 +1,5 @@
 //! Preferencias del usuario. Se guardan como JSON en la carpeta de datos de la app
-//! (`%APPDATA%\com.mrtn.haze\settings.json`).
+//! (`%APPDATA%\app.haze.player\settings.json`).
 //!
 //! Todos los campos tienen valor por defecto: un archivo viejo, al que le falta algo
 //! que se agrego despues, se sigue leyendo sin perder lo demas.
@@ -29,7 +29,7 @@ pub struct Settings {
 #[serde(default, rename_all = "camelCase")]
 pub struct Appearance {
     pub accent: String,
-    /// "glass" (escritorio desenfocado), "kiosk" (fondo del kiosco), "image" o "color".
+    /// "glass" (escritorio desenfocado), "haze" (bruma), "image" o "color".
     pub background: String,
     pub background_color: String,
     pub background_image: Option<String>,

@@ -291,7 +291,7 @@ impl Player {
         } else if self.state.repeat != "off" || manual {
             self.queue = self.queue.move_to_index(0);
             if !manual && self.state.shuffle {
-                // Otra vuelta mezclada, como en el celu.
+                // Otra vuelta mezclada, como en la app de Android.
                 let ctx = self.queue.context_entries();
                 let order = self.shuffled(ctx);
                 self.queue = self.queue.with_context_order(order);

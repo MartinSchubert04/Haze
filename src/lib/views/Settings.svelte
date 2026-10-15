@@ -14,7 +14,7 @@
   const BACKGROUNDS = ["#0f1720", "#000000", "#121212", "#1a1423", "#102019", "#1b1412", "#1d2328"];
   const MODES: [string, string, string][] = [
     ["glass", "Vidrio", "Desenfoca lo que hay detrás de la ventana"],
-    ["kiosk", "Kiosco", "El fondo del kiosco de casa"],
+    ["haze", "Bruma", "Un degradé oscuro y difuso"],
     ["image", "Imagen", "Una imagen tuya"],
     ["color", "Color", "Un color liso"],
   ];
@@ -194,7 +194,7 @@
           <input type="range" min="0" max="0.9" step="0.01" value={s.appearance.dim} onchange={(e) => store.saveSettings((x) => (x.appearance.dim = +e.currentTarget.value))} oninput={(e) => store.settings && (store.settings.appearance.dim = +e.currentTarget.value)} />
         </div>
       {/if}
-      {#if s.appearance.background === "image" || s.appearance.background === "kiosk"}
+      {#if s.appearance.background === "image" || s.appearance.background === "haze"}
         <div class="field">
           <div class="name">Desenfoque <span class="val">{Math.round(s.appearance.blur)} px</span></div>
           <input type="range" min="0" max="40" step="1" value={s.appearance.blur} onchange={(e) => store.saveSettings((x) => (x.appearance.blur = +e.currentTarget.value))} oninput={(e) => store.settings && (store.settings.appearance.blur = +e.currentTarget.value)} />
@@ -272,7 +272,7 @@
         <input type="checkbox" bind:checked={ha.enabled} />
       </label>
       <div class="form" class:off={!ha.enabled}>
-        <label>Servidor MQTT<input type="text" bind:value={ha.host} placeholder="192.168.0.100" /></label>
+        <label>Servidor MQTT<input type="text" bind:value={ha.host} placeholder="192.168.1.10" /></label>
         <label>Puerto<input type="number" bind:value={ha.port} /></label>
         <label>Usuario<input type="text" bind:value={ha.username} autocomplete="off" /></label>
         <label>Contraseña<input type="password" bind:value={ha.password} autocomplete="off" /></label>
@@ -437,8 +437,8 @@
   .prev.glass {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)), #2a3038;
   }
-  .prev.kiosk {
-    background-image: url("/kiosk-bg.webp");
+  .prev.haze {
+    background: var(--haze-bg);
   }
   .prev.image {
     background-color: rgba(255, 255, 255, 0.06);

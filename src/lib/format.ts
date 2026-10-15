@@ -15,7 +15,7 @@ export function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString("es-AR")} ${n === 1 ? one : many}`;
 }
 
-/** Igual que el celu: lo que empieza con letra va primero, lo raro al final. */
+/** Como en la app de Android: lo que empieza con letra va primero, lo raro al final. */
 export function sortKey(text: string): string {
   const t = text
     .normalize("NFD")

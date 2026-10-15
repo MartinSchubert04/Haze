@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Haze",
-  "version": "0.1.0",
-  "identifier": "com.mrtn.haze",
+  "version": "0.1.1",
+  "identifier": "app.haze.player",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
