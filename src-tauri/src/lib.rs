@@ -313,6 +313,57 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
+/// Ultima version de escritorio publicada en GitHub, si es mas nueva que esta.
+#[tauri::command]
+async fn check_update() -> Option<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let body = ureq::get("https://api.github.com/repos/MartinSchubert04/music-player/releases?per_page=30")
+            .header("User-Agent", "Reproductor-desktop")
+            .header("Accept", "application/vnd.github+json")
+            .call()
+            .ok()?
+            .into_body()
+            .read_to_string()
+            .ok()?;
+        let list: Vec<serde_json::Value> = serde_json::from_str(&body).ok()?;
+        let latest = list.iter().find(|r| {
+            r["tag_name"].as_str().is_some_and(|t| t.starts_with("desktop-v"))
+                && !r["draft"].as_bool().unwrap_or(false)
+                && !r["prerelease"].as_bool().unwrap_or(false)
+        })?;
+        let version = latest["tag_name"].as_str()?.trim_start_matches("desktop-v").to_string();
+        is_newer(env!("CARGO_PKG_VERSION"), &version)
+            .then(|| serde_json::json!({ "version": version, "url": latest["html_url"] }))
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Compara MAYOR.MENOR.PARCHE numero por numero ("0.10.0" es mas nueva que "0.9.0").
+fn is_newer(installed: &str, candidate: &str) -> bool {
+    let nums = |v: &str| -> Vec<u64> { v.split('.').map(|p| p.trim().parse().unwrap_or(0)).collect() };
+    let (a, b) = (nums(installed), nums(candidate));
+    for i in 0..a.len().max(b.len()) {
+        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
+        if x != y {
+            return y > x;
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn versions() {
+        assert!(super::is_newer("0.1.0", "0.2.0"));
+        assert!(super::is_newer("0.9.0", "0.10.0"));
+        assert!(!super::is_newer("1.0.0", "1.0.0"));
+        assert!(!super::is_newer("1.2.0", "1.1.9"));
+    }
+}
+
 #[tauri::command]
 fn mini_moved(app: AppHandle, x: i32, y: i32) {
     let state = app.state::<AppState>();
@@ -686,6 +737,7 @@ pub fn run() {
             main_show,
             quit,
             mini_moved,
+            check_update,
         ])
         .build(tauri::generate_context!())
         .expect("no se pudo iniciar la app")

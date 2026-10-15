@@ -1,7 +1,8 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check } from "@lucide/svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "../format";
@@ -65,6 +66,16 @@
   <div class="page">
     <h1 class="page-title">Ajustes</h1>
     <div class="page-sub">Versión {store.version}</div>
+
+    {#if store.update}
+      <button class="update" onclick={() => openUrl(store.update!.url)}>
+        <Download size={18} />
+        <div>
+          <div>Hay una versión nueva: {store.update.version}</div>
+          <div class="hint">Tocá para abrir la página de descarga.</div>
+        </div>
+      </button>
+    {/if}
 
     <!-- ------------------------------------------------------------ biblioteca -->
     <section>
@@ -289,6 +300,19 @@
   }
   .page {
     max-width: 860px;
+  }
+  .update {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    padding: 14px 18px;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent);
+    font-weight: 580;
   }
   section {
     margin-top: 18px;

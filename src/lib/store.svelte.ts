@@ -45,6 +45,7 @@ class Store {
   search = $state("");
   nowPlayingOpen = $state(false);
   toasts = $state<{ id: number; text: string; kind: "info" | "error" }[]>([]);
+  update = $state<{ version: string; url: string } | null>(null);
   /** Link pegado que espera que el usuario elija que hacer. */
   pendingLink = $state<string | null>(null);
 
@@ -94,6 +95,14 @@ class Store {
     listen("app://ready", () => (this.engineReady = true));
 
     setInterval(() => this.tick(), 250);
+  }
+
+  async checkUpdate() {
+    try {
+      this.update = await api.checkUpdate();
+    } catch {
+      /* sin red: no pasa nada */
+    }
   }
 
   private setPosition(p: number) {

@@ -64,7 +64,9 @@
   <button class="item" class:active={active === "settings"} onclick={() => store.go({ name: "settings" })}>
     <Settings size={18} strokeWidth={1.8} />
     <span>Ajustes</span>
-    {#if store.settings?.ha.enabled}
+    {#if store.update}
+      <span class="dot new" title="Hay una versión nueva"></span>
+    {:else if store.settings?.ha.enabled}
       <span class="dot" class:ok={store.haStatus === "connected"} title="Home Assistant"></span>
     {/if}
   </button>
@@ -159,6 +161,9 @@
   }
   .dot.ok {
     background: #82c896;
+  }
+  .dot.new {
+    background: var(--accent);
   }
   .spacer {
     flex: 1;

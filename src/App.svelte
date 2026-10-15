@@ -27,6 +27,7 @@
     win.show().then(() => win.setFocus());
     try {
       await store.init();
+      store.checkUpdate();
     } catch (e) {
       fatal = String(e);
     }

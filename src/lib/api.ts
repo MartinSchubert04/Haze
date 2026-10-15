@@ -114,6 +114,7 @@ export const api = {
   showMain: () => invoke("main_show"),
   quit: () => invoke("quit"),
   miniMoved: (x: number, y: number) => invoke("mini_moved", { x, y }),
+  checkUpdate: () => invoke<{ version: string; url: string } | null>("check_update"),
 };
 
 /** URL de la tapa: la miniatura remota o la embebida (servida por Rust). */
