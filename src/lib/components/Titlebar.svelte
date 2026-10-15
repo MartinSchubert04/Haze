@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { Minus, Square, X, Search, PictureInPicture2, ChevronLeft } from "@lucide/svelte";
+  import { Minus, Square, X, Search, PictureInPicture2, ChevronLeft, ArrowDownToLine } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
 
@@ -54,6 +54,11 @@
   </form>
 
   <div class="right" data-tauri-drag-region>
+    {#if store.update?.status === "ready"}
+      <button class="upd" title="Haze {store.update.version}: se reinicia y vuelve igual que estaba" onclick={() => api.updateNow()}>
+        <ArrowDownToLine size={14} /> Actualizar
+      </button>
+    {/if}
     <button class="win" title="Mini reproductor" onclick={() => api.openMini()}><PictureInPicture2 size={15} /></button>
     <button class="win" title="Minimizar" onclick={() => win.minimize()}><Minus size={16} /></button>
     <button class="win" title="Maximizar" onclick={() => win.toggleMaximize()}><Square size={13} /></button>
@@ -123,6 +128,24 @@
     display: flex;
     justify-content: flex-end;
     height: 100%;
+  }
+  .upd {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    margin-right: 8px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+    transition: background 0.15s;
+  }
+  .upd:hover {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
   .win {
     width: 46px;

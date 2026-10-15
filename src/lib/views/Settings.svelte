@@ -1,7 +1,6 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { openUrl } from "@tauri-apps/plugin-opener";
   import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
@@ -68,13 +67,21 @@
     <div class="page-sub">Versión {store.version}</div>
 
     {#if store.update}
-      <button class="update" onclick={() => openUrl(store.update!.url)}>
+      <div class="update">
         <Download size={18} />
-        <div>
-          <div>Hay una versión nueva: {store.update.version}</div>
-          <div class="hint">Tocá para abrir la página de descarga.</div>
+        <div class="grow">
+          {#if store.update.status === "ready"}
+            <div>Haze {store.update.version} está lista</div>
+            <div class="hint">Se instala sola cuando no estés escuchando nada. Si actualizás ahora, vuelve igual que estaba, con la música sonando.</div>
+          {:else}
+            <div>Bajando Haze {store.update.version}…</div>
+            <div class="hint">Es de fondo, no hace falta hacer nada.</div>
+          {/if}
         </div>
-      </button>
+        {#if store.update.status === "ready"}
+          <button class="pill primary" onclick={() => api.updateNow()}>Actualizar ahora</button>
+        {/if}
+      </div>
     {/if}
 
     <!-- ------------------------------------------------------------ biblioteca -->
@@ -276,7 +283,10 @@
         <label>Puerto<input type="number" bind:value={ha.port} /></label>
         <label>Usuario<input type="text" bind:value={ha.username} autocomplete="off" /></label>
         <label>Contraseña<input type="password" bind:value={ha.password} autocomplete="off" /></label>
-        <label class="wide">Nombre del dispositivo<input type="text" bind:value={ha.deviceName} /></label>
+        <label class="wide">
+          Nombre del dispositivo<input type="text" bind:value={ha.deviceName} />
+          <span class="hint">Si usás Haze en más de una PC, poné un nombre distinto en cada una.</span>
+        </label>
       </div>
       <div class="save">
         <button class="pill primary" disabled={!haDirty} onclick={() => store.saveSettings((x) => (x.ha = { ...ha, port: Number(ha.port) || 1883 }))}>

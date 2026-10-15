@@ -62,11 +62,19 @@ jobs:
       - name: Instalador
         if: steps.version.outputs.version
         shell: bash
+        env:
+          # Clave privada de las actualizaciones (Settings > Secrets > Actions). Sin ella
+          # el instalador sale igual, pero las apps instaladas no se pueden actualizar solas.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           V="${{ steps.version.outputs.version }}"
           # La version sale del tag: se escribe en los dos lugares donde vive.
           sed -i "s/^version = \".*\"/version = \"$V\"/" src-tauri/Cargo.toml
-          npx tauri build --config "{\"version\":\"$V\"}"
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then FIRMA=true; else FIRMA=false
+            echo "::warning::Falta el secret TAURI_SIGNING_PRIVATE_KEY: esta version no se ofrece como actualizacion automatica."
+          fi
+          npx tauri build --config "{\"version\":\"$V\",\"bundle\":{\"createUpdaterArtifacts\":$FIRMA}}"
 
       - name: Publicar el Release
         if: steps.version.outputs.version
@@ -77,11 +85,26 @@ jobs:
           V="${{ steps.version.outputs.version }}"
           SETUP=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe)
           cp "$SETUP" "Haze-$V-setup.exe"
+          ARCHIVOS="Haze-$V-setup.exe"
+
+          # latest.json: lo que consultan las apps instaladas para actualizarse solas.
+          if [ -f "$SETUP.sig" ]; then
+            URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/Haze-$V-setup.exe"
+            node -e '
+              const fs = require("fs");
+              const [v, url, sig] = process.argv.slice(1);
+              fs.writeFileSync("latest.json", JSON.stringify({
+                version: v,
+                pub_date: new Date().toISOString(),
+                platforms: { "windows-x86_64": { url, signature: fs.readFileSync(sig, "utf8").trim() } },
+              }, null, 2));
+            ' "$V" "$URL" "$SETUP.sig"
+            ARCHIVOS="$ARCHIVOS latest.json"
+          fi
+
           cat > notas.md <<NOTAS
           Bajá \`Haze-$V-setup.exe\` y abrilo. Se instala solo para tu usuario, sin pedir permisos de administrador.
 
-          La primera vez baja el motor de audio (mpv, ~30 MB). yt-dlp, deno y ffmpeg se bajan recién la primera vez que usás YouTube.
-
-          Si ya la tenías, se actualiza encima sin perder la biblioteca ni los ajustes.
+          Si ya tenés Haze, no hace falta: se actualiza sola de fondo.
           NOTAS
-          gh release create "$GITHUB_REF_NAME" "Haze-$V-setup.exe" --title "Haze $V" --notes-file notas.md
+          gh release create "$GITHUB_REF_NAME" $ARCHIVOS --title "Haze $V" --notes-file notas.md

@@ -12,6 +12,7 @@ mod player;
 mod queue;
 mod settings;
 mod tools;
+mod updater;
 mod youtube;
 
 use std::path::PathBuf;
@@ -39,6 +40,7 @@ pub struct AppState {
     pub mqtt: Mutex<mqtt::Bridge>,
     pub ha_status: Mutex<String>,
     pub scanning: Mutex<bool>,
+    pub update: Mutex<updater::Pending>,
 }
 
 /// Ordenes que llegan de afuera de la interfaz: bandeja, teclas multimedia, HA.
@@ -139,6 +141,7 @@ struct Bootstrap {
     scanning: bool,
     ha_status: String,
     downloads: Vec<youtube::DownloadJob>,
+    update: Option<updater::UpdateInfo>,
     version: String,
 }
 
@@ -154,6 +157,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
     let scanning = *state.scanning.lock().unwrap();
     let ha_status = state.ha_status.lock().unwrap().clone();
     let downloads = state.downloads.lock().unwrap().jobs.clone();
+    let update = state.update.lock().unwrap().info.clone();
     Bootstrap {
         settings,
         songs,
@@ -163,6 +167,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         scanning,
         ha_status,
         downloads,
+        update,
         version: env!("CARGO_PKG_VERSION").into(),
     }
 }
@@ -325,55 +330,16 @@ async fn quit(app: AppHandle) {
     quit_app(&app);
 }
 
-/// Ultima version publicada en GitHub, si es mas nueva que esta.
+/// Estado de la actualizacion: None, bajando o lista para instalar.
 #[tauri::command]
-async fn check_update() -> Option<serde_json::Value> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let body = ureq::get("https://api.github.com/repos/MartinSchubert04/Haze/releases?per_page=30")
-            .header("User-Agent", "Haze-desktop")
-            .header("Accept", "application/vnd.github+json")
-            .call()
-            .ok()?
-            .into_body()
-            .read_to_string()
-            .ok()?;
-        let list: Vec<serde_json::Value> = serde_json::from_str(&body).ok()?;
-        let latest = list.iter().find(|r| {
-            r["tag_name"].as_str().is_some_and(|t| t.starts_with('v'))
-                && !r["draft"].as_bool().unwrap_or(false)
-                && !r["prerelease"].as_bool().unwrap_or(false)
-        })?;
-        let version = latest["tag_name"].as_str()?.trim_start_matches('v').to_string();
-        is_newer(env!("CARGO_PKG_VERSION"), &version)
-            .then(|| serde_json::json!({ "version": version, "url": latest["html_url"] }))
-    })
-    .await
-    .ok()
-    .flatten()
+fn update_status(app: AppHandle) -> Option<updater::UpdateInfo> {
+    app.state::<AppState>().update.lock().unwrap().info.clone()
 }
 
-/// Compara MAYOR.MENOR.PARCHE numero por numero ("0.10.0" es mas nueva que "0.9.0").
-fn is_newer(installed: &str, candidate: &str) -> bool {
-    let nums = |v: &str| -> Vec<u64> { v.split('.').map(|p| p.trim().parse().unwrap_or(0)).collect() };
-    let (a, b) = (nums(installed), nums(candidate));
-    for i in 0..a.len().max(b.len()) {
-        let (x, y) = (a.get(i).copied().unwrap_or(0), b.get(i).copied().unwrap_or(0));
-        if x != y {
-            return y > x;
-        }
-    }
-    false
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn versions() {
-        assert!(super::is_newer("0.1.0", "0.2.0"));
-        assert!(super::is_newer("0.9.0", "0.10.0"));
-        assert!(!super::is_newer("1.0.0", "1.0.0"));
-        assert!(!super::is_newer("1.2.0", "1.1.9"));
-    }
+/// "Actualizar" en la interfaz: instala ya y vuelve tal cual estaba.
+#[tauri::command]
+async fn update_now(app: AppHandle) {
+    updater::apply(&app).await;
 }
 
 // --------------------------------------------------------------------- ventanas
@@ -646,7 +612,7 @@ pub fn quit_app(app: &AppHandle) {
     std::process::exit(0);
 }
 
-fn shutdown(app: &AppHandle) {
+pub(crate) fn shutdown(app: &AppHandle) {
     let state = app.state::<AppState>();
     if let Ok(p) = state.player.try_lock() {
         p.save_session();
@@ -656,7 +622,7 @@ fn shutdown(app: &AppHandle) {
     state.mqtt.lock().unwrap().stop();
 }
 
-async fn start_engine(app: AppHandle) {
+async fn start_engine(app: AppHandle, resume_playing: bool) {
     let state = app.state::<AppState>();
     let mpv_path = match youtube::ensure_tool(&app, tools::Tool::Mpv).await {
         Ok(p) => p,
@@ -672,9 +638,13 @@ async fn start_engine(app: AppHandle) {
             let resume = state.settings.lock().unwrap().playback.resume;
             let mut p = state.player.lock().await;
             p.attach(m);
-            if resume {
+            if resume || resume_playing {
                 let lib = state.library.read().unwrap();
                 p.restore(|id| lib.get(id));
+            }
+            // Tras una actualizacion, la musica sigue donde estaba.
+            if resume_playing {
+                p.set_paused(false);
             }
         }
         Err(e) => {
@@ -704,6 +674,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
@@ -746,7 +717,13 @@ pub fn run() {
                 settings.playback.repeat.clone(),
                 data_dir.join("session.json"),
             );
-            let start_hidden = settings.behavior.start_hidden || std::env::args().any(|a| a == "--hidden");
+            // Si venimos de una actualizacion, se vuelve a como estaba la app; si no, se
+            // respeta "iniciar escondida" y el --hidden del arranque con Windows.
+            let relaunch = updater::take_relaunch(&handle);
+            let start_hidden = match &relaunch {
+                Some(r) => !r.show_main,
+                None => settings.behavior.start_hidden || std::env::args().any(|a| a == "--hidden"),
+            };
 
             app.manage(AppState {
                 settings: Mutex::new(settings),
@@ -759,6 +736,7 @@ pub fn run() {
                 mqtt: Mutex::new(mqtt::Bridge::new()),
                 ha_status: Mutex::new("off".into()),
                 scanning: Mutex::new(false),
+                update: Mutex::new(Default::default()),
             });
 
             build_tray(&handle)?;
@@ -767,10 +745,14 @@ pub fn run() {
             persist_playback(&handle);
             start_mqtt(&handle);
             start_scan(&handle);
-            tauri::async_runtime::spawn(start_engine(handle.clone()));
+            let resume_playing = relaunch.as_ref().is_some_and(|r| r.playing);
+            tauri::async_runtime::spawn(start_engine(handle.clone(), resume_playing));
+            updater::start(handle.clone());
 
             if !start_hidden {
                 show_main(&handle);
+            } else if relaunch.as_ref().is_some_and(|r| r.show_mini) {
+                open_mini(&handle);
             }
             Ok(())
         })
@@ -792,7 +774,8 @@ pub fn run() {
             mini_open,
             main_show,
             quit,
-            check_update,
+            update_status,
+            update_now,
             window_ready,
         ])
         .build(tauri::generate_context!())

@@ -1,7 +1,7 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
-import { api, type DownloadJob, type PlayerState, type Settings, type Song } from "./api";
+import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 import { folderName, sortKey } from "./format";
 
 export type View =
@@ -45,7 +45,8 @@ class Store {
   search = $state("");
   nowPlayingOpen = $state(false);
   toasts = $state<{ id: number; text: string; kind: "info" | "error" }[]>([]);
-  update = $state<{ version: string; url: string } | null>(null);
+  /** Version nueva: bajandose o lista para instalar. Se instala sola si la app esta ociosa. */
+  update = $state<UpdateInfo | null>(null);
   /** Link pegado que espera que el usuario elija que hacer. */
   pendingLink = $state<string | null>(null);
 
@@ -67,6 +68,7 @@ class Store {
     this.scanning = b.scanning;
     this.haStatus = b.haStatus;
     this.downloads = b.downloads;
+    this.update = b.update;
     this.version = b.version;
     this.engineReady = b.engine;
     this.ready = true;
@@ -93,17 +95,12 @@ class Store {
     });
     listen<string>("app://error", (e) => this.toast(e.payload, "error"));
     listen("app://ready", () => (this.engineReady = true));
+    listen<UpdateInfo | null>("update://status", (e) => (this.update = e.payload));
 
     setInterval(() => this.tick(), 250);
   }
 
-  async checkUpdate() {
-    try {
-      this.update = await api.checkUpdate();
-    } catch {
-      /* sin red: no pasa nada */
-    }
-  }
+
 
   private setPosition(p: number) {
     this.posBase = p;

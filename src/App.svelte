@@ -30,7 +30,6 @@
       .then(() => api.windowReady("main"));
     try {
       await store.init();
-      store.checkUpdate();
     } catch (e) {
       fatal = String(e);
     }

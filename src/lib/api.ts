@@ -67,6 +67,8 @@ export type DownloadJob = {
   files: string[];
 };
 
+export type UpdateInfo = { version: string; status: "downloading" | "ready" };
+
 export type LinkInfo = { title: string; isPlaylist: boolean; count: number; thumb: string | null; songs: Song[] };
 
 export type Bootstrap = {
@@ -78,6 +80,7 @@ export type Bootstrap = {
   scanning: boolean;
   haStatus: string;
   downloads: DownloadJob[];
+  update: UpdateInfo | null;
   version: string;
 };
 
@@ -114,7 +117,7 @@ export const api = {
   showMain: () => invoke("main_show"),
   windowReady: (label: "main" | "mini") => invoke("window_ready", { label }),
   quit: () => invoke("quit"),
-  checkUpdate: () => invoke<{ version: string; url: string } | null>("check_update"),
+  updateNow: () => invoke("update_now"),
 };
 
 /** URL de la tapa: la miniatura remota o la embebida (servida por Rust). */
