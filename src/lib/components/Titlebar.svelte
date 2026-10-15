@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "../shortcuts";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { Minus, Square, X, Search, PictureInPicture2, ChevronLeft, ArrowDownToLine } from "@lucide/svelte";
   import { api } from "../api";
@@ -59,7 +60,7 @@
         <ArrowDownToLine size={14} /> Actualizar
       </button>
     {/if}
-    <button class="win" title="Mini reproductor" onclick={() => api.openMini()}><PictureInPicture2 size={15} /></button>
+    <button class="win" title={tip("Mini reproductor", "mini")} onclick={() => api.openMini()}><PictureInPicture2 size={15} /></button>
     <button class="win" title="Minimizar" onclick={() => win.minimize()}><Minus size={16} /></button>
     <button class="win" title="Maximizar" onclick={() => win.toggleMaximize()}><Square size={13} /></button>
     <button class="win close" title="Cerrar" onclick={() => win.close()}><X size={17} /></button>

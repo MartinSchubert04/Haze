@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "../shortcuts";
   import { Volume, Volume1, Volume2, VolumeX } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
@@ -46,7 +47,7 @@
   }
 </script>
 
-<div class="vol" onwheel={wheel}>
+<div class="vol" onwheel={wheel} title="Volumen (Ctrl+Alt+Shift+↑ / ↓)">
   <button class="icon-btn" title="Silenciar" onclick={toggleMute}>
     {#if vol === 0}<VolumeX size={18} />{:else if vol < 34}<Volume size={18} />{:else if vol < 67}<Volume1 size={18} />{:else}<Volume2 size={18} />{/if}
   </button>

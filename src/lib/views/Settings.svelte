@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { shortcutList } from "../shortcuts";
   import { open } from "@tauri-apps/plugin-dialog";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download } from "@lucide/svelte";
@@ -261,6 +262,17 @@
       </label>
     </section>
 
+    <!-- ------------------------------------------------------------ atajos -->
+    <section>
+      <h2>Atajos de teclado</h2>
+      <p>Andan desde cualquier programa, también con Haze en segundo plano o con la ventana cerrada.</p>
+      <div class="keys">
+        {#each shortcutList as [label, keys]}
+          <div class="key-row"><span>{label}</span><kbd>{keys}</kbd></div>
+        {/each}
+      </div>
+    </section>
+
     <!-- ------------------------------------------------------------ home assistant -->
     <section>
       <div class="sec-head">
@@ -310,6 +322,30 @@
   }
   .page {
     max-width: 860px;
+  }
+  .keys {
+    display: flex;
+    flex-direction: column;
+  }
+  .key-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+  }
+  .key-row:first-child {
+    border-top: 0;
+  }
+  kbd {
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-2);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.04);
   }
   .update {
     display: flex;

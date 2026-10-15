@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "./lib/shortcuts";
   // Ventanita fija: tapa, titulo y controles. Se arrastra desde cualquier parte.
   // Reemplaza a la ventana grande: al abrirse la cierra, y al expandirla se cierra ella.
   import { onMount } from "svelte";
@@ -42,9 +43,9 @@
       <button class="icon-btn sm" class:on={p.shuffle} title={p.shuffle ? "Aleatorio: sí" : "Aleatorio: no (orden normal)"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
         <Shuffle size={14} />
       </button>
-      <button class="icon-btn" title="Anterior" onclick={() => api.control({ type: "previous" })}><SkipBack size={16} fill="currentColor" /></button>
+      <button class="icon-btn" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}><SkipBack size={16} fill="currentColor" /></button>
       <PlayButton size={36} ring={false} solid />
-      <button class="icon-btn" title="Siguiente" onclick={() => api.control({ type: "next" })}><SkipForward size={16} fill="currentColor" /></button>
+      <button class="icon-btn" title={tip("Siguiente", "next")} onclick={() => api.control({ type: "next" })}><SkipForward size={16} fill="currentColor" /></button>
       <button class="icon-btn sm" class:on={p.repeat !== "off"} title={repeatLabel} onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
         {#if p.repeat === "one"}<Repeat1 size={14} />{:else}<Repeat size={14} />{/if}
       </button>
@@ -52,7 +53,7 @@
   </div>
 
   <div class="win">
-    <button class="icon-btn s" title="Abrir Haze" onclick={() => api.showMain()}><Maximize2 size={13} /></button>
+    <button class="icon-btn s" title={tip("Abrir Haze", "mini")} onclick={() => api.showMain()}><Maximize2 size={13} /></button>
     <button class="icon-btn s" title="Cerrar (sigue sonando)" onclick={() => win.close()}><X size={15} /></button>
   </div>
   <div class="progress"><div class="fill" style:width="{frac * 100}%"></div></div>

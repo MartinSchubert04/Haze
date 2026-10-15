@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "../shortcuts";
   import { ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Download } from "@lucide/svelte";
   import { api, coverUrl, type QueueView } from "../api";
   import { store } from "../store.svelte";
@@ -50,9 +51,9 @@
         <button class="icon-btn big" class:on={p.shuffle} title="Aleatorio" onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
           <Shuffle size={20} />
         </button>
-        <button class="icon-btn big" title="Anterior" onclick={() => api.control({ type: "previous" })}><SkipBack size={26} fill="currentColor" /></button>
+        <button class="icon-btn big" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}><SkipBack size={26} fill="currentColor" /></button>
         <PlayButton size={76} solid />
-        <button class="icon-btn big" title="Siguiente" onclick={() => api.control({ type: "next" })}><SkipForward size={26} fill="currentColor" /></button>
+        <button class="icon-btn big" title={tip("Siguiente", "next")} onclick={() => api.control({ type: "next" })}><SkipForward size={26} fill="currentColor" /></button>
         <button class="icon-btn big" class:on={p.repeat !== "off"} title="Repetir" onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
           {#if p.repeat === "one"}<Repeat1 size={20} />{:else}<Repeat size={20} />{/if}
         </button>
@@ -60,7 +61,7 @@
 
       <div class="extras">
         <button class="icon-btn" title="Cola" onclick={() => store.go({ name: "queue" })}><ListMusic size={18} /></button>
-        <button class="icon-btn" title="Mini reproductor" onclick={() => api.openMini()}><PictureInPicture2 size={17} /></button>
+        <button class="icon-btn" title={tip("Mini reproductor", "mini")} onclick={() => api.openMini()}><PictureInPicture2 size={17} /></button>
         {#if p.song?.kind === "stream"}
           <button class="icon-btn" title="Bajar como MP3" onclick={() => (store.pendingLink = p.song!.path)}><Download size={17} /></button>
         {/if}

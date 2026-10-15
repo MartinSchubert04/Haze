@@ -54,6 +54,8 @@ pub enum Control {
     Previous,
     Seek(f64),
     Volume(f64),
+    /// Sube o baja el volumen en esa cantidad (atajos de teclado).
+    VolumeBy(f64),
     Shuffle(bool),
     Repeat(String),
     PlayFolder(String),
@@ -90,6 +92,10 @@ pub fn control(app: &AppHandle, c: Control) {
             Control::Previous => p.previous(),
             Control::Seek(s) => p.seek(s),
             Control::Volume(v) => p.set_volume(v),
+            Control::VolumeBy(d) => {
+                let v = p.state().volume + d;
+                p.set_volume(v);
+            }
             Control::Shuffle(on) => p.set_shuffle(on),
             Control::Repeat(m) => p.set_repeat(m),
             Control::PlayFolder(path) => {
@@ -535,6 +541,51 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+// --------------------------------------------------------------------- atajos globales
+
+/// Atajos que andan desde cualquier programa, con la app en segundo plano o con la
+/// ventana cerrada. Todos con Ctrl+Alt+Shift: Ctrl+Alt solo es AltGr en teclados en
+/// espanol (robaria caracteres como la @) y Ctrl+Alt+flechas rota la pantalla con
+/// algunos drivers de Intel. La lista visible esta en src/lib/shortcuts.ts.
+fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
+    use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+    let mods = Some(Modifiers::CONTROL | Modifiers::ALT | Modifiers::SHIFT);
+    let keys = [Code::Space, Code::ArrowRight, Code::ArrowLeft, Code::ArrowUp, Code::ArrowDown, Code::KeyM];
+
+    app.plugin(
+        tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(|app, shortcut, event| {
+                if event.state() != ShortcutState::Pressed {
+                    return;
+                }
+                match shortcut.key {
+                    Code::Space => control(app, Control::Toggle),
+                    Code::ArrowRight => control(app, Control::Next),
+                    Code::ArrowLeft => control(app, Control::Previous),
+                    Code::ArrowUp => control(app, Control::VolumeBy(5.0)),
+                    Code::ArrowDown => control(app, Control::VolumeBy(-5.0)),
+                    Code::KeyM => {
+                        if app.get_webview_window("mini").is_some() {
+                            show_main(app);
+                        } else {
+                            open_mini(app);
+                        }
+                    }
+                    _ => {}
+                }
+            })
+            .build(),
+    )?;
+    for key in keys {
+        // Si otro programa ya lo tiene tomado, ese atajo no anda pero los demas si.
+        if let Err(e) = app.global_shortcut().register(Shortcut::new(mods, key)) {
+            log::warn!("atajo {key:?} ocupado: {e}");
+        }
+    }
+    Ok(())
+}
+
 // --------------------------------------------------------------------- arranque
 
 fn start_scan(app: &AppHandle) {
@@ -740,6 +791,7 @@ pub fn run() {
             });
 
             build_tray(&handle)?;
+            register_shortcuts(&handle)?;
             let h = handle.clone();
             media_keys::start(app.state::<AppState>().player_rx.clone(), move |c| control(&h, c));
             persist_playback(&handle);

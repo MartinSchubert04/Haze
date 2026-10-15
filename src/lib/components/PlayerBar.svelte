@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "../shortcuts";
   import { Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Maximize2 } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
@@ -33,11 +34,11 @@
       <button class="icon-btn" class:on={p.shuffle} title="Aleatorio" onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
         <Shuffle size={17} />
       </button>
-      <button class="icon-btn" title="Anterior" onclick={() => api.control({ type: "previous" })}>
+      <button class="icon-btn" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}>
         <SkipBack size={19} fill="currentColor" />
       </button>
       <PlayButton size={44} />
-      <button class="icon-btn" title="Siguiente" onclick={() => api.control({ type: "next" })}>
+      <button class="icon-btn" title={tip("Siguiente", "next")} onclick={() => api.control({ type: "next" })}>
         <SkipForward size={19} fill="currentColor" />
       </button>
       <button class="icon-btn" class:on={p.repeat !== "off"} title={repeatLabel} onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
@@ -51,7 +52,7 @@
     <button class="icon-btn" class:on={store.view.name === "queue"} title="Cola" onclick={() => store.go({ name: "queue" })}>
       <ListMusic size={18} />
     </button>
-    <button class="icon-btn" title="Mini reproductor" onclick={() => api.openMini()}>
+    <button class="icon-btn" title={tip("Mini reproductor", "mini")} onclick={() => api.openMini()}>
       <PictureInPicture2 size={17} />
     </button>
     <Volume />

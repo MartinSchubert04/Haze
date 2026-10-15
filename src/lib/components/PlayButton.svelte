@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from "../shortcuts";
   import { Play, Pause, LoaderCircle } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
@@ -16,7 +17,7 @@
   class:solid
   style:width="{size}px"
   style:height="{size}px"
-  title={store.player.playing ? "Pausar (Espacio)" : "Reproducir (Espacio)"}
+  title={tip(store.player.playing ? "Pausar" : "Reproducir", "toggle")}
   disabled={!store.player.song}
   onclick={() => api.control({ type: "toggle" })}
 >
