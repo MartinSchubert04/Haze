@@ -20,11 +20,6 @@
     await store.init();
     await win.show();
     api.windowReady("mini");
-    let t: ReturnType<typeof setTimeout>;
-    win.onMoved(({ payload }) => {
-      clearTimeout(t);
-      t = setTimeout(() => api.miniMoved(payload.x, payload.y), 400);
-    });
   });
 </script>
 

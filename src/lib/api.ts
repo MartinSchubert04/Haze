@@ -114,7 +114,6 @@ export const api = {
   showMain: () => invoke("main_show"),
   windowReady: (label: "main" | "mini") => invoke("window_ready", { label }),
   quit: () => invoke("quit"),
-  miniMoved: (x: number, y: number) => invoke("mini_moved", { x, y }),
   checkUpdate: () => invoke<{ version: string; url: string } | null>("check_update"),
 };
 

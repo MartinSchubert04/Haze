@@ -244,8 +244,10 @@ fn settings_set(app: AppHandle, settings: Settings) {
                 new.sources.push(d.clone());
             }
         }
-        // Lo de reproduccion lo maneja el reproductor, no la pantalla de ajustes.
+        // Lo de reproduccion lo maneja el reproductor, no la pantalla de ajustes, y la
+        // posicion de la mini la guarda la ventana mini: la copia de la interfaz esta vieja.
         new.playback = cur.playback.clone();
+        new.behavior.mini_position = cur.behavior.mini_position;
         let changes = (
             new.sources != cur.sources,
             serde_json::to_string(&new.ha).ok() != serde_json::to_string(&cur.ha).ok(),
@@ -319,9 +321,8 @@ async fn main_show(app: AppHandle) {
 }
 
 #[tauri::command]
-fn quit(app: AppHandle) {
-    shutdown(&app);
-    app.exit(0);
+async fn quit(app: AppHandle) {
+    quit_app(&app);
 }
 
 /// Ultima version publicada en GitHub, si es mas nueva que esta.
@@ -373,14 +374,6 @@ mod tests {
         assert!(!super::is_newer("1.0.0", "1.0.0"));
         assert!(!super::is_newer("1.2.0", "1.1.9"));
     }
-}
-
-#[tauri::command]
-fn mini_moved(app: AppHandle, x: i32, y: i32) {
-    let state = app.state::<AppState>();
-    let mut s = state.settings.lock().unwrap();
-    s.behavior.mini_position = Some((x, y));
-    s.save(&state.settings_path);
 }
 
 // --------------------------------------------------------------------- ventanas
@@ -436,8 +429,7 @@ pub fn show_main(app: &AppHandle) {
             if let WindowEvent::CloseRequested { .. } = e {
                 let to_tray = app2.state::<AppState>().settings.lock().unwrap().behavior.close_to_tray;
                 if !to_tray {
-                    shutdown(&app2);
-                    app2.exit(0);
+                    quit_app(&app2);
                 }
             }
         });
@@ -472,11 +464,56 @@ pub fn open_mini(app: &AppHandle) {
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }
-    b = match pos {
-        Some((x, y)) => b.position(x as f64, y as f64),
-        None => b.center(),
-    };
-    let _ = b.build();
+    let Ok(w) = b.build() else { return };
+
+    // Vuelve a donde estaba. La primera vez, o si ese lugar ya no esta en ninguna
+    // pantalla (monitor desconectado), va abajo a la derecha, arriba de la barra de
+    // tareas. La ventana nace oculta, asi que no se la ve saltar.
+    let target = pos.filter(|&(x, y)| on_screen(app, x, y)).or_else(|| bottom_right(&w));
+    if let Some((x, y)) = target {
+        let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+
+    // Se guarda en pixeles fisicos, igual que se restaura: con la pantalla al 125 % o
+    // 150 % mezclar fisicos con logicos la abria corrida. Moverla solo actualiza la
+    // memoria; el archivo se escribe al cerrarla.
+    let app2 = app.clone();
+    w.on_window_event(move |e| {
+        let state = app2.state::<AppState>();
+        match e {
+            WindowEvent::Moved(p) => {
+                state.settings.lock().unwrap().behavior.mini_position = Some((p.x, p.y));
+            }
+            WindowEvent::Destroyed => {
+                let s = state.settings.lock().unwrap();
+                s.save(&state.settings_path);
+            }
+            _ => {}
+        }
+    });
+}
+
+/// Esquina de abajo a la derecha del area de trabajo del monitor principal (la pantalla
+/// sin la barra de tareas, este donde este), con un margen.
+fn bottom_right(w: &tauri::WebviewWindow) -> Option<(i32, i32)> {
+    let m = w.primary_monitor().ok()??;
+    let area = m.work_area();
+    let size = w.outer_size().ok()?;
+    let margin = (12.0 * m.scale_factor()) as i32;
+    Some((
+        area.position.x + area.size.width as i32 - size.width as i32 - margin,
+        area.position.y + area.size.height as i32 - size.height as i32 - margin,
+    ))
+}
+
+/// Si el punto (esquina de la mini, mas un margen para que se pueda agarrar) cae en
+/// algun monitor conectado.
+fn on_screen(app: &AppHandle, x: i32, y: i32) -> bool {
+    let (px, py) = (x + 40, y + 20);
+    app.available_monitors().unwrap_or_default().iter().any(|m| {
+        let (p, sz) = (m.position(), m.size());
+        px >= p.x && py >= p.y && px < p.x + sz.width as i32 && py < p.y + sz.height as i32
+    })
 }
 
 // --------------------------------------------------------------------- bandeja
@@ -503,10 +540,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "prev" => control(app, Control::Previous),
             "mini" => open_mini(app),
             "open" => show_main(app),
-            "quit" => {
-                shutdown(app);
-                app.exit(0);
-            }
+            "quit" => quit_app(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, e| {
@@ -603,11 +637,22 @@ fn persist_playback(app: &AppHandle) {
     });
 }
 
+/// Sale de la app. `app.exit()` quedaba trabado cerrando los WebViews (llegaba el
+/// ExitRequested pero nunca el Exit) y el proceso seguia vivo. Como `shutdown` ya
+/// guardo todo, se sale directo; mpv muere con nosotros por el Job de Windows.
+pub fn quit_app(app: &AppHandle) {
+    shutdown(app);
+    app.cleanup_before_exit();
+    std::process::exit(0);
+}
+
 fn shutdown(app: &AppHandle) {
     let state = app.state::<AppState>();
     if let Ok(p) = state.player.try_lock() {
         p.save_session();
     }
+    // Al salir con la mini abierta, su posicion todavia esta solo en memoria.
+    state.settings.lock().unwrap().save(&state.settings_path);
     state.mqtt.lock().unwrap().stop();
 }
 
@@ -747,7 +792,6 @@ pub fn run() {
             mini_open,
             main_show,
             quit,
-            mini_moved,
             check_update,
             window_ready,
         ])
