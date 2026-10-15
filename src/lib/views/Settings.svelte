@@ -2,7 +2,7 @@
   import { shortcutList } from "../shortcuts";
   import { open } from "@tauri-apps/plugin-dialog";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download } from "@lucide/svelte";
+  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "../format";
@@ -290,9 +290,10 @@
     </section>
 
     <!-- ------------------------------------------------------------ home assistant -->
-    <section>
-      <div class="sec-head">
-        <div>
+    <!-- Desplegable: la mayoria lo configura una vez y no lo vuelve a tocar. -->
+    <details class="fold">
+      <summary>
+        <div class="grow">
           <h2>Home Assistant</h2>
           <p>Por MQTT. Las entidades aparecen solas en HA, en el dispositivo "{s.ha.deviceName}".</p>
         </div>
@@ -301,7 +302,8 @@
             {store.haStatus === "connected" ? "Conectado" : store.haStatus === "error" ? "Sin conexión" : "Conectando…"}
           </span>
         {/if}
-      </div>
+        <ChevronDown size={18} class="chev" />
+      </summary>
       <label class="toggle">
         <div>Conectar con Home Assistant</div>
         <input type="checkbox" bind:checked={ha.enabled} />
@@ -321,7 +323,7 @@
           Guardar
         </button>
       </div>
-    </section>
+    </details>
 
     <section>
       <h2>Salir</h2>
@@ -338,6 +340,39 @@
   }
   .page {
     max-width: 860px;
+  }
+  .fold {
+    margin-top: 18px;
+    padding: 0 22px;
+    border-radius: var(--radius-lg);
+    background: var(--tile);
+  }
+  .fold summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 0;
+    cursor: pointer;
+    list-style: none;
+  }
+  .fold summary::-webkit-details-marker {
+    display: none;
+  }
+  .fold summary p {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+  .fold :global(.chev) {
+    flex: none;
+    color: var(--text-3);
+    transition: transform 0.2s;
+  }
+  .fold[open] :global(.chev) {
+    transform: rotate(180deg);
+  }
+  .fold[open] {
+    padding-bottom: 22px;
   }
   .keys {
     display: flex;
