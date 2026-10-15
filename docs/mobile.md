@@ -1,8 +1,9 @@
 # Haze para Android
 
 Plan para la versión de celular: dónde va a vivir, qué se reusa de escritorio y en qué
-orden se hace. Las fases 0 a 3 (núcleo compartido, reproductor local, Home Assistant y YouTube) ya están;
-lo siguiente es la fase 4 (actualizaciones y publicación).
+orden se hace. Las cinco fases (núcleo compartido, reproductor local, Home Assistant, YouTube y
+actualizaciones) están hechas. Falta crear la keystore de firma (ver "Publicar") y
+probar las actualizaciones en un celular real.
 
 Solo Android. En iOS no se puede instalar por fuera de la App Store, la App Store no
 acepta una app que baja de YouTube y yt-dlp no corre ahí.
@@ -108,36 +109,52 @@ Ahí Haze se da cuenta en la primera descarga y baja el audio tal cual lo da You
 sin tags ni tapa: el nombre queda "Artista - Tema" y la biblioteca separa el artista del
 nombre. Cuando la librería publique un ffmpeg de 16 KB, alcanza con subir la versión.
 
-**4. Actualizaciones.** Ver la sección siguiente.
+**4. Actualizaciones. Hecho.** Ver las dos secciones siguientes.
 
 ## Actualizaciones
 
-Igual que en escritorio: busca en GitHub cada tantas horas, baja de fondo, verifica la
-firma, instala cuando no está sonando nada y vuelve a la canción en el mismo segundo
-(`MY_PACKAGE_REPLACED` reemplaza a `relaunch.json`).
+Cada seis horas (y con "Buscar" en Ajustes) Haze se fija en GitHub si hay un Release
+`mobile-v*` más nuevo, lo baja de fondo y verifica el sha256 de `latest-android.json`. La
+firma la verifica Android: un APK firmado con otra clave no se instala encima.
 
-Lo que cambia es que Android pide permiso:
+Se instala solo al salir de la app sin música sonando, si Android deja hacerlo sin
+preguntar: Android 12 o más nuevo, con el permiso "Instalar apps desconocidas" y Haze como
+quien instaló la versión actual (`setRequireUserAction(USER_ACTION_NOT_REQUIRED)`). Si no,
+queda "Actualizar ahora" en Ajustes, que la primera vez abre el ajuste del permiso y
+después muestra el diálogo del sistema. La sesión queda guardada: al abrir la versión
+nueva, vuelve a la misma canción en el mismo segundo.
 
-1. Una sola vez, el permiso "Instalar apps desconocidas" para Haze.
-2. La primera actualización muestra el diálogo del sistema.
-3. Después, en Android 12 o más nuevo, `setRequireUserAction(USER_ACTION_NOT_REQUIRED)`
-   permite instalar sin preguntar, porque Haze pasa a ser quien instaló la versión
-   actual. Si alguien reinstala el APK a mano, la siguiente vuelve a preguntar. En
-   Android 11 o anterior siempre pregunta. Hay que confirmarlo en un dispositivo real.
+Probado en el emulador: buscar (con y sin versión nueva publicada) y el APK de release
+firmado. La instalación en sí hay que confirmarla en un celular real con el primer Release.
 
-Todas las versiones se firman con la misma keystore. Si se pierde, nadie puede
-actualizar sin desinstalar. Va como secret en GitHub, igual que la clave del updater de
-escritorio.
+## Publicar
 
-## Publicación
+```
+git tag mobile-v0.2.0
+git push origin mobile-v0.2.0
+```
 
-- Tags separados por app: `v*` sigue siendo escritorio; Android usa `mobile-v*`.
-- El APK se sube al mismo Release de GitHub con su propio `latest-android.json`.
-- Workflow aparte en el CI (`android.yml`), en `ubuntu-latest` con el SDK y el NDK de
-  Android. Hoy compila un APK de debug en cada push que toque algo de Android.
+El workflow `Android` compila el APK de release para arm64, lo firma y lo sube a un Release
+con `latest-android.json`. El Release se crea con `--latest=false`: "latest" es de
+escritorio, que busca ahí su `latest.json` (y los de escritorio se crean con `--latest`).
 
-## Antes de arrancar
+La firma sale de cuatro secrets del repo (Settings > Secrets and variables > Actions). Para
+crearlos, una sola vez:
 
-- Android Studio con el SDK, el NDK y un emulador o un celular con depuración USB.
-- Rust con los targets `aarch64-linux-android` y `armv7-linux-androideabi`.
-- Generar la keystore de firma y guardarla en dos lugares.
+```
+keytool -genkeypair -keystore haze.jks -alias haze -keyalg RSA -keysize 4096 -validity 36500
+base64 -w0 haze.jks   # en Windows: certutil -encode haze.jks haze.b64 (sin las lineas BEGIN/END)
+```
+
+| Secret | Valor |
+|---|---|
+| `ANDROID_KEYSTORE` | `haze.jks` en base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | la contraseña de la keystore |
+| `ANDROID_KEY_ALIAS` | `haze` |
+| `ANDROID_KEY_PASSWORD` | la de la clave (si es la misma, se puede omitir) |
+
+Todas las versiones se firman con la misma keystore. Si se pierde, nadie puede actualizar
+sin desinstalar: guardala en dos lugares, fuera del repo.
+
+Para un APK firmado en la PC, crear `apps/mobile/src-tauri/gen/android/keystore.properties`
+(está en el `.gitignore`) con `storeFile`, `storePassword`, `keyAlias` y `keyPassword`.

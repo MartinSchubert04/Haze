@@ -11,7 +11,7 @@ use tauri::plugin::mobile::PluginInvokeError;
 use tauri::plugin::PluginHandle;
 use tauri::{Manager, Runtime};
 
-use crate::{parse, PlayerEvent, Track};
+use crate::{parse, PlayerEvent, Release, Track};
 
 pub struct HazePlayer<R: Runtime>(PluginHandle<R>);
 
@@ -115,6 +115,29 @@ impl<R: Runtime> HazePlayer<R> {
             saved: usize,
         }
         Ok(self.call::<Saved>("ytDownload", json!({ "id": id, "args": args }))?.saved)
+    }
+
+    /// La ultima version publicada para Android, si hay. Tarda: llamar fuera del runtime.
+    pub fn update_latest(&self) -> Result<Option<Release>, PluginInvokeError> {
+        let v = self.call::<Value>("updateLatest", ())?;
+        Ok(serde_json::from_value(v).ok())
+    }
+
+    /// Baja y verifica el APK. El avance llega como `PlayerEvent::UpdateProgress`.
+    pub fn update_download(&self, release: &Release) -> Result<(), PluginInvokeError> {
+        self.call::<Value>("updateDownload", json!({ "url": release.url, "sha256": release.sha256 }))?;
+        Ok(())
+    }
+
+    /// Instala lo bajado. `Ok(false)` si antes hay que dar el permiso de instalar apps (se
+    /// abrio ese ajuste).
+    pub fn update_install(&self) -> Result<bool, PluginInvokeError> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Installed {
+            needs_permission: bool,
+        }
+        Ok(!self.call::<Installed>("updateInstall", ())?.needs_permission)
     }
 
     /// La tapa en JPEG, si el archivo trae una.

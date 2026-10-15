@@ -14,6 +14,16 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Firma de los APK de release. El CI escribe gen/android/keystore.properties con los
+// secrets (ver .github/workflows/android.yml); en la PC se puede crear a mano. Nunca se
+// sube al repo.
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 37
     namespace = "app.haze.player"
@@ -29,6 +39,16 @@ android {
     packaging {
         jniLibs.useLegacyPackaging = true
     }
+    signingConfigs {
+        if (!keystoreProperties.isEmpty) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -43,6 +63,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             optimization {
                enable = true
             }

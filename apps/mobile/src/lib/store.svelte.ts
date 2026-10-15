@@ -2,7 +2,7 @@
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
 import { folderName, sortKey } from "@haze/ui/format";
-import { api, type DownloadJob, type PlayerState, type Settings, type Song } from "./api";
+import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 
 export type Tab = "songs" | "folders" | "youtube" | "queue";
 
@@ -43,6 +43,7 @@ class Store {
   version = $state("");
   haStatus = $state("off");
   downloads = $state.raw<DownloadJob[]>([]);
+  update = $state<UpdateInfo | null>(null);
   songs = $state.raw<Song[]>([]);
   settings = $state<Settings | null>(null);
   player = $state<PlayerState>(emptyState);
@@ -72,6 +73,7 @@ class Store {
     this.version = b.version;
     this.haStatus = b.haStatus;
     this.downloads = b.downloads;
+    this.update = b.update;
     this.ready = true;
 
     listen<PlayerState>("player://state", (e) => {
@@ -83,6 +85,11 @@ class Store {
     listen<{ position: number; duration: number }>("player://position", (e) => this.setPosition(e.payload.position));
     listen<Song[]>("library://changed", (e) => (this.songs = e.payload));
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
+    listen<UpdateInfo | null>("update://status", (e) => {
+      const was = this.update?.status;
+      this.update = e.payload;
+      if (e.payload?.status === "ready" && was !== "ready") this.toast(`Haze ${e.payload.version} está lista: se instala al salir`);
+    });
     listen<DownloadJob[]>("downloads://changed", (e) => (this.downloads = e.payload));
     listen<string>("downloads://done", (e) => this.toast(`Bajada: ${e.payload}`));
     listen<string>("ha://status", (e) => (this.haStatus = e.payload));

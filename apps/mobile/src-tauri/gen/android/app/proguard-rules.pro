@@ -19,7 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
-# youtubedl-android lee la respuesta de yt-dlp con Jackson por reflexion.
+# youtubedl-android: lee la respuesta de yt-dlp con Jackson y descomprime Python y
+# ffmpeg con commons-compress, los dos por reflexion. Sin esto, R8 los rompe.
 -keep class com.yausername.** { *; }
--keep class com.fasterxml.jackson.databind.** { *; }
--dontwarn com.fasterxml.jackson.databind.**
+-keep class com.fasterxml.jackson.** { *; }
+-keep class org.apache.commons.compress.** { *; }
+-dontwarn com.fasterxml.jackson.**
+-dontwarn org.apache.commons.compress.**

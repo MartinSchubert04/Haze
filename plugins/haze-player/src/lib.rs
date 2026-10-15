@@ -28,6 +28,16 @@ pub enum PlayerEvent {
     Previous,
     /// Una linea de yt-dlp mientras baja (ver `haze_core::youtube::parse_progress`).
     Download { id: u64, line: String },
+    /// Avance de la descarga de una actualizacion, de 0 a 1.
+    UpdateProgress(f64),
+}
+
+/// Una version publicada en GitHub (`latest-android.json`).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Release {
+    pub version: String,
+    pub url: String,
+    pub sha256: String,
 }
 
 /// Una cancion de MediaStore.
@@ -87,6 +97,7 @@ enum Raw {
     Next,
     Previous,
     Download { id: u64, line: String },
+    Update(f64),
 }
 
 impl From<Raw> for PlayerEvent {
@@ -102,6 +113,7 @@ impl From<Raw> for PlayerEvent {
             Raw::Next => Self::Next,
             Raw::Previous => Self::Previous,
             Raw::Download { id, line } => Self::Download { id, line },
+            Raw::Update(p) => Self::UpdateProgress(p),
         }
     }
 }
@@ -150,6 +162,7 @@ mod tests {
             parse(r#"{"type":"download","value":{"id":3,"line":"DL 50%"}}"#),
             Some(PlayerEvent::Download { id: 3, line: "DL 50%".into() })
         );
+        assert_eq!(parse(r#"{"type":"update","value":0.5}"#), Some(PlayerEvent::UpdateProgress(0.5)));
         assert_eq!(parse(r#"{"type":"bogus"}"#), None);
     }
 

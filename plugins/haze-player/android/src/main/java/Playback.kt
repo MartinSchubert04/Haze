@@ -62,7 +62,7 @@ internal object Playback {
       connecting = null
       val c = try {
         future.get()
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         Logger.error("haze-player: no se pudo conectar con el servicio: ${e.message}")
         pending.clear()
         return@addListener
@@ -92,7 +92,7 @@ internal object Playback {
     resolver.execute {
       val url = try {
         Youtube.streamUrl(context, args.uri)
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         main.post { if (seq == loadSeq) emit("failed", e.message ?: "No se pudo abrir el link") }
         return@execute
       }
@@ -134,6 +134,12 @@ internal object Playback {
 
   /** "Anterior" o "siguiente" desde la notificacion, la pantalla de bloqueo o auriculares. */
   fun remote(type: String) = emit(type)
+
+  /** Si esta sonando (o por sonar): no se actualiza en medio de una cancion. */
+  val playing get() = controller?.playWhenReady == true
+
+  /** Avance de la descarga de una actualizacion, de 0 a 1. Llega desde otro hilo. */
+  fun update(progress: Float) = main.post { emit("update", progress.toDouble()) }
 
   /** Una linea de yt-dlp mientras baja. Llega desde otro hilo. */
   fun download(id: Long, line: String) = main.post {

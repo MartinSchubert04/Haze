@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Actualizaciones: instalar el APK nuevo que baja Haze. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Home Assistant: Android 17 pide permiso para hablar con la red local. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
@@ -24,5 +27,8 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <receiver
+            android:name="app.haze.player.plugin.InstallResult"
+            android:exported="false" />
     </application>
 </manifest>

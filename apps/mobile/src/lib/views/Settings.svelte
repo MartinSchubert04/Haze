@@ -1,6 +1,6 @@
 <script lang="ts">
   // Ajustes del telefono: acento, fondo, reproduccion y Home Assistant.
-  import { ChevronLeft, Check, RefreshCw } from "@lucide/svelte";
+  import { ChevronLeft, Check, RefreshCw, Download } from "@lucide/svelte";
   import { plural } from "@haze/ui/format";
   import { api } from "../api";
   import { store } from "../store.svelte";
@@ -22,6 +22,29 @@
     ({ connected: "Conectado", error: "Sin conexión", network: "Falta permiso" } as Record<string, string>)[store.haStatus] ??
       "Conectando…",
   );
+
+  let checking = $state(false);
+  let upToDate = $state(false);
+
+  async function checkUpdate() {
+    checking = true;
+    upToDate = false;
+    try {
+      upToDate = !(await api.updateCheck()) && !store.update;
+    } catch (e) {
+      store.toast(String(e), "error");
+    } finally {
+      checking = false;
+    }
+  }
+
+  async function install() {
+    try {
+      if (!(await api.updateInstall())) store.toast('Permití "Instalar apps desconocidas" para Haze y tocá de nuevo');
+    } catch (e) {
+      store.toast(String(e), "error");
+    }
+  }
 
   async function saveHa() {
     await store.saveSettings((x) => (x.ha = { ...ha, port: Number(ha.port) || 1883 }));
@@ -144,7 +167,29 @@
       </button>
     </div>
 
-    <p class="version">Haze {store.version}</p>
+    <h2>Actualizaciones</h2>
+    <div class="row">
+      <span>Versión {store.version}</span>
+      {#if store.update?.status === "ready"}
+        <button class="pill primary" onclick={install}>Actualizar ahora</button>
+      {:else}
+        <button class="pill" onclick={checkUpdate} disabled={checking || !!store.update}>
+          <RefreshCw size={15} class={checking || store.update ? "spin" : ""} /> Buscar
+        </button>
+      {/if}
+    </div>
+    {#if store.update}
+      <div class="update">
+        <Download size={18} />
+        <span>
+          {store.update.status === "ready"
+            ? `Haze ${store.update.version} está lista. Se instala sola al salir de la app sin música sonando.`
+            : `Bajando Haze ${store.update.version}… ${Math.round(store.update.progress * 100)}%`}
+        </span>
+      </div>
+    {:else if upToDate}
+      <div class="update"><Check size={18} /> Estás en la última versión</div>
+    {/if}
   </div>
   <div class="spacer-bottom"></div>
 </section>
@@ -279,10 +324,11 @@
   .save {
     align-self: flex-end;
   }
-  .version {
-    margin-top: 32px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--text-3);
+  .update {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--text-2);
   }
 </style>

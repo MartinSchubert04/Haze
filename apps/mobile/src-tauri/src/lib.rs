@@ -3,6 +3,7 @@
 //! MediaStore. Home Assistant usa el mismo puente MQTT que escritorio y YouTube, el
 //! mismo yt-dlp (con `youtubedl-android`).
 
+mod updater;
 mod youtube;
 
 use std::collections::HashMap;
@@ -47,6 +48,8 @@ struct AppState {
     /// "off", "connected", "error" o "network".
     ha_status: Mutex<String>,
     downloads: Mutex<youtube::Downloads>,
+    /// Una version nueva bajandose o lista para instalar.
+    update: Mutex<Option<updater::UpdateInfo>>,
     /// Hay permiso para leer la musica.
     access: Mutex<bool>,
     scanning: Mutex<bool>,
@@ -98,6 +101,7 @@ struct Bootstrap {
     version: String,
     ha_status: String,
     downloads: Vec<youtube::DownloadJob>,
+    update: Option<updater::UpdateInfo>,
 }
 
 #[tauri::command]
@@ -118,6 +122,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         version: app.package_info().version.to_string(),
         ha_status: state.ha_status.lock().unwrap().clone(),
         downloads: state.downloads.lock().unwrap().jobs.clone(),
+        update: state.update.lock().unwrap().clone(),
     };
     boot
 }
@@ -421,16 +426,23 @@ async fn start(app: AppHandle) {
             tokio::select! {
                 ev = rx.recv() => {
                     let Some(ev) = ev else { return };
-                    if let PlayerEvent::Download { id, line } = &ev {
-                        youtube::on_line(&h, *id, line);
-                        continue;
+                    match &ev {
+                        PlayerEvent::Download { id, line } => {
+                            youtube::on_line(&h, *id, line);
+                            continue;
+                        }
+                        PlayerEvent::UpdateProgress(p) => {
+                            updater::on_progress(&h, *p);
+                            continue;
+                        }
+                        _ => {}
                     }
                     let mut p = player.lock().await;
                     match ev {
                         PlayerEvent::Engine(e) => p.on_event(e),
                         PlayerEvent::Next => p.next(),
                         PlayerEvent::Previous => p.previous(),
-                        PlayerEvent::Download { .. } => {}
+                        PlayerEvent::Download { .. } | PlayerEvent::UpdateProgress(_) => {}
                     }
                 }
                 _ = save.tick() => {
@@ -458,6 +470,7 @@ async fn start(app: AppHandle) {
     let _ = app.emit("app://ready", granted);
     // Despues de la biblioteca: asi el primer anuncio ya trae las carpetas.
     start_mqtt(&app).await;
+    tauri::async_runtime::spawn(updater::run(app.clone()));
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -508,6 +521,7 @@ pub fn run() {
                 mqtt: Mutex::new(mqtt::Bridge::new()),
                 ha_status: Mutex::new("off".into()),
                 downloads: Mutex::new(Default::default()),
+                update: Mutex::new(None),
                 access: Mutex::new(false),
                 scanning: Mutex::new(false),
                 ready: Mutex::new(false),
@@ -532,6 +546,8 @@ pub fn run() {
             youtube::yt_inspect,
             youtube::yt_download,
             youtube::downloads_clear,
+            updater::update_check,
+            updater::update_install,
         ])
         .run(tauri::generate_context!())
         .expect("no se pudo arrancar Haze");

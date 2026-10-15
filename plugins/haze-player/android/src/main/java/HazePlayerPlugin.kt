@@ -5,6 +5,7 @@ import android.app.Activity
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
+import app.tauri.Logger
 import app.tauri.PermissionState
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -36,6 +37,12 @@ class LoadArgs {
   var artwork: String? = null
   /** Es un link (YouTube...): hay que sacar la URL del audio con yt-dlp. */
   var stream: Boolean = false
+}
+
+@InvokeArg
+class UpdateArgs {
+  lateinit var url: String
+  lateinit var sha256: String
 }
 
 @InvokeArg
@@ -195,7 +202,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val result = JSObject()
         result.put("out", Youtube.run(context, args))
         invoke.resolve(result)
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         invoke.reject(e.message ?: "yt-dlp fallo")
       }
     }
@@ -211,8 +218,77 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val result = JSObject()
         result.put("saved", saved)
         invoke.resolve(result)
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         invoke.reject(e.message ?: "yt-dlp fallo")
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ actualizaciones
+
+  /** El ultimo Release de Android en GitHub: {version, url, sha256} o {} si no hay. */
+  @Command
+  fun updateLatest(invoke: Invoke) {
+    yt.execute {
+      try {
+        val latest = Updater.latest()
+        invoke.resolve(if (latest == null) JSObject() else JSObject(latest.toString()))
+      } catch (e: Throwable) {
+        invoke.reject(e.message ?: "No se pudo consultar GitHub")
+      }
+    }
+  }
+
+  /** Baja y verifica el APK. El avance va por el canal como "update". */
+  @Command
+  fun updateDownload(invoke: Invoke) {
+    val a = invoke.parseArgs(UpdateArgs::class.java)
+    yt.execute {
+      try {
+        Updater.download(context, a.url, a.sha256) { p -> Playback.update(p) }
+        invoke.resolve()
+      } catch (e: Throwable) {
+        invoke.reject(e.message ?: "No se pudo bajar la actualizacion")
+      }
+    }
+  }
+
+  /**
+   * Instala lo bajado. Sin el permiso "Instalar apps desconocidas" abre ese ajuste y
+   * responde `needsPermission`: al volver, se toca "Actualizar" de nuevo.
+   */
+  @Command
+  fun updateInstall(invoke: Invoke) {
+    val result = JSObject()
+    if (!Updater.allowed(context)) {
+      Updater.openPermission(activity)
+      result.put("needsPermission", true)
+      invoke.resolve(result)
+      return
+    }
+    yt.execute {
+      try {
+        Updater.install(context)
+        result.put("needsPermission", false)
+        invoke.resolve(result)
+      } catch (e: Throwable) {
+        invoke.reject(e.message ?: "No se pudo instalar")
+      }
+    }
+  }
+
+  /**
+   * Al salir de la app sin musica sonando, se instala lo que haya listo, si Android deja
+   * hacerlo sin preguntar. Si no, queda para "Actualizar ahora" en Ajustes.
+   */
+  override fun onStop() {
+    if (Updater.ready != null && !Playback.playing && Updater.silent(context)) {
+      yt.execute {
+        try {
+          Updater.install(context)
+        } catch (e: Throwable) {
+          Logger.error("haze-player: no se pudo instalar la actualizacion: ${e.message}")
+        }
       }
     }
   }
@@ -224,7 +300,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val result = JSObject()
         result.put("songs", Library.query(context))
         invoke.resolve(result)
-      } catch (e: Exception) {
+      } catch (e: Throwable) {
         invoke.reject(e.message ?: e.toString())
       }
     }

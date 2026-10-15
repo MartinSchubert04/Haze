@@ -4,6 +4,8 @@ import type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Setting
 
 export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song };
 
+export type UpdateInfo = { version: string; status: "downloading" | "ready"; progress: number };
+
 export type Bootstrap = {
   settings: Settings;
   songs: Song[];
@@ -18,6 +20,7 @@ export type Bootstrap = {
   /** Home Assistant: "off", "connected", "error" o "network" (falta el permiso de red local). */
   haStatus: string;
   downloads: DownloadJob[];
+  update: UpdateInfo | null;
 };
 
 export type Control =
@@ -50,6 +53,10 @@ export const api = {
   ytDownload: (url: string, title: string, thumb: string | null, playlist: boolean) =>
     invoke<number>("yt_download", { url, title, thumb, playlist }),
   clearDownloads: () => invoke("downloads_clear"),
+  /** Devuelve la version nueva, si hay (y la empieza a bajar). */
+  updateCheck: () => invoke<string | null>("update_check"),
+  /** `false` si antes hay que dar el permiso de instalar apps (se abre ese ajuste). */
+  updateInstall: () => invoke<boolean>("update_install"),
 };
 
 /** URL de la tapa: la miniatura remota o la del archivo (la sirve Rust desde MediaStore). */

@@ -141,4 +141,6 @@ jobs:
 
           Si ya tenés Haze, no hace falta: se actualiza sola de fondo.
           NOTAS
-          gh release create "$GITHUB_REF_NAME" $ARCHIVOS --title "Haze $V" --notes-file notas.md
+          # --latest: las apps de escritorio buscan su latest.json en el ultimo Release, y los
+          # de Android (mobile-v*) no deben quedar como ultimo.
+          gh release create "$GITHUB_REF_NAME" $ARCHIVOS --title "Haze $V" --notes-file notas.md --latest

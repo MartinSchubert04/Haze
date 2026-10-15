@@ -1,14 +1,20 @@
 name: Android
 
-# En cada push y PR que toque algo de Android: tests de Rust del nucleo y del plugin,
-# chequeo de tipos y un APK de debug para celulares (arm64), que queda como artefacto.
+# - En cada push y PR que toque algo de Android: tests de Rust del nucleo y del plugin,
+#   chequeo de tipos y un APK de debug para celulares (arm64), que queda como artefacto.
+# - Al etiquetar mobile-vX.Y.Z: compila el APK firmado y lo publica en Releases con
+#   latest-android.json, que es lo que consultan las apps instaladas para actualizarse.
+#
+#     git tag mobile-v0.2.0
+#     git push origin mobile-v0.2.0
 #
 # Escritorio tiene su propio workflow (desktop.yml). Cada uno corre solo si cambio algo
 # que le afecta, y tienen grupos de concurrencia separados: no se cancelan entre si.
-# Publicar el APK firmado con un tag mobile-v* llega con la fase 4 (docs/mobile.md).
+# Los filtros de carpetas no aplican a los tags: un tag mobile-v* siempre compila.
 on:
   push:
     branches: [main]
+    tags: ['mobile-v*']
     paths:
       - 'apps/mobile/**'
       - 'plugins/**'
@@ -32,6 +38,9 @@ on:
       - '.github/workflows/android.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -41,6 +50,8 @@ jobs:
     name: Tests y APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/mobile-v') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,25 +76,99 @@ jobs:
 
       - run: npm ci
 
+      # En los tags no se repiten: ya corrieron con el push a main.
       - name: Chequeo de tipos
+        if: env.RELEASE != 'true'
         run: npm run check -w @haze/mobile
 
       # El plugin depende de Tauri, y sus tests corren en Linux: hacen falta GTK y WebKit.
       - name: Librerias de Tauri para Linux
+        if: env.RELEASE != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev
 
       - name: Tests de Rust
+        if: env.RELEASE != 'true'
         run: cargo test -p haze-core -p tauri-plugin-haze-player --features haze-core/mqtt
 
       - name: APK de debug
+        if: env.RELEASE != 'true'
         working-directory: apps/mobile
         # El runner trae el SDK y el NDK de Android instalados.
         run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npx tauri android build --debug --target aarch64 --apk
 
       - uses: actions/upload-artifact@v4
+        if: env.RELEASE != 'true'
         with:
           name: haze-android-debug
           path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           retention-days: 7
+
+      # ------------------------------------------------------------------ release
+
+      - name: Version desde el tag
+        if: env.RELEASE == 'true'
+        id: version
+        run: |
+          V="${GITHUB_REF_NAME#mobile-v}"
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "El tag '$GITHUB_REF_NAME' no tiene la forma mobile-vMAYOR.MENOR.PARCHE" >&2
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      # La keystore va como secrets (Settings > Secrets > Actions), en base64. Todas las
+      # versiones se firman con la misma: con otra, Android no instala encima.
+      - name: Keystore
+        if: steps.version.outputs.version
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "Falta el secret ANDROID_KEYSTORE: sin firma no se puede publicar (ver docs/mobile.md)." >&2
+            exit 1
+          fi
+          GEN=apps/mobile/src-tauri/gen/android
+          echo "$KEYSTORE" | base64 -d > "$GEN/haze.jks"
+          {
+            echo "storeFile=haze.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=${KEY_PASSWORD:-$STORE_PASSWORD}"
+          } > "$GEN/keystore.properties"
+
+      - name: APK firmado
+        if: steps.version.outputs.version
+        working-directory: apps/mobile
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          # La version sale del tag; Tauri arma el versionCode con ella.
+          NDK_HOME="$ANDROID_NDK_LATEST_HOME" npx tauri android build --target aarch64 --apk --config "{\"version\":\"$V\"}"
+
+      - name: Publicar el Release
+        if: steps.version.outputs.version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          APK=$(find apps/mobile/src-tauri/gen/android/app/build/outputs/apk -name '*-release.apk' | head -1)
+          cp "$APK" "Haze-$V-android.apk"
+          SHA=$(sha256sum "Haze-$V-android.apk" | cut -d' ' -f1)
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/Haze-$V-android.apk"
+          node -e '
+            const [version, url, sha256] = process.argv.slice(1);
+            require("fs").writeFileSync("latest-android.json", JSON.stringify({ version, url, sha256, pub_date: new Date().toISOString() }, null, 2));
+          ' "$V" "$URL" "$SHA"
+
+          cat > notas.md <<NOTAS
+          Bajá \`Haze-$V-android.apk\` en el celular y abrilo. Android va a pedir permiso para instalar apps de esta fuente.
+
+          Si ya tenés Haze, no hace falta: se actualiza sola.
+          NOTAS
+          # --latest=false: "latest" es de escritorio, que busca ahi su latest.json.
+          gh release create "$GITHUB_REF_NAME" "Haze-$V-android.apk" latest-android.json \
+            --title "Haze para Android $V" --notes-file notas.md --latest=false
