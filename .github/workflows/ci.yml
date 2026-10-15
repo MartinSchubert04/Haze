@@ -34,18 +34,28 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Los tags solo pueden leer la cache de main: por eso main la deja con lo de
+      # release ya compilado (ver "Calentar cache") y el tag compila solo Haze.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - run: npm ci
 
+      # En los tags no se repiten: ya corrieron con el push a main.
       - name: Chequeo de tipos
+        if: "!startsWith(github.ref, 'refs/tags/')"
         run: npm run check
 
       - name: Tests de Rust
+        if: "!startsWith(github.ref, 'refs/tags/')"
         working-directory: src-tauri
         run: cargo test
+
+      - name: Calentar cache de release
+        if: github.ref == 'refs/heads/main'
+        run: npx tauri build --no-bundle
 
       - name: Version desde el tag
         if: startsWith(github.ref, 'refs/tags/v')
