@@ -4,13 +4,13 @@
 
 use std::time::Duration;
 
+use haze_core::settings::HomeAssistant;
 use rumqttc::{AsyncClient, Event, LastWill, MqttOptions, Packet, QoS};
 use serde_json::json;
 use tauri::async_runtime::JoinHandle;
 use tokio::sync::watch;
 
 use crate::player::PlayerState;
-use crate::settings::HomeAssistant;
 use crate::Control;
 
 const REPEAT: &[(&str, &str)] = &[("off", "No"), ("all", "Todo"), ("one", "Una")];

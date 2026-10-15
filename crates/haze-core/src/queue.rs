@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::library::Song;
+use crate::song::Song;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct QueueEntry {
@@ -51,7 +51,6 @@ impl PlayQueue {
         self.entries.iter().filter(|e| !e.ephemeral).cloned().collect()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn from_context(songs: &[Arc<Song>], start: usize, uid_from: u64) -> Self {
         if songs.is_empty() {
             return Self::default();
@@ -203,7 +202,7 @@ impl PlayQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::{Song, SongKind};
+    use crate::song::{Song, SongKind};
 
     fn song(n: u64) -> Arc<Song> {
         Arc::new(Song {

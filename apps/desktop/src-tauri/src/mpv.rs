@@ -1,24 +1,18 @@
 //! mpv como motor de audio: un proceso aparte, sin ventana, que se maneja por su IPC
 //! JSON en un named pipe. Reproduce cualquier formato y, con yt-dlp, URLs de YouTube.
+//!
+//! Es el [`Engine`] de escritorio: traduce los comandos del reproductor a mpv y lo que
+//! avisa mpv a [`EngineEvent`].
 
 use std::path::Path;
 use std::time::Duration;
 
+use haze_core::player::{Engine, EngineEvent, SharedPlayer};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::tools;
-
-#[derive(Debug)]
-pub enum MpvEvent {
-    Property(String, Value),
-    /// Termino un archivo. `reason`: eof, error, stop, quit, redirect.
-    EndFile { reason: String, error: Option<String> },
-    FileLoaded,
-    /// El proceso se cerro (o se rompio el pipe).
-    Exited,
-}
 
 pub struct Mpv {
     tx: mpsc::UnboundedSender<String>,
@@ -30,7 +24,7 @@ const OBSERVED: &[&str] =
     &["pause", "time-pos", "duration", "volume", "idle-active", "media-title", "paused-for-cache", "current-ao"];
 
 impl Mpv {
-    pub async fn spawn(mpv: &Path, volume: f64, events: mpsc::UnboundedSender<MpvEvent>) -> Result<Self, String> {
+    pub async fn spawn(mpv: &Path, volume: f64, events: mpsc::UnboundedSender<EngineEvent>) -> Result<Self, String> {
         let pipe = format!(r"\\.\pipe\haze-mpv-{}", std::process::id());
         let mut cmd = tools::command(mpv);
         cmd.args([
@@ -91,22 +85,12 @@ impl Mpv {
             let mut lines = BufReader::new(read).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
-                let ev = match v["event"].as_str() {
-                    Some("property-change") => {
-                        MpvEvent::Property(v["name"].as_str().unwrap_or_default().to_string(), v["data"].clone())
-                    }
-                    Some("end-file") => MpvEvent::EndFile {
-                        reason: v["reason"].as_str().unwrap_or_default().to_string(),
-                        error: v["file_error"].as_str().map(str::to_string),
-                    },
-                    Some("file-loaded") => MpvEvent::FileLoaded,
-                    _ => continue,
-                };
+                let Some(ev) = translate(&v) else { continue };
                 if events.send(ev).is_err() {
                     return;
                 }
             }
-            let _ = events.send(MpvEvent::Exited);
+            let _ = events.send(EngineEvent::Exited);
         });
 
         let me = Self { tx, child };
@@ -120,7 +104,14 @@ impl Mpv {
         let _ = self.tx.send(json!({ "command": args }).to_string());
     }
 
-    pub fn load(&self, path: &str, start: f64) {
+    pub fn set(&self, prop: &str, value: Value) {
+        self.command(json!(["set_property", prop, value]));
+    }
+}
+
+impl Engine for Mpv {
+    fn load(&self, path: &str, start: f64, paused: bool) {
+        self.set("pause", json!(paused));
         if start > 0.0 {
             self.command(json!(["loadfile", path, "replace", -1, format!("start={start}")]));
         } else {
@@ -128,13 +119,65 @@ impl Mpv {
         }
     }
 
-    pub fn set(&self, prop: &str, value: Value) {
-        self.command(json!(["set_property", prop, value]));
+    fn set_paused(&self, paused: bool) {
+        self.set("pause", json!(paused));
     }
 
-    pub fn stop(&self) {
+    fn seek(&self, seconds: f64) {
+        self.command(json!(["seek", seconds, "absolute"]));
+    }
+
+    fn set_volume(&self, volume: f64) {
+        self.set("volume", json!(volume));
+    }
+
+    fn stop(&self) {
         self.command(json!(["stop"]));
     }
+}
+
+/// Pasa un mensaje del IPC de mpv a un evento del reproductor. Lo que no le importa al
+/// reproductor (otras propiedades, respuestas a comandos) queda en `None`.
+fn translate(v: &Value) -> Option<EngineEvent> {
+    match v["event"].as_str()? {
+        "property-change" => {
+            let data = &v["data"];
+            match v["name"].as_str()? {
+                "time-pos" => data.as_f64().map(EngineEvent::Position),
+                "duration" => data.as_f64().map(EngineEvent::Duration),
+                "pause" => data.as_bool().map(EngineEvent::Paused),
+                "paused-for-cache" => Some(EngineEvent::Buffering(data.as_bool().unwrap_or(false))),
+                "current-ao" => Some(EngineEvent::AudioOutput(data.as_str().is_some_and(|ao| ao != "null"))),
+                "media-title" => data.as_str().map(|t| EngineEvent::Title(t.to_string())),
+                _ => None,
+            }
+        }
+        // `reason`: eof, error, stop, quit, redirect. Solo importan los dos primeros: el
+        // resto es porque se cargo otra cosa o se freno a proposito.
+        "end-file" => match v["reason"].as_str()? {
+            "eof" => Some(EngineEvent::Ended),
+            "error" => Some(EngineEvent::Failed(v["file_error"].as_str().unwrap_or_default().to_string())),
+            _ => None,
+        },
+        "file-loaded" => Some(EngineEvent::Loaded),
+        _ => None,
+    }
+}
+
+/// Procesa los eventos de mpv en orden, del lado del reproductor.
+pub fn pump(player: SharedPlayer, mut rx: mpsc::UnboundedReceiver<EngineEvent>) {
+    tauri::async_runtime::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                ev = rx.recv() => match ev {
+                    Some(ev) => player.lock().await.on_event(ev),
+                    None => return,
+                },
+                _ = tick.tick() => player.lock().await.check_audio(),
+            }
+        }
+    });
 }
 
 impl Drop for Mpv {
@@ -175,3 +218,34 @@ fn kill_with_parent(child: &std::process::Child) {
 
 #[cfg(not(windows))]
 fn kill_with_parent(_child: &std::process::Child) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prop(name: &str, data: Value) -> Option<EngineEvent> {
+        translate(&json!({ "event": "property-change", "name": name, "data": data }))
+    }
+
+    #[test]
+    fn translates_properties() {
+        assert_eq!(prop("time-pos", json!(1.5)), Some(EngineEvent::Position(1.5)));
+        assert_eq!(prop("time-pos", Value::Null), None);
+        assert_eq!(prop("pause", json!(true)), Some(EngineEvent::Paused(true)));
+        assert_eq!(prop("paused-for-cache", Value::Null), Some(EngineEvent::Buffering(false)));
+        assert_eq!(prop("current-ao", json!("wasapi")), Some(EngineEvent::AudioOutput(true)));
+        assert_eq!(prop("current-ao", json!("null")), Some(EngineEvent::AudioOutput(false)));
+        assert_eq!(prop("current-ao", Value::Null), Some(EngineEvent::AudioOutput(false)));
+        assert_eq!(prop("volume", json!(50)), None);
+    }
+
+    #[test]
+    fn translates_end_file() {
+        let end = |reason: &str| translate(&json!({ "event": "end-file", "reason": reason, "file_error": "boom" }));
+        assert_eq!(end("eof"), Some(EngineEvent::Ended));
+        assert_eq!(end("error"), Some(EngineEvent::Failed("boom".into())));
+        assert_eq!(end("stop"), None);
+        assert_eq!(translate(&json!({ "event": "file-loaded" })), Some(EngineEvent::Loaded));
+        assert_eq!(translate(&json!({ "request_id": 0, "error": "success" })), None);
+    }
+}

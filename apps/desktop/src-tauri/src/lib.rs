@@ -9,8 +9,6 @@ mod media_keys;
 mod mpv;
 mod mqtt;
 mod player;
-mod queue;
-mod settings;
 mod tools;
 mod updater;
 mod youtube;
@@ -18,6 +16,7 @@ mod youtube;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+use haze_core::settings::Settings;
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -27,7 +26,6 @@ use tokio::sync::watch;
 
 use library::{Library, Song};
 use player::{Player, PlayerState, SharedPlayer};
-use settings::Settings;
 
 pub struct AppState {
     pub settings: Mutex<Settings>,
@@ -744,7 +742,7 @@ async fn start_engine(app: AppHandle, resume_playing: bool) {
             return;
         }
     }
-    player::pump(state.player.clone(), rx);
+    mpv::pump(state.player.clone(), rx);
     let _ = app.emit("app://ready", ());
 
     // yt-dlp viejo deja de andar con YouTube: se actualiza de fondo cada tanto.
@@ -803,7 +801,7 @@ pub fn run() {
             library.set(Library::load_cache(&cache_path));
 
             let (player, player_rx) = Player::new(
-                handle.clone(),
+                player::Windows(handle.clone()),
                 settings.playback.volume,
                 settings.playback.shuffle,
                 settings.playback.repeat.clone(),

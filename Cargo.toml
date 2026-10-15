@@ -1,8 +1,8 @@
-# Workspace de Rust: por ahora solo la app de escritorio. Cuando exista el nucleo
-# compartido (ver docs/mobile.md) se suma aca como crates/haze-core.
+# Workspace de Rust: la app de escritorio y el nucleo que va a compartir con Android
+# (ver docs/mobile.md).
 [workspace]
 resolver = "2"
-members = ["apps/desktop/src-tauri"]
+members = ["apps/desktop/src-tauri", "crates/haze-core"]
 
 [profile.release]
 # Binario chico (es lo que queda corriendo de fondo) sin que compilar tarde una

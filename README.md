@@ -26,6 +26,7 @@ Es un monorepo. Por ahora tiene una sola app:
 |---|---|
 | `apps/desktop/` | La app de Windows. |
 | `apps/mobile/` | La futura app de Android. El plan está en [docs/mobile.md](docs/mobile.md). |
+| `crates/haze-core/` | Cola, ajustes y reproductor, sin Tauri ni mpv. Lo comparten las dos apps. |
 | `assets/` | Fuente del ícono. |
 
 Dentro de `apps/desktop/`:

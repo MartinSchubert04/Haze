@@ -1,7 +1,7 @@
 # Haze para Android
 
-Plan para la versión de celular. Todavía no hay código: esto dice dónde va a vivir, qué
-se reusa de escritorio y en qué orden se hace.
+Plan para la versión de celular: dónde va a vivir, qué se reusa de escritorio y en qué
+orden se hace. La fase 0 (núcleo compartido) ya está; lo siguiente es la fase 1.
 
 Solo Android. En iOS no se puede instalar por fuera de la App Store, la App Store no
 acepta una app que baja de YouTube y yt-dlp no corre ahí.
@@ -25,8 +25,8 @@ assets/
   icon.svg          fuente del ícono, de acá salen los de escritorio y Android
 ```
 
-Tanto `crates/haze-core` como `packages/ui` se crean recién cuando mobile los necesite,
-no antes. Mientras exista una sola app, separar código es costo sin beneficio.
+`crates/haze-core` ya existe. `packages/ui` se crea recién cuando mobile lo necesite, no
+antes: mientras la interfaz viva en una sola app, separarla es costo sin beneficio.
 
 ## Qué se reusa
 
@@ -53,9 +53,16 @@ no antes. Mientras exista una sola app, separar código es costo sin beneficio.
 
 ## Fases
 
-**0. Núcleo compartido.** Sacar `queue`, `settings` y la lógica de `player` a
-`crates/haze-core` con el trait `Engine`. Escritorio tiene que quedar igual y pasar sus
-tests. Se puede hacer antes de tocar Android.
+**0. Núcleo compartido. Hecho.** `crates/haze-core` tiene `song` (`Song` e `id_for`),
+`queue`, `settings` y `player`. El reproductor no sabe de Tauri ni de mpv: pide un
+`Engine` (cargar, pausa, seek, volumen, stop), recibe lo que pasa como `EngineEvent` y
+avisa los cambios a un `Listener`. En escritorio, `mpv.rs` implementa `Engine` y traduce
+el IPC de mpv a `EngineEvent`, y `player.rs` es el `Listener` que emite a las ventanas.
+En Android, el plugin `haze-player` va a ser otro `Engine`.
+
+Pendiente para la fase 1: los valores por defecto de `settings` son de Windows
+(`USERPROFILE\Music`, `COMPUTERNAME`) y `Behavior` y `Shortcuts` solo tienen sentido en
+escritorio. Hay que separar eso cuando Android lea sus ajustes.
 
 **1. Reproductor local.** `tauri android init` en `apps/mobile`, el plugin `haze-player`
 con Media3 y servicio en primer plano, la biblioteca por MediaStore y la interfaz con
