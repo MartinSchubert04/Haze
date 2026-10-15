@@ -1,8 +1,9 @@
 <script lang="ts">
   // Ventanita fija: tapa, titulo y controles. Se arrastra desde cualquier parte.
+  // Reemplaza a la ventana grande: al abrirse la cierra, y al expandirla se cierra ella.
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { SkipBack, SkipForward, X, Maximize2 } from "@lucide/svelte";
+  import { SkipBack, SkipForward, X, Maximize2, Shuffle, Repeat, Repeat1 } from "@lucide/svelte";
   import { api } from "./lib/api";
   import { store } from "./lib/store.svelte";
   import Background from "./lib/components/Background.svelte";
@@ -12,10 +13,13 @@
   const win = getCurrentWindow();
   const p = $derived(store.player);
   const frac = $derived(p.duration > 0 ? Math.min(1, store.position / p.duration) : 0);
+  const nextRepeat = $derived(p.repeat === "off" ? "all" : p.repeat === "all" ? "one" : "off");
+  const repeatLabel = $derived(p.repeat === "off" ? "Repetir: no" : p.repeat === "all" ? "Repetir: todo" : "Repetir: una");
 
   onMount(async () => {
     await store.init();
     await win.show();
+    api.windowReady("mini");
     let t: ReturnType<typeof setTimeout>;
     win.onMoved(({ payload }) => {
       clearTimeout(t);
@@ -24,24 +28,37 @@
   });
 </script>
 
+<svelte:window onkeydown={(e) => e.code === "Space" && (e.preventDefault(), api.control({ type: "toggle" }))} />
+
 <Background />
 
 <div class="mini" data-tauri-drag-region>
   <div class="cov" data-tauri-drag-region>
     <Cover song={p.song} size={64} radius={10} />
   </div>
-  <div class="info" data-tauri-drag-region>
-    <div class="t ellipsis" data-tauri-drag-region>{p.song?.title ?? "Nada sonando"}</div>
-    <div class="a ellipsis" data-tauri-drag-region>{p.song?.artist ?? ""}</div>
+
+  <div class="side" data-tauri-drag-region>
+    <div class="meta" data-tauri-drag-region>
+      <div class="t ellipsis" data-tauri-drag-region>{p.song?.title ?? "Nada sonando"}</div>
+      <div class="a ellipsis" data-tauri-drag-region>{p.song?.artist ?? ""}</div>
+    </div>
+
     <div class="controls">
+      <button class="icon-btn sm" class:on={p.shuffle} title={p.shuffle ? "Aleatorio: sí" : "Aleatorio: no (orden normal)"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
+        <Shuffle size={14} />
+      </button>
       <button class="icon-btn" title="Anterior" onclick={() => api.control({ type: "previous" })}><SkipBack size={16} fill="currentColor" /></button>
-      <PlayButton size={34} ring={false} solid />
+      <PlayButton size={36} ring={false} solid />
       <button class="icon-btn" title="Siguiente" onclick={() => api.control({ type: "next" })}><SkipForward size={16} fill="currentColor" /></button>
+      <button class="icon-btn sm" class:on={p.repeat !== "off"} title={repeatLabel} onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
+        {#if p.repeat === "one"}<Repeat1 size={14} />{:else}<Repeat size={14} />{/if}
+      </button>
     </div>
   </div>
+
   <div class="win">
     <button class="icon-btn s" title="Abrir Haze" onclick={() => api.showMain()}><Maximize2 size={13} /></button>
-    <button class="icon-btn s" title="Cerrar" onclick={() => win.close()}><X size={15} /></button>
+    <button class="icon-btn s" title="Cerrar (sigue sonando)" onclick={() => win.close()}><X size={15} /></button>
   </div>
   <div class="progress"><div class="fill" style:width="{frac * 100}%"></div></div>
 </div>
@@ -52,36 +69,47 @@
     height: 100vh;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 10px 0 14px;
+    gap: 14px;
+    padding: 0 12px 0 14px;
     overflow: hidden;
   }
   .cov {
     flex: none;
   }
-  .info {
+  .side {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .meta {
+    text-align: center;
+    padding: 0 30px;
   }
   .t {
     font-weight: 600;
     font-size: 13.5px;
-    padding-right: 44px;
   }
   .a {
     color: var(--text-2);
     font-size: 12px;
     margin-top: 1px;
+    min-height: 15px;
   }
   .controls {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    margin-top: 5px;
   }
   .controls .icon-btn {
     width: 30px;
     height: 30px;
+  }
+  .controls .sm {
+    width: 26px;
+    height: 26px;
   }
   .win {
     position: absolute;

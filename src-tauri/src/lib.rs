@@ -302,6 +302,17 @@ async fn mini_open(app: AppHandle) {
     open_mini(&app);
 }
 
+/// La ventana `label` ya se ve: se cierra la otra. La grande y la mini se reemplazan,
+/// nunca conviven. Se espera a que la nueva este dibujada para que no haya parpadeo, y
+/// destruir la grande libera su WebView entero.
+#[tauri::command]
+async fn window_ready(app: AppHandle, label: String) {
+    let other = if label == "mini" { "main" } else { "mini" };
+    if let Some(w) = app.get_webview_window(other) {
+        let _ = w.destroy();
+    }
+}
+
 #[tauri::command]
 async fn main_show(app: AppHandle) {
     show_main(&app);
@@ -738,6 +749,7 @@ pub fn run() {
             quit,
             mini_moved,
             check_update,
+            window_ready,
         ])
         .build(tauri::generate_context!())
         .expect("no se pudo iniciar la app")

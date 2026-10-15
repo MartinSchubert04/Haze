@@ -24,7 +24,10 @@
   onMount(async () => {
     // La ventana nace oculta para no mostrar un cuadro vacio mientras arranca el WebView.
     const win = getCurrentWindow();
-    win.show().then(() => win.setFocus());
+    win
+      .show()
+      .then(() => win.setFocus())
+      .then(() => api.windowReady("main"));
     try {
       await store.init();
       store.checkUpdate();
