@@ -44,6 +44,18 @@
     });
   }
 
+  function toggleFav(dir: string) {
+    store.saveSettings((x) => {
+      if (x.downloadFolders.includes(dir)) {
+        x.downloadFolders = x.downloadFolders.filter((p) => p !== dir);
+        if (x.defaultDownloadFolder === dir) x.defaultDownloadFolder = x.downloadFolders[0] ?? null;
+      } else {
+        x.downloadFolders = [...x.downloadFolders, dir];
+        x.defaultDownloadFolder ??= dir;
+      }
+    });
+  }
+
   async function pickImage() {
     const f = await open({ title: "Imagen de fondo", filters: [{ name: "Imágenes", extensions: ["jpg", "jpeg", "png", "webp", "gif"] }] });
     if (typeof f === "string") store.saveSettings((x) => ((x.appearance.backgroundImage = f), (x.appearance.background = "image")));
@@ -98,7 +110,11 @@
       </div>
       <div class="rows">
         {#each s.sources as src}
+          {@const fav = s.downloadFolders.includes(src)}
           <div class="item">
+            <button class="icon-btn" class:on={fav} title={fav ? "Quitar de favoritas" : "Agregar a favoritas"} onclick={() => toggleFav(src)}>
+              <Star size={16} fill={fav ? "currentColor" : "none"} />
+            </button>
             <div class="grow">
               <div class="ellipsis">{folderName(src)}</div>
               <div class="hint ellipsis">{src} · {plural(count(src), "canción", "canciones")}</div>
