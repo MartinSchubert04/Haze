@@ -93,7 +93,7 @@
     z-index: 20;
     display: flex;
     flex-direction: column;
-    background: rgba(10, 13, 16, 0.55);
+    background: rgba(12, 15, 18, 0.88);
     backdrop-filter: blur(40px) saturate(150%);
     animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     overflow: hidden;
@@ -125,13 +125,14 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, auto) minmax(300px, 520px);
+    grid-template-rows: minmax(0, 1fr);
     justify-content: center;
     align-items: center;
     gap: clamp(28px, 5vw, 72px);
     padding: 48px 48px 12px;
   }
   .art {
-    height: min(52vh, 440px);
+    height: min(100%, 440px);
     aspect-ratio: 1;
     border-radius: 18px;
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);

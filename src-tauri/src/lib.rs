@@ -296,13 +296,14 @@ fn downloads_clear(app: AppHandle) {
     youtube::clear_finished(&app);
 }
 
+// Async a proposito: crear una ventana desde un comando sincronico traba Windows.
 #[tauri::command]
-fn mini_open(app: AppHandle) {
+async fn mini_open(app: AppHandle) {
     open_mini(&app);
 }
 
 #[tauri::command]
-fn main_show(app: AppHandle) {
+async fn main_show(app: AppHandle) {
     show_main(&app);
 }
 

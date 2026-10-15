@@ -96,7 +96,7 @@
           <div class="txt">
             <div class="t ellipsis">{song.title}</div>
             <div class="a ellipsis">
-              {song.artist || "Desconocido"}{#if showFolder && song.kind === "local"}<span class="dim"> · {song.folder.split("/").pop()}</span>{/if}
+              {song.artist || "Desconocido"}{#if showFolder && song.kind === "local"}<span class="dim">{song.folder.split("/").pop()}</span>{/if}
             </div>
           </div>
           {#if onDownload}
@@ -181,6 +181,7 @@
   }
   .eq {
     position: absolute;
+    z-index: 1;
     inset: 0;
     display: grid;
     place-items: center;
@@ -210,6 +211,10 @@
   }
   .dim {
     color: var(--text-3);
+  }
+  .dim::before {
+    content: "·";
+    margin: 0 5px;
   }
   .dl {
     width: 30px;
