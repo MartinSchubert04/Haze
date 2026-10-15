@@ -1,6 +1,6 @@
-# Reproductor (escritorio)
+# Haze (escritorio)
 
-Versión de Windows del reproductor: liviana, queda en la bandeja y sigue sonando con la
+Reproductor de música para Windows: liviano, queda en la bandeja y sigue sonando con la
 ventana cerrada.
 
 - **Biblioteca local:** varias carpetas fuente, búsqueda, orden y el índice A-Z del celu.
@@ -26,7 +26,7 @@ ventana cerrada.
 | `src/` (Svelte 5) | La interfaz. Al cerrar la ventana se destruye el WebView entero, por eso de fondo pesa poco. |
 
 Los programas externos no vienen en el instalador: se bajan solos a
-`%LOCALAPPDATA%\com.mrtn.reproductor\bin` la primera vez que hacen falta. yt-dlp se
+`%LOCALAPPDATA%\com.mrtn.haze\bin` la primera vez que hacen falta. yt-dlp se
 actualiza solo cada tres días, porque YouTube cambia seguido.
 
 ## Desarrollo
@@ -42,8 +42,8 @@ cd src-tauri && cargo test
 
 Para depurar sin pantalla (por ejemplo, desde un servicio):
 
-- `REPRODUCTOR_DEVTOOLS_PORT=9333` abre el protocolo de DevTools del WebView en ese puerto.
-- `REPRODUCTOR_MPV_ARGS="--ao=null"` le pasa argumentos extra a mpv (sirve para probar sin
+- `HAZE_DEVTOOLS_PORT=9333` abre el protocolo de DevTools del WebView en ese puerto.
+- `HAZE_MPV_ARGS="--ao=null"` le pasa argumentos extra a mpv (sirve para probar sin
   parlantes).
 
 ## Publicar una versión
@@ -58,6 +58,6 @@ cuando hay una versión nueva.
 
 ## Datos
 
-- Ajustes: `%APPDATA%\com.mrtn.reproductor\settings.json`. La clave de MQTT queda ahí en
+- Ajustes: `%APPDATA%\com.mrtn.haze\settings.json`. La clave de MQTT queda ahí en
   texto plano.
-- Cache de la biblioteca y sesión: `%LOCALAPPDATA%\com.mrtn.reproductor\`.
+- Cache de la biblioteca y sesión: `%LOCALAPPDATA%\com.mrtn.haze\`.

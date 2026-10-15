@@ -1,5 +1,5 @@
 //! Preferencias del usuario. Se guardan como JSON en la carpeta de datos de la app
-//! (`%APPDATA%\com.mrtn.reproductor\settings.json`).
+//! (`%APPDATA%\com.mrtn.haze\settings.json`).
 //!
 //! Todos los campos tienen valor por defecto: un archivo viejo, al que le falta algo
 //! que se agrego despues, se sigue leyendo sin perder lo demas.
@@ -138,7 +138,7 @@ impl Default for HomeAssistant {
             port: 1883,
             username: String::new(),
             password: String::new(),
-            device_name: "Reproductor PC".into(),
+            device_name: "Haze PC".into(),
         }
     }
 }

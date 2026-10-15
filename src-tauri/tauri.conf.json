@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Reproductor",
+  "productName": "Haze",
   "version": "0.1.0",
-  "identifier": "com.mrtn.reproductor",
+  "identifier": "com.mrtn.haze",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -21,7 +21,7 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
-    "shortDescription": "Reproductor de musica",
+    "shortDescription": "Haze, reproductor de musica",
     "windows": {
       "nsis": { "installMode": "currentUser", "languages": ["Spanish"] }
     }

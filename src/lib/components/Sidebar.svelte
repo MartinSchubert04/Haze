@@ -27,7 +27,7 @@
       <circle cx="16" cy="16" r="11" fill="none" stroke="url(#lg)" stroke-width="3" stroke-linecap="round" stroke-dasharray="48 21" transform="rotate(-90 16 16)" />
       <path d="M13.5 11.5 L21 16 L13.5 20.5 Z" fill="url(#lg)" stroke="url(#lg)" stroke-width="1.5" stroke-linejoin="round" />
     </svg>
-    <span>Reproductor</span>
+    <span>Haze</span>
   </div>
 
   <div class="group">

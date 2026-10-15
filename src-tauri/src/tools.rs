@@ -93,7 +93,7 @@ pub fn async_command(program: &Path) -> tokio::process::Command {
     c
 }
 
-const UA: &str = "Reproductor-desktop";
+const UA: &str = "Haze-desktop";
 
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder().user_agent(UA).build().into()

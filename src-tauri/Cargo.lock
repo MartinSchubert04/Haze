@@ -1615,6 +1615,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
+name = "haze"
+version = "0.1.0"
+dependencies = [
+ "lofty",
+ "log",
+ "percent-encoding",
+ "rumqttc",
+ "serde",
+ "serde_json",
+ "sevenz-rust2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tokio",
+ "ureq",
+ "url",
+ "walkdir",
+ "windows 0.61.3",
+ "zip",
+]
+
+[[package]]
 name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3143,31 +3168,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "reproductor"
-version = "0.1.0"
-dependencies = [
- "lofty",
- "log",
- "percent-encoding",
- "rumqttc",
- "serde",
- "serde_json",
- "sevenz-rust2",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tokio",
- "ureq",
- "url",
- "walkdir",
- "windows 0.61.3",
- "zip",
-]
 
 [[package]]
 name = "reqwest"

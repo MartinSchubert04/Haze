@@ -31,7 +31,7 @@ const OBSERVED: &[&str] =
 
 impl Mpv {
     pub async fn spawn(mpv: &Path, volume: f64, events: mpsc::UnboundedSender<MpvEvent>) -> Result<Self, String> {
-        let pipe = format!(r"\\.\pipe\reproductor-mpv-{}", std::process::id());
+        let pipe = format!(r"\\.\pipe\haze-mpv-{}", std::process::id());
         let mut cmd = tools::command(mpv);
         cmd.args([
             "--idle=yes",
@@ -44,14 +44,17 @@ impl Mpv {
             "--keep-open=no",
             "--volume-max=100",
             "--gapless-audio=weak",
-            "--audio-client-name=Reproductor",
+            // Sin dispositivo de audio, mpv reintenta en loop y se come un nucleo.
+            // Con esto pasa a una salida nula y la app avisa (ver check_audio).
+            "--audio-fallback-to-null=yes",
+            "--audio-client-name=Haze",
             "--ytdl-format=bestaudio/best",
             "--cache=yes",
             "--demuxer-max-bytes=32MiB",
         ]);
         cmd.arg(format!("--volume={volume}"));
-        // Para probar sin parlantes: REPRODUCTOR_MPV_ARGS="--ao=null".
-        if let Ok(extra) = std::env::var("REPRODUCTOR_MPV_ARGS") {
+        // Para probar sin parlantes: HAZE_MPV_ARGS="--ao=null".
+        if let Ok(extra) = std::env::var("HAZE_MPV_ARGS") {
             cmd.args(extra.split_whitespace());
         }
         cmd.arg(format!("--input-ipc-server={pipe}"));

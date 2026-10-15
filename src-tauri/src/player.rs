@@ -477,7 +477,7 @@ impl Player {
                     self.publish();
                 }
             }
-            "current-ao" => self.has_audio_out = !v.is_null(),
+            "current-ao" => self.has_audio_out = v.as_str().is_some_and(|ao| ao != "null"),
             "media-title" => {
                 // Los streams traen el titulo real recien al cargar.
                 if let (Some(t), Some(song)) = (v.as_str(), self.state.song.clone()) {

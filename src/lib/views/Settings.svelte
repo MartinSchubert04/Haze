@@ -288,7 +288,7 @@
     <section>
       <h2>Salir</h2>
       <p>Cierra la app del todo, incluida la música de fondo.</p>
-      <button class="pill" onclick={() => api.quit()}>Salir de Reproductor</button>
+      <button class="pill" onclick={() => api.quit()}>Salir de Haze</button>
     </section>
   </div>
 </div>

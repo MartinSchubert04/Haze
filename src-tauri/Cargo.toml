@@ -1,11 +1,11 @@
 [package]
-name = "reproductor"
+name = "haze"
 version = "0.1.0"
-description = "Reproductor de musica liviano para escritorio"
+description = "Haze: reproductor de musica liviano para escritorio"
 edition = "2021"
 
 [lib]
-name = "reproductor_lib"
+name = "haze_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

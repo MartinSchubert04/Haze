@@ -40,7 +40,7 @@
     </div>
   </div>
   <div class="win">
-    <button class="icon-btn s" title="Abrir el reproductor" onclick={() => api.showMain()}><Maximize2 size={13} /></button>
+    <button class="icon-btn s" title="Abrir Haze" onclick={() => api.showMain()}><Maximize2 size={13} /></button>
     <button class="icon-btn s" title="Cerrar" onclick={() => win.close()}><X size={15} /></button>
   </div>
   <div class="progress"><div class="fill" style:width="{frac * 100}%"></div></div>

@@ -68,10 +68,10 @@ async fn run(
     status: impl Fn(&str) + Send + Sync + 'static,
 ) {
     let node = slug(&cfg.device_name);
-    let base = format!("reproductor/{node}");
+    let base = format!("haze/{node}");
     let avail = format!("{base}/availability");
 
-    let mut opts = MqttOptions::new(format!("reproductor-{node}"), cfg.host.trim(), cfg.port);
+    let mut opts = MqttOptions::new(format!("haze-{node}"), cfg.host.trim(), cfg.port);
     opts.set_keep_alive(Duration::from_secs(30));
     // Las caratulas pesan bastante mas que el limite por defecto.
     opts.set_max_packet_size(256 * 1024, 4 * 1024 * 1024);
@@ -139,10 +139,10 @@ async fn run(
     });
 
     let device = json!({
-        "identifiers": [format!("reproductor_{node}")],
+        "identifiers": [format!("haze_{node}")],
         "name": cfg.device_name,
         "manufacturer": "MRTN",
-        "model": "Reproductor (escritorio)",
+        "model": "Haze (escritorio)",
         "sw_version": env!("CARGO_PKG_VERSION"),
     });
     let state_topic = format!("{base}/state");
@@ -220,8 +220,8 @@ async fn announce(
     device: &serde_json::Value,
     folders: &[(String, String)],
 ) {
-    let node = base.trim_start_matches("reproductor/");
-    let p = |s: &str| format!("reproductor_{node}_{s}");
+    let node = base.trim_start_matches("haze/");
+    let p = |s: &str| format!("haze_{node}_{s}");
     let cmd = format!("{base}/cmd");
 
     publish_config(client, "sensor", &p("estado"), json!({
@@ -265,13 +265,13 @@ async fn announce(
 }
 
 async fn announce_folders(client: &AsyncClient, base: &str, device: &serde_json::Value, folders: &[(String, String)]) {
-    let node = base.trim_start_matches("reproductor/");
+    let node = base.trim_start_matches("haze/");
     let avail = format!("{base}/availability");
     let mut options: Vec<&str> = folders.iter().map(|(n, _)| n.as_str()).collect();
     if options.is_empty() {
         options.push("Todas las canciones");
     }
-    publish_config(client, "select", &format!("reproductor_{node}_carpeta"), json!({
+    publish_config(client, "select", &format!("haze_{node}_carpeta"), json!({
         "name": "Reproducir carpeta", "icon": "mdi:folder-music",
         "options": options, "command_topic": format!("{base}/folder/set"),
     }), device, &avail).await;

@@ -1,4 +1,4 @@
-//! Reproductor de escritorio. Rust hace todo lo pesado (biblioteca, cola, mpv, YouTube,
+//! Haze, reproductor de musica de escritorio. Rust hace todo lo pesado (biblioteca, cola, mpv, YouTube,
 //! Home Assistant); la interfaz es una vista que se puede cerrar sin cortar la musica.
 //!
 //! Al cerrar la ventana se destruye el WebView entero: de fondo queda solo este proceso
@@ -318,7 +318,7 @@ fn quit(app: AppHandle) {
 async fn check_update() -> Option<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(|| {
         let body = ureq::get("https://api.github.com/repos/MartinSchubert04/music-player/releases?per_page=30")
-            .header("User-Agent", "Reproductor-desktop")
+            .header("User-Agent", "Haze-desktop")
             .header("Accept", "application/vnd.github+json")
             .call()
             .ok()?
@@ -387,11 +387,11 @@ fn apply_effects(app: &AppHandle) {
     }
 }
 
-/// Para depurar sin pantalla: `REPRODUCTOR_DEVTOOLS_PORT=9333` abre el protocolo de
+/// Para depurar sin pantalla: `HAZE_DEVTOOLS_PORT=9333` abre el protocolo de
 /// DevTools del WebView en ese puerto. Hay que repetir los argumentos que Tauri pone
 /// por defecto, porque este los reemplaza.
 fn browser_args() -> Option<String> {
-    let port = std::env::var("REPRODUCTOR_DEVTOOLS_PORT").ok()?;
+    let port = std::env::var("HAZE_DEVTOOLS_PORT").ok()?;
     Some(format!(
         "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
     ))
@@ -405,7 +405,7 @@ pub fn show_main(app: &AppHandle) {
         return;
     }
     let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-        .title("Reproductor")
+        .title("Haze")
         .inner_size(1120.0, 720.0)
         .min_inner_size(780.0, 520.0)
         .decorations(false)
@@ -444,7 +444,7 @@ pub fn open_mini(app: &AppHandle) {
         (s.mini_on_top, s.mini_position)
     };
     let mut b = WebviewWindowBuilder::new(app, "mini", WebviewUrl::App("index.html#mini".into()))
-        .title("Reproductor - mini")
+        .title("Haze - mini")
         .inner_size(380.0, 96.0)
         .resizable(false)
         .maximizable(false)
@@ -483,7 +483,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
     let tray = TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().cloned().unwrap())
-        .tooltip("Reproductor")
+        .tooltip("Haze")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, e| match e.id.as_ref() {
@@ -513,7 +513,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             let tip = match &s.song {
                 Some(song) if song.artist.is_empty() => song.title.clone(),
                 Some(song) => format!("{} - {}", song.title, song.artist),
-                None => "Reproductor".into(),
+                None => "Haze".into(),
             };
             // Windows corta el tooltip en 127 caracteres.
             let tip: String = tip.chars().take(120).collect();
