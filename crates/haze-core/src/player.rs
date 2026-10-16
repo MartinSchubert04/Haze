@@ -32,7 +32,12 @@ pub trait Engine: Send {
     fn set_volume(&self, volume: f64);
     /// Descarga lo que haya y queda en silencio.
     fn stop(&self);
+    /// Vuelve a buscar a donde mandar el audio (se conectaron los auriculares, Windows
+    /// termino de levantar el audio...). Los motores que lo hacen solos no hacen nada.
+    fn reopen_audio(&self) {}
 }
+
+const NO_AUDIO: &str = "No hay salida de audio: revisá que haya parlantes o auriculares conectados.";
 
 /// Lo que avisa el motor de audio.
 #[derive(Clone, Debug, PartialEq)]
@@ -503,7 +508,13 @@ impl Player {
                     self.publish();
                 }
             }
-            EngineEvent::AudioOutput(ok) => self.has_audio_out = ok,
+            EngineEvent::AudioOutput(ok) => {
+                self.has_audio_out = ok;
+                if ok && self.state.error.as_deref() == Some(NO_AUDIO) {
+                    self.state.error = None;
+                    self.publish();
+                }
+            }
             EngineEvent::Title(t) => {
                 // Los streams traen el titulo real recien al cargar.
                 if let Some(song) = self.state.song.clone() {
@@ -543,13 +554,21 @@ impl Player {
     }
 
     /// Cada segundo: si hace rato que deberia sonar y el motor no tiene salida de audio
-    /// (no hay parlantes, o se desconectaron los auriculares), se avisa una vez.
+    /// (no hay parlantes, o se desconectaron los auriculares), se avisa una vez y se le
+    /// pide al motor que reintente cada tanto. mpv no reintenta solo: si al arrancar el
+    /// audio todavia no estaba listo (Windows recien prendido, auriculares inalambricos
+    /// conectandose) quedaba sonando mudo para siempre.
     pub fn check_audio(&mut self) {
         let silent = self.state.playing && !self.state.buffering && self.state.song.is_some() && !self.has_audio_out;
         self.silent_ticks = if silent { self.silent_ticks + 1 } else { 0 };
         if self.silent_ticks == 3 {
-            self.state.error = Some("No hay salida de audio: revisá que haya parlantes o auriculares conectados.".into());
+            self.state.error = Some(NO_AUDIO.into());
             self.publish();
+        }
+        if self.silent_ticks > 0 && self.silent_ticks % 5 == 0 {
+            if let Some(e) = &self.engine {
+                e.reopen_audio();
+            }
         }
     }
 
@@ -644,6 +663,9 @@ mod tests {
         fn stop(&self) {
             self.0.lock().unwrap().push("stop".into());
         }
+        fn reopen_audio(&self) {
+            self.0.lock().unwrap().push("reopen audio".into());
+        }
     }
 
     struct Quiet;
@@ -710,6 +732,23 @@ mod tests {
         // Con un solo tema no hay otro para elegir: vuelve a sonar ese.
         p.play_random(vec![song(1)], String::new());
         assert_eq!(playing(&p), Some(1));
+    }
+
+    #[test]
+    fn without_audio_output_it_warns_retries_and_clears_the_warning_when_it_comes_back() {
+        let (mut p, log, rx) = player("all");
+        p.play_context((1..=3).map(song).collect(), 0, String::new());
+        p.on_event(EngineEvent::AudioOutput(false));
+        log.take();
+        for _ in 0..10 {
+            p.check_audio();
+        }
+        assert_eq!(rx.borrow().error.as_deref(), Some(NO_AUDIO));
+        assert_eq!(log.take(), vec!["reopen audio", "reopen audio"]);
+        p.on_event(EngineEvent::AudioOutput(true));
+        assert_eq!(rx.borrow().error, None);
+        p.check_audio();
+        assert!(log.take().is_empty());
     }
 
     #[test]

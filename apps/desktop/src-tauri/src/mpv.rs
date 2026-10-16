@@ -133,6 +133,10 @@ impl Engine for Mpv {
         self.set("volume", json!(volume));
     }
 
+    fn reopen_audio(&self) {
+        self.command(json!(["ao-reload"]));
+    }
+
     fn stop(&self) {
         self.command(json!(["stop"]));
     }
