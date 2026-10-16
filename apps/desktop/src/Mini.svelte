@@ -98,7 +98,8 @@
   }
   /* Los botones de expandir y cerrar estan arriba a la derecha: el titulo no pasa por ahi. */
   .t {
-    margin-right: 48px;
+    margin-right: 50px;
+    max-width: 98px;
   }
   .scroll {
     overflow: hidden;
