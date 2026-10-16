@@ -38,14 +38,15 @@ impl<R: Runtime> HazePlayer<R> {
     /// El motor para `haze_core::player::Player`.
     pub fn engine(&self) -> AndroidEngine {
         let (tx, rx) = mpsc::channel::<(&'static str, Value)>();
-        let handle = self.0.clone();
-        // Los comandos esperan la respuesta de Kotlin: se mandan desde un hilo propio,
-        // en orden, para que el reproductor nunca quede trabado esperando.
+        // Las ordenes van por JNI a `EngineBridge`, no por el plugin: los comandos del
+        // plugin necesitan la Activity, y con la app sacada de recientes la musica sigue y
+        // hay que poder pasar a la siguiente. Se mandan en orden desde un hilo propio.
         std::thread::Builder::new()
             .name("haze-player".into())
             .spawn(move || {
+                let mut bridge = None;
                 for (command, payload) in rx {
-                    if let Err(e) = handle.run_mobile_plugin::<Value>(command, payload) {
+                    if let Err(e) = bridge::call(&mut bridge, command, &payload.to_string()) {
                         log::warn!("haze-player: {command} fallo: {e}");
                     }
                 }
@@ -115,6 +116,12 @@ impl<R: Runtime> HazePlayer<R> {
             saved: usize,
         }
         Ok(self.call::<Saved>("ytDownload", json!({ "id": id, "args": args }))?.saved)
+    }
+
+    /// Manda la app al fondo (como el boton de inicio), sin cerrarla.
+    pub fn minimize(&self) -> Result<(), PluginInvokeError> {
+        self.call::<Value>("minimize", ())?;
+        Ok(())
     }
 
     /// La ultima version publicada para Android, si hay. Tarda: llamar fuera del runtime.
@@ -199,5 +206,40 @@ impl Engine for AndroidEngine {
 
     fn stop(&self) {
         self.send("stop", json!({}));
+    }
+}
+
+/// `EngineBridge.call(command, json)` en Kotlin, por JNI.
+mod bridge {
+    use jni::objects::{GlobalRef, JClass, JObject, JValue};
+    use jni::JavaVM;
+
+    const CLASS: &str = "app.haze.player.plugin.EngineBridge";
+
+    /// La clase se busca una vez con el class loader de la app (desde un hilo de Rust,
+    /// `FindClass` solo ve las del sistema) y se guarda.
+    pub fn call(class: &mut Option<GlobalRef>, command: &str, json: &str) -> jni::errors::Result<()> {
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
+        let mut env = vm.attach_current_thread_permanently()?;
+        if class.is_none() {
+            let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+            let loader = env.call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
+            let name = env.new_string(CLASS)?;
+            let found = env
+                .call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?
+                .l()?;
+            *class = Some(env.new_global_ref(found)?);
+        }
+        let class: &JClass = class.as_ref().unwrap().as_obj().into();
+        let command = env.new_string(command)?;
+        let json = env.new_string(json)?;
+        env.call_static_method(
+            class,
+            "call",
+            "(Ljava/lang/String;Ljava/lang/String;)V",
+            &[JValue::Object(&command), JValue::Object(&json)],
+        )?;
+        Ok(())
     }
 }

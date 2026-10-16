@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { Search, X, Settings as SettingsIcon, Shuffle, LoaderCircle } from "@lucide/svelte";
+  import { Search, X, Settings as SettingsIcon, Shuffle, LoaderCircle, Clock, ArrowDownAZ, UserRound } from "@lucide/svelte";
   import { normalizeSearch, plural } from "@haze/ui/format";
   import { api } from "../api";
   import { store, ALL_SONGS } from "../store.svelte";
   import SongList from "../components/SongList.svelte";
+  import Select from "../components/Select.svelte";
 
   const SORTS = [
-    { id: "title_asc", label: "Título" },
-    { id: "artist_asc", label: "Artista" },
-    { id: "date_desc", label: "Recientes" },
+    { id: "date_desc", label: "Recientes", icon: Clock },
+    { id: "title_asc", label: "Título", icon: ArrowDownAZ },
+    { id: "artist_asc", label: "Artista", icon: UserRound },
   ];
 
   let query = $state("");
@@ -48,15 +49,12 @@
 
     <div class="actions">
       <button class="pill primary" disabled={!sorted.length} onclick={shuffleAll}><Shuffle size={16} /> Aleatorio</button>
-      <div class="sorts">
-        {#each SORTS as s (s.id)}
-          <button
-            class="chip"
-            class:on={(store.settings?.songSort ?? "title_asc") === s.id}
-            onclick={() => store.saveSettings((x) => (x.songSort = s.id))}>{s.label}</button
-          >
-        {/each}
-      </div>
+      <Select
+        label="Ordenar"
+        value={store.settings?.songSort ?? "date_desc"}
+        options={SORTS}
+        onchange={(id) => store.saveSettings((x) => (x.songSort = id))}
+      />
     </div>
   </div>
   {#if !store.scanning && !store.songs.length}
@@ -67,7 +65,7 @@
   {/if}
 {/snippet}
 
-<SongList songs={shown} context={query ? "Búsqueda" : ALL_SONGS} {header} />
+<SongList songs={shown} context={query ? "Búsqueda" : ALL_SONGS} {header} onrefresh={() => api.rescan()} />
 
 <style>
   .top {
@@ -106,26 +104,9 @@
   .actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    margin-top: 14px;
-  }
-  .sorts {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-  }
-  .chip {
-    height: 32px;
-    padding: 0 12px;
-    border-radius: 999px;
-    font-size: 13px;
-    color: var(--text-2);
-    border: 1px solid var(--line);
-    white-space: nowrap;
-  }
-  .chip.on {
-    color: var(--text);
-    background: rgba(255, 255, 255, 0.1);
+    margin-top: 18px;
   }
   .empty {
     padding: 40px 24px;

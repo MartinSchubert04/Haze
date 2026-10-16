@@ -6,9 +6,15 @@
   import type { Song } from "../api";
   import { store } from "../store.svelte";
   import { longpress } from "../longpress";
+  import { pullToRefresh } from "../pull";
   import Cover from "./Cover.svelte";
 
-  let { songs, context, header }: { songs: Song[]; context: string; header?: Snippet } = $props();
+  let {
+    songs,
+    context,
+    header,
+    onrefresh,
+  }: { songs: Song[]; context: string; header?: Snippet; onrefresh?: () => Promise<unknown> } = $props();
 
   const ROW = 64;
   const EXTRA = 8;
@@ -24,7 +30,7 @@
   const current = $derived(store.player.song?.id);
 </script>
 
-<div class="scroller" bind:this={scroller} bind:clientHeight={height} onscroll={() => (top = scroller.scrollTop)}>
+<div class="scroller" use:pullToRefresh={onrefresh} bind:this={scroller} bind:clientHeight={height} onscroll={() => (top = scroller.scrollTop)}>
   <div bind:clientHeight={headerHeight}>{@render header?.()}</div>
   <div class="rows" style:height="{songs.length * ROW}px">
     {#each visible as song, k (song.id)}

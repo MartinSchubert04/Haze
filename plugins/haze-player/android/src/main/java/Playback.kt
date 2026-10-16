@@ -30,6 +30,10 @@ internal object Playback {
   /** Por donde se le avisa a Rust lo que pasa. Lo pone el comando `listen`. */
   var channel: Channel? = null
 
+  /** El contexto de la aplicacion: vive mas que cualquier Activity (ver [EngineBridge]). */
+  var app: Context? = null
+    private set
+
   private var controller: MediaController? = null
   private var connecting: ListenableFuture<MediaController>? = null
   private val pending = ArrayDeque<(MediaController) -> Unit>()
@@ -46,6 +50,7 @@ internal object Playback {
   fun connect(context: Context) {
     if (controller != null || connecting != null) return
     val app = context.applicationContext
+    this.app = app
     val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
     val future = MediaController.Builder(app, token)
       .setListener(object : MediaController.Listener {

@@ -53,6 +53,8 @@ export const api = {
   ytDownload: (url: string, title: string, thumb: string | null, playlist: boolean) =>
     invoke<number>("yt_download", { url, title, thumb, playlist }),
   clearDownloads: () => invoke("downloads_clear"),
+  /** Manda la app al fondo sin cerrarla (sigue sonando). */
+  minimize: () => invoke("minimize"),
   /** Devuelve la version nueva, si hay (y la empieza a bajar). */
   updateCheck: () => invoke<string | null>("update_check"),
   /** `false` si antes hay que dar el permiso de instalar apps (se abre ese ajuste). */

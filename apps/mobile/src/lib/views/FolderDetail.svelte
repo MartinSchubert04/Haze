@@ -28,7 +28,7 @@
       </div>
     </div>
   {/snippet}
-  <SongList {songs} context={name} {header} />
+  <SongList {songs} context={name} {header} onrefresh={() => api.rescan()} />
 </section>
 
 <style>

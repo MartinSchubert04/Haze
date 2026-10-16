@@ -224,6 +224,16 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /**
+   * "Atras" en la pantalla de inicio: la app se va al fondo en vez de cerrarse, como las
+   * de musica. Sigue sonando y al volver esta todo como estaba.
+   */
+  @Command
+  fun minimize(invoke: Invoke) {
+    activity.moveTaskToBack(true)
+    invoke.resolve()
+  }
+
   // ------------------------------------------------------------------ actualizaciones
 
   /** El ultimo Release de Android en GitHub: {version, url, sha256} o {} si no hay. */

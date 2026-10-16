@@ -274,6 +274,13 @@ async fn settings_set(app: AppHandle, settings: Settings) {
     }
 }
 
+/// "Atras" en la pantalla de inicio: la app queda en segundo plano en vez de cerrarse.
+#[tauri::command]
+async fn minimize(app: AppHandle) {
+    let h = app.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || h.haze_player().minimize()).await;
+}
+
 /// Pide el permiso de red local (Android 17) y, si lo dan, reconecta con HA.
 #[tauri::command]
 async fn request_local_network(app: AppHandle) -> bool {
@@ -502,7 +509,12 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
 
             let settings_path = config_dir.join("settings.json");
-            let settings = Settings::load(&settings_path);
+            let fresh = !settings_path.exists();
+            let mut settings = Settings::load(&settings_path);
+            if fresh {
+                // En el telefono la lista arranca por lo ultimo que entro (lo recien bajado).
+                settings.song_sort = "date_desc".into();
+            }
             // En el telefono el volumen es el del sistema: Haze suena siempre entero.
             let (player, player_rx) = Player::new(
                 Screen(handle.clone()),
@@ -542,6 +554,7 @@ pub fn run() {
             queue_action,
             settings_set,
             request_local_network,
+            minimize,
             youtube::yt_search,
             youtube::yt_inspect,
             youtube::yt_download,
@@ -549,6 +562,22 @@ pub fn run() {
             updater::update_check,
             updater::update_install,
         ])
-        .run(tauri::generate_context!())
-        .expect("no se pudo arrancar Haze");
+        .build(tauri::generate_context!())
+        .expect("no se pudo arrancar Haze")
+        .run(|app, event| match event {
+            // Sacar Haze de recientes destruye la Activity y Tauri, sin ventanas, cerraba el
+            // proceso y se cortaba la musica. El proceso sigue mientras lo sostenga el
+            // servicio de reproduccion.
+            tauri::RunEvent::ExitRequested { api, code: None, .. } => api.prevent_exit(),
+            // Al abrir la app de nuevo hay una Activity nueva sin ventana: se le crea la
+            // de siempre. Hasta que exista, `build` falla y se reintenta en la proxima vuelta.
+            tauri::RunEvent::MainEventsCleared if app.get_webview_window("main").is_none() => {
+                if let Some(config) = app.config().app.windows.first() {
+                    if let Ok(builder) = tauri::WebviewWindowBuilder::from_config(app, config) {
+                        let _ = builder.build();
+                    }
+                }
+            }
+            _ => {}
+        });
 }

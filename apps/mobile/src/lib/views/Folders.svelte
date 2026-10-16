@@ -1,11 +1,13 @@
 <script lang="ts">
   import { Folder } from "@lucide/svelte";
   import { plural } from "@haze/ui/format";
+  import { api } from "../api";
   import { store } from "../store.svelte";
+  import { pullToRefresh } from "../pull";
   import Cover from "../components/Cover.svelte";
 </script>
 
-<div class="scroller">
+<div class="scroller" use:pullToRefresh={() => api.rescan()}>
   <div class="page">
     <h1 class="page-title">Carpetas</h1>
     <div class="page-sub">{plural(store.folders.length, "carpeta", "carpetas")}</div>

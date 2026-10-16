@@ -4389,7 +4389,9 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "haze-core",
+ "jni 0.21.1",
  "log",
+ "ndk-context",
  "serde",
  "serde_json",
  "tauri",

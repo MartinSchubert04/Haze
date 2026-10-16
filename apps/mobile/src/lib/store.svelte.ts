@@ -18,6 +18,9 @@ export type Layer =
   /** Un link pegado: escucharlo o bajarlo. */
   | { kind: "link"; url: string };
 
+/** Lo que guarda cada entrada del historial. */
+type Nav = { tab: Tab; tabs: number; depth: number };
+
 export type Folder = { path: string; name: string; songs: Song[]; coverSong: Song | null };
 
 export const ALL_SONGS = "Todas las canciones";
@@ -99,11 +102,25 @@ class Store {
       this.access = e.payload;
     });
 
-    // El historial lleva cuantas capas habia: "atras" (o history.go) deja solo esas.
-    history.replaceState({ depth: 0 }, "");
+    // Cada entrada del historial dice en que pestaña estaba (y cuantas habia en la pila)
+    // y cuantas capas habia abiertas: "atras" vuelve a eso.
+    //
+    // Debajo de todo hay una entrada centinela: si "atras" llega ahi (estando en
+    // Canciones sin nada abierto), la app se va al fondo en vez de cerrarse, y se vuelve a
+    // poner la entrada de inicio para la proxima vez.
+    const home: Nav = { tab: "songs", tabs: 1, depth: 0 };
+    history.replaceState({ sentinel: true }, "");
+    history.pushState(home, "");
     window.addEventListener("popstate", (e) => {
-      const depth = (e.state?.depth as number | undefined) ?? 0;
-      if (depth < this.layers.length) this.layers = this.layers.slice(0, depth);
+      if (e.state?.sentinel) {
+        history.pushState(home, "");
+        api.minimize();
+        return;
+      }
+      const nav = (e.state as Nav | null) ?? home;
+      this.tabs = this.tabs.slice(0, nav.tabs);
+      this.tab = nav.tab;
+      if (nav.depth < this.layers.length) this.layers = this.layers.slice(0, nav.depth);
     });
 
     setInterval(() => this.tick(), 250);
@@ -123,9 +140,12 @@ class Store {
 
   // ------------------------------------------------------------------ navegacion
 
+  /** Pestañas por las que se paso, sin repetir: "atras" vuelve a la anterior. */
+  private tabs: Tab[] = ["songs"];
+
   open(layer: Layer) {
     this.layers = [...this.layers, layer];
-    history.pushState({ depth: this.layers.length }, "");
+    history.pushState({ tab: this.tab, tabs: this.tabs.length, depth: this.layers.length } satisfies Nav, "");
   }
 
   /** Cierra la capa de arriba, igual que el boton "atras". */
@@ -133,22 +153,35 @@ class Store {
     if (this.layers.length) history.back();
   }
 
-  /** Cambiar de pestaña cierra todo lo que estaba abierto encima. */
-  setTab(tab: Tab) {
-    if (this.layers.length) history.go(-this.layers.length);
-    this.tab = tab;
+  /** Vuelve `n` entradas del historial y espera a que llegue el popstate. */
+  private async goBack(n: number) {
+    if (n <= 0) return;
+    const back = new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
+    history.go(-n);
+    await back;
+  }
+
+  /**
+   * Cambiar de pestaña cierra lo que estaba abierto encima. La pestaña nueva se apila y
+   * "atras" vuelve a la anterior; si ya estaba en la pila, se vuelve hasta ella, asi la
+   * pila no crece y desde Canciones "atras" sale de la app.
+   */
+  async setTab(tab: Tab) {
+    await this.goBack(this.layers.length);
+    if (tab === this.tab) return;
+    const i = this.tabs.indexOf(tab);
+    if (i >= 0) {
+      await this.goBack(this.tabs.length - 1 - i);
+    } else {
+      this.tabs = [...this.tabs, tab];
+      this.tab = tab;
+      history.pushState({ tab, tabs: this.tabs.length, depth: 0 } satisfies Nav, "");
+    }
   }
 
   /** Cierra todo, pasa a Carpetas y abre esa. */
   async goToFolder(path: string) {
-    const n = this.layers.length;
-    if (n) {
-      // Hay que esperar a que el historial vuelva antes de sumar la capa nueva.
-      const back = new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
-      history.go(-n);
-      await back;
-    }
-    this.tab = "folders";
+    await this.setTab("folders");
     this.open({ kind: "folder", path });
   }
 
@@ -181,7 +214,7 @@ class Store {
     await api.saveSettings(copy);
   }
 
-  sortSongs(list: Song[], sort = this.settings?.songSort ?? "title_asc"): Song[] {
+  sortSongs(list: Song[], sort = this.settings?.songSort ?? "date_desc"): Song[] {
     const out = [...list];
     switch (sort) {
       case "artist_asc":
