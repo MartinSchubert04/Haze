@@ -46,7 +46,13 @@ export type Settings = {
     folderColor: string;
   };
   playback: { volume: number; shuffle: boolean; repeat: string; resume: boolean };
-  behavior: { closeToTray: boolean; startHidden: boolean; miniOnTop: boolean; miniPosition: [number, number] | null };
+  behavior: {
+    closeToTray: boolean;
+    startHidden: boolean;
+    miniOnTop: boolean;
+    miniPosition: [number, number] | null;
+    mainWindow: { x: number; y: number; width: number; height: number; maximized: boolean } | null;
+  };
   ha: { enabled: boolean; host: string; port: number; username: string; password: string; deviceName: string };
   shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string };
   songSort: string;

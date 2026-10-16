@@ -65,6 +65,20 @@ pub struct Behavior {
     pub start_hidden: bool,
     pub mini_on_top: bool,
     pub mini_position: Option<(i32, i32)>,
+    /// Donde quedo la ventana grande al cerrarse.
+    pub main_window: Option<WindowBounds>,
+}
+
+/// Posicion y tamaño de una ventana, en pixeles fisicos. Si estaba maximizada, la
+/// posicion y el tamaño son los de antes de maximizar: a eso vuelve al restaurarla.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub maximized: bool,
 }
 
 /// Atajos globales, como acelerador de Tauri ("Ctrl+Alt+Shift+Space"). Vacio = sin atajo.
@@ -153,7 +167,7 @@ impl Default for Playback {
 
 impl Default for Behavior {
     fn default() -> Self {
-        Self { close_to_tray: true, start_hidden: false, mini_on_top: true, mini_position: None }
+        Self { close_to_tray: true, start_hidden: false, mini_on_top: true, mini_position: None, main_window: None }
     }
 }
 

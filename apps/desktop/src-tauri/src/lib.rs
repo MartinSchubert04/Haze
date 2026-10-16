@@ -265,9 +265,10 @@ fn settings_set(app: AppHandle, settings: Settings) {
             }
         }
         // Lo de reproduccion lo maneja el reproductor, no la pantalla de ajustes, y la
-        // posicion de la mini la guarda la ventana mini: la copia de la interfaz esta vieja.
+        // posicion de las ventanas la guardan las ventanas: la copia de la interfaz esta vieja.
         new.playback = cur.playback.clone();
         new.behavior.mini_position = cur.behavior.mini_position;
+        new.behavior.main_window = cur.behavior.main_window;
         let changes = (
             new.sources != cur.sources,
             serde_json::to_string(&new.ha).ok() != serde_json::to_string(&cur.ha).ok(),
@@ -399,6 +400,9 @@ pub fn show_main(app: &AppHandle) {
         let _ = w.set_focus();
         return;
     }
+    // Vuelve a donde estaba, salvo que ese lugar ya no este en ninguna pantalla.
+    let saved = app.state::<AppState>().settings.lock().unwrap().behavior.main_window;
+    let saved = saved.filter(|b| b.width > 0 && b.height > 0 && on_screen(app, b.x, b.y));
     let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Haze")
         .inner_size(1120.0, 720.0)
@@ -406,25 +410,76 @@ pub fn show_main(app: &AppHandle) {
         .decorations(false)
         .transparent(true)
         .shadow(true)
-        .visible(false)
-        .center();
+        .visible(false);
+    if saved.is_none() {
+        b = b.center();
+    }
     if let Some(args) = browser_args() {
         b = b.additional_browser_args(&args);
     }
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }
-    if let Ok(w) = b.build() {
-        let app2 = app.clone();
-        w.on_window_event(move |e| {
-            if let WindowEvent::CloseRequested { .. } = e {
-                let to_tray = app2.state::<AppState>().settings.lock().unwrap().behavior.close_to_tray;
+    let Ok(w) = b.build() else { return };
+
+    // En pixeles fisicos, como se guardo. Nace oculta: no se la ve saltar. Maximizar una
+    // ventana oculta solo la marca, y se maximiza al mostrarse.
+    if let Some(s) = saved {
+        let _ = w.set_size(tauri::PhysicalSize::new(s.width, s.height));
+        let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+        if s.maximized {
+            let _ = w.maximize();
+        }
+    }
+
+    // Moverla o agrandarla solo actualiza la memoria; el archivo se escribe al cerrarla.
+    // Windows avisa que se movio antes de avisar que se maximizo o minimizo, y esa
+    // posicion no es la de la ventana normal: se guarda la anterior para deshacerlo.
+    let app2 = app.clone();
+    let before_move = Mutex::new(None::<(i32, i32)>);
+    w.on_window_event(move |e| {
+        let state = app2.state::<AppState>();
+        let maximized = || app2.get_webview_window("main").and_then(|w| w.is_maximized().ok()).unwrap_or(false);
+        match e {
+            WindowEvent::CloseRequested { .. } => {
+                let to_tray = state.settings.lock().unwrap().behavior.close_to_tray;
                 if !to_tray {
                     quit_app(&app2);
                 }
             }
-        });
-    }
+            WindowEvent::Moved(p) => {
+                let mut prev = before_move.lock().unwrap();
+                if maximized() {
+                    *prev = None;
+                    return;
+                }
+                let mut s = state.settings.lock().unwrap();
+                let b = s.behavior.main_window.get_or_insert_with(Default::default);
+                *prev = Some((b.x, b.y));
+                (b.x, b.y) = (p.x, p.y);
+            }
+            WindowEvent::Resized(size) => {
+                let max = maximized();
+                let prev = before_move.lock().unwrap().take();
+                let mut s = state.settings.lock().unwrap();
+                let b = s.behavior.main_window.get_or_insert_with(Default::default);
+                if max || size.width == 0 || size.height == 0 {
+                    if let Some((x, y)) = prev {
+                        (b.x, b.y) = (x, y);
+                    }
+                    if max {
+                        b.maximized = true;
+                    }
+                } else {
+                    (b.width, b.height, b.maximized) = (size.width, size.height, false);
+                }
+            }
+            WindowEvent::Destroyed => {
+                state.settings.lock().unwrap().save(&state.settings_path);
+            }
+            _ => {}
+        }
+    });
 }
 
 pub fn open_mini(app: &AppHandle) {
@@ -713,7 +768,7 @@ pub(crate) fn shutdown(app: &AppHandle) {
     if let Ok(p) = state.player.try_lock() {
         p.save_session();
     }
-    // Al salir con la mini abierta, su posicion todavia esta solo en memoria.
+    // Al salir con una ventana abierta, su posicion todavia esta solo en memoria.
     state.settings.lock().unwrap().save(&state.settings_path);
     state.mqtt.lock().unwrap().stop();
 }

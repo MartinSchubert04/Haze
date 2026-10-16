@@ -416,6 +416,7 @@
   }
   .page {
     max-width: 860px;
+    margin: 0 auto;
   }
   .fold {
     margin-top: 18px;
