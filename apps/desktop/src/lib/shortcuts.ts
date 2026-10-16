@@ -15,6 +15,7 @@ export const defaultShortcuts: Settings["shortcuts"] = {
   volumeUp: `${MOD}+ArrowUp`,
   volumeDown: `${MOD}+ArrowDown`,
   mini: `${MOD}+KeyM`,
+  random: `${MOD}+KeyR`,
 };
 
 export const shortcutList: [ShortcutKey, string][] = [
@@ -24,6 +25,7 @@ export const shortcutList: [ShortcutKey, string][] = [
   ["volumeUp", "Subir volumen"],
   ["volumeDown", "Bajar volumen"],
   ["mini", "Abrir / cerrar el mini reproductor"],
+  ["random", "Canción al azar"],
 ];
 
 const NAMES: Record<string, string> = {

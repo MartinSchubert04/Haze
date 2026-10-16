@@ -284,6 +284,21 @@ impl Player {
         self.load_current(0.0);
     }
 
+    /// Arranca `songs` desde un tema al azar, aunque estuviera en pausa. Si hay otro, no
+    /// repite el que ya sonaba.
+    pub fn play_random(&mut self, songs: Vec<Arc<Song>>, context: String) {
+        if songs.is_empty() {
+            return;
+        }
+        let n = songs.len() as u64;
+        let mut i = (self.random() % n) as usize;
+        let current = self.state.song.as_ref().map(|s| s.id);
+        if n > 1 && Some(songs[i].id) == current {
+            i = (i + 1 + (self.random() % (n - 1)) as usize) % n as usize;
+        }
+        self.play_context(songs, i, context);
+    }
+
     pub fn toggle(&mut self) {
         if self.state.song.is_none() {
             return;
@@ -679,6 +694,22 @@ mod tests {
         assert_eq!(playing(&p), Some(2));
         assert!(rx.borrow().playing);
         assert_eq!(rx.borrow().context, "Carpeta");
+    }
+
+    #[test]
+    fn play_random_plays_even_when_paused_and_never_repeats_the_current_song() {
+        let (mut p, _log, rx) = player("all");
+        p.play_context((1..=3).map(song).collect(), 0, String::new());
+        p.set_paused(true);
+        for _ in 0..50 {
+            let before = playing(&p);
+            p.play_random((1..=3).map(song).collect(), "Todas".into());
+            assert_ne!(playing(&p), before);
+            assert!(rx.borrow().playing);
+        }
+        // Con un solo tema no hay otro para elegir: vuelve a sonar ese.
+        p.play_random(vec![song(1)], String::new());
+        assert_eq!(playing(&p), Some(1));
     }
 
     #[test]

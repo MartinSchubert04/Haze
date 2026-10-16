@@ -54,7 +54,7 @@ export type Settings = {
     mainWindow: { x: number; y: number; width: number; height: number; maximized: boolean } | null;
   };
   ha: { enabled: boolean; host: string; port: number; username: string; password: string; deviceName: string };
-  shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string };
+  shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string; random: string };
   songSort: string;
   folderSort: string;
 };

@@ -57,6 +57,8 @@ pub enum Control {
     Shuffle(bool),
     Repeat(String),
     PlayFolder(String),
+    /// Un tema al azar de toda la biblioteca.
+    PlayRandom,
 }
 
 fn songs_sorted(mut songs: Vec<Arc<Song>>) -> Vec<Arc<Song>> {
@@ -68,16 +70,18 @@ pub fn control(app: &AppHandle, c: Control) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
-        let folder_songs = if let Control::PlayFolder(path) = &c {
-            let lib = state.library.read().unwrap();
-            let songs: Vec<_> = if path == ALL_SONGS {
-                lib.songs.clone()
-            } else {
-                lib.songs.iter().filter(|s| &s.folder == path).cloned().collect()
-            };
-            Some(songs_sorted(songs))
-        } else {
-            None
+        let folder_songs = match &c {
+            Control::PlayFolder(path) => {
+                let lib = state.library.read().unwrap();
+                let songs: Vec<_> = if path == ALL_SONGS {
+                    lib.songs.clone()
+                } else {
+                    lib.songs.iter().filter(|s| &s.folder == path).cloned().collect()
+                };
+                Some(songs_sorted(songs))
+            }
+            Control::PlayRandom => Some(songs_sorted(state.library.read().unwrap().songs.clone())),
+            _ => None,
         };
         let mut p = state.player.lock().await;
         match c {
@@ -98,6 +102,7 @@ pub fn control(app: &AppHandle, c: Control) {
                 let name = if path == ALL_SONGS { path.clone() } else { folder_name(&path) };
                 p.play_context(folder_songs.unwrap_or_default(), 0, name);
             }
+            Control::PlayRandom => p.play_random(folder_songs.unwrap_or_default(), ALL_SONGS.into()),
         }
     });
 }
@@ -642,6 +647,7 @@ fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
                     Some("previous") => control(app, Control::Previous),
                     Some("volumeUp") => control(app, Control::VolumeBy(5.0)),
                     Some("volumeDown") => control(app, Control::VolumeBy(-5.0)),
+                    Some("random") => control(app, Control::PlayRandom),
                     Some("mini") => {
                         if app.get_webview_window("mini").is_some() {
                             show_main(app);

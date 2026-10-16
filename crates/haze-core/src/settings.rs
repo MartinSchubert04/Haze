@@ -91,10 +91,12 @@ pub struct Shortcuts {
     pub volume_up: String,
     pub volume_down: String,
     pub mini: String,
+    /// Un tema al azar de toda la biblioteca.
+    pub random: String,
 }
 
 impl Shortcuts {
-    pub fn list(&self) -> [(&'static str, &str); 6] {
+    pub fn list(&self) -> [(&'static str, &str); 7] {
         [
             ("toggle", &self.toggle),
             ("next", &self.next),
@@ -102,6 +104,7 @@ impl Shortcuts {
             ("volumeUp", &self.volume_up),
             ("volumeDown", &self.volume_down),
             ("mini", &self.mini),
+            ("random", &self.random),
         ]
     }
 }
@@ -183,6 +186,7 @@ impl Default for Shortcuts {
             volume_up: k("ArrowUp"),
             volume_down: k("ArrowDown"),
             mini: k("KeyM"),
+            random: k("KeyR"),
         }
     }
 }
