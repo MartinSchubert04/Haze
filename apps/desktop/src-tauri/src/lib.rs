@@ -13,6 +13,7 @@ mod updater;
 mod youtube;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use haze_core::mqtt::{self, ALL_SONGS};
@@ -398,11 +399,33 @@ fn browser_args() -> Option<String> {
     ))
 }
 
+/// Abre una ventana despues de que vuelva el handler que la pidio. Tauri corre los de la
+/// bandeja y su menu con un Mutex tomado, y crear el WebView bombea mensajes: si en ese
+/// rato llega otro evento de la bandeja (con solo pasar el mouse), Tauri vuelve a tomar
+/// ese Mutex en el mismo hilo y la app queda colgada para siempre. Al prender la PC el
+/// WebView tarda segundos en nacer y pasaba casi seguro. `run_on_main_thread` desde el
+/// hilo principal corre en el acto, por eso se encola desde otro.
+fn defer(app: &AppHandle, open: fn(&AppHandle)) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let a = app.clone();
+        let _ = app.run_on_main_thread(move || open(&a));
+    });
+}
+
+/// Mientras nace el WebView se siguen atendiendo eventos, y otro pedido de la misma
+/// ventana llegaria antes de que exista: se crearia dos veces.
+static OPENING_MAIN: AtomicBool = AtomicBool::new(false);
+static OPENING_MINI: AtomicBool = AtomicBool::new(false);
+
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        return;
+    }
+    if OPENING_MAIN.swap(true, Ordering::SeqCst) {
         return;
     }
     // Vuelve a donde estaba, salvo que ese lugar ya no este en ninguna pantalla.
@@ -425,7 +448,9 @@ pub fn show_main(app: &AppHandle) {
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }
-    let Ok(w) = b.build() else { return };
+    let built = b.build();
+    OPENING_MAIN.store(false, Ordering::SeqCst);
+    let Ok(w) = built else { return };
 
     // En pixeles fisicos, como se guardo. Nace oculta: no se la ve saltar. Maximizar una
     // ventana oculta solo la marca, y se maximiza al mostrarse.
@@ -493,6 +518,9 @@ pub fn open_mini(app: &AppHandle) {
         let _ = w.set_focus();
         return;
     }
+    if OPENING_MINI.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let (on_top, pos) = {
         let s = app.state::<AppState>().settings.lock().unwrap().behavior.clone();
         (s.mini_on_top, s.mini_position)
@@ -515,7 +543,9 @@ pub fn open_mini(app: &AppHandle) {
     if let Some(fx) = glass_effects(app) {
         b = b.effects(fx);
     }
-    let Ok(w) = b.build() else { return };
+    let built = b.build();
+    OPENING_MINI.store(false, Ordering::SeqCst);
+    let Ok(w) = built else { return };
 
     // Vuelve a donde estaba. La primera vez, o si ese lugar ya no esta en ninguna
     // pantalla (monitor desconectado), va abajo a la derecha, arriba de la barra de
@@ -589,14 +619,14 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "toggle" => control(app, Control::Toggle),
             "next" => control(app, Control::Next),
             "prev" => control(app, Control::Previous),
-            "mini" => open_mini(app),
-            "open" => show_main(app),
+            "mini" => defer(app, open_mini),
+            "open" => defer(app, show_main),
             "quit" => quit_app(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, e| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
-                show_main(tray.app_handle());
+                defer(tray.app_handle(), show_main);
             }
         })
         .build(app)?;
@@ -828,7 +858,7 @@ async fn start_engine(app: AppHandle, resume_playing: bool) {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| defer(app, show_main)))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
