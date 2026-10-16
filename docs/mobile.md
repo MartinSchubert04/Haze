@@ -113,9 +113,9 @@ nombre. Cuando la librería publique un ffmpeg de 16 KB, alcanza con subir la ve
 
 ## Actualizaciones
 
-Cada seis horas (y con "Buscar" en Ajustes) Haze se fija en GitHub si hay un Release
-`mobile-v*` más nuevo, lo baja de fondo y verifica el sha256 de `latest-android.json`. La
-firma la verifica Android: un APK firmado con otra clave no se instala encima.
+Cada seis horas (y con "Buscar" en Ajustes) Haze se fija si el último Release de GitHub
+trae una versión más nueva en `latest-android.json`, la baja de fondo y verifica el sha256.
+La firma la verifica Android: un APK firmado con otra clave no se instala encima.
 
 Se instala solo al salir de la app sin música sonando, si Android deja hacerlo sin
 preguntar: Android 12 o más nuevo, con el permiso "Instalar apps desconocidas" y Haze como
@@ -124,19 +124,21 @@ queda "Actualizar ahora" en Ajustes, que la primera vez abre el ajuste del permi
 después muestra el diálogo del sistema. La sesión queda guardada: al abrir la versión
 nueva, vuelve a la misma canción en el mismo segundo.
 
-Probado en el emulador: buscar (con y sin versión nueva publicada) y el APK de release
-firmado. La instalación en sí hay que confirmarla en un celular real con el primer Release.
+Probado en el emulador: buscar sin versión nueva publicada y el APK de release firmado. La instalación en sí hay que confirmarla en un celular real con el primer Release.
 
 ## Publicar
 
+Escritorio y Android salen juntos, con la misma versión:
+
 ```
-git tag mobile-v0.2.0
-git push origin mobile-v0.2.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-El workflow `Android` compila el APK de release para arm64, lo firma y lo sube a un Release
-con `latest-android.json`. El Release se crea con `--latest=false`: "latest" es de
-escritorio, que busca ahí su `latest.json` (y los de escritorio se crean con `--latest`).
+El tag dispara los dos workflows. `Escritorio` sube el instalador y `latest.json`;
+`Android` compila el APK de release para arm64, lo firma y sube el APK y
+`latest-android.json`. Los dos usan `.github/scripts/release.sh`: el que termina primero
+crea el Release (marcado como último) y el otro le suma sus archivos.
 
 La firma sale de cuatro secrets del repo (Settings > Secrets and variables > Actions). Para
 crearlos, una sola vez:

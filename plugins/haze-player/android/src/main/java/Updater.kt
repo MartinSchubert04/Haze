@@ -10,7 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import app.tauri.Logger
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -18,50 +17,36 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Actualizaciones desde GitHub Releases: cada version de Android es un Release con tag
- * `mobile-vX.Y.Z`, el APK y `latest-android.json` (version, url, sha256).
+ * Actualizaciones desde GitHub Releases: cada version (tag `vX.Y.Z`) trae el instalador
+ * de escritorio y el APK, con `latest.json` y `latest-android.json` (version, url, sha256).
  *
  * La firma la controla Android: un APK firmado con otra clave no se instala encima. Aca
  * se verifica que lo bajado sea lo publicado (sha256).
  */
 internal object Updater {
-  private const val RELEASES = "https://api.github.com/repos/MartinSchubert04/Haze/releases?per_page=30"
+  private const val LATEST = "https://github.com/MartinSchubert04/Haze/releases/latest/download/latest-android.json"
 
   /** El APK bajado y verificado, listo para instalar. */
   @Volatile
   var ready: File? = null
     private set
 
-  private fun get(url: String): String {
-    val c = URL(url).openConnection() as HttpURLConnection
+  /** El ultimo Release: {version, url, sha256}, o null si no trae APK. Bloquea. */
+  fun latest(): JSONObject? {
+    val c = URL(LATEST).openConnection() as HttpURLConnection
     c.connectTimeout = 15_000
     c.readTimeout = 30_000
-    c.setRequestProperty("Accept", "application/vnd.github+json")
     c.setRequestProperty("User-Agent", "Haze-Android")
     try {
-      if (c.responseCode != 200) throw IllegalStateException("GitHub respondio ${c.responseCode}")
-      return c.inputStream.bufferedReader().use { it.readText() }
+      return when (c.responseCode) {
+        200 -> JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+        // Sin Releases todavia, o el ultimo salio sin APK (fallo la parte de Android).
+        404 -> null
+        else -> throw IllegalStateException("GitHub respondio ${c.responseCode}")
+      }
     } finally {
       c.disconnect()
     }
-  }
-
-  /** El ultimo Release de Android: {version, url, sha256}, o null si no hay. Bloquea. */
-  fun latest(): JSONObject? {
-    val releases = JSONArray(get(RELEASES))
-    for (i in 0 until releases.length()) {
-      val r = releases.getJSONObject(i)
-      if (r.optBoolean("draft") || r.optBoolean("prerelease")) continue
-      if (!r.optString("tag_name").startsWith("mobile-v")) continue
-      val assets = r.optJSONArray("assets") ?: continue
-      for (j in 0 until assets.length()) {
-        val a = assets.getJSONObject(j)
-        if (a.optString("name") == "latest-android.json") {
-          return JSONObject(get(a.getString("browser_download_url")))
-        }
-      }
-    }
-    return null
   }
 
   /** Baja el APK y lo deja en [ready] si el sha256 coincide. Bloquea. */

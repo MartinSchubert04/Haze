@@ -1,7 +1,8 @@
 name: Escritorio
 
 # - En cada push y PR que toque algo de escritorio: tests de Rust y chequeo de tipos.
-# - Al etiquetar vX.Y.Z: compila el instalador de Windows y lo publica en Releases.
+# - Al etiquetar vX.Y.Z: compila el instalador de Windows y lo publica en el Release de
+#   esa version. El mismo tag dispara android.yml, que suma el APK al mismo Release.
 #
 #     git tag v0.2.0
 #     git push origin v0.2.0
@@ -22,6 +23,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/desktop.yml'
+      - '.github/scripts/release.sh'
   pull_request:
     paths:
       - 'apps/desktop/**'
@@ -32,6 +34,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/desktop.yml'
+      - '.github/scripts/release.sh'
   workflow_dispatch:
 
 permissions:
@@ -136,11 +139,4 @@ jobs:
             ARCHIVOS="$ARCHIVOS latest.json"
           fi
 
-          cat > notas.md <<NOTAS
-          Bajá \`Haze-$V-setup.exe\` y abrilo. Se instala solo para tu usuario, sin pedir permisos de administrador.
-
-          Si ya tenés Haze, no hace falta: se actualiza sola de fondo.
-          NOTAS
-          # --latest: las apps de escritorio buscan su latest.json en el ultimo Release, y los
-          # de Android (mobile-v*) no deben quedar como ultimo.
-          gh release create "$GITHUB_REF_NAME" $ARCHIVOS --title "Haze $V" --notes-file notas.md --latest
+          bash .github/scripts/release.sh "$V" $ARCHIVOS

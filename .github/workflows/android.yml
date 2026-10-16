@@ -2,19 +2,20 @@ name: Android
 
 # - En cada push y PR que toque algo de Android: tests de Rust del nucleo y del plugin,
 #   chequeo de tipos y un APK de debug para celulares (arm64), que queda como artefacto.
-# - Al etiquetar mobile-vX.Y.Z: compila el APK firmado y lo publica en Releases con
-#   latest-android.json, que es lo que consultan las apps instaladas para actualizarse.
+# - Al etiquetar vX.Y.Z: compila el APK firmado y lo suma al Release de esa version con
+#   latest-android.json, que es lo que consultan las apps instaladas para actualizarse. El
+#   mismo tag dispara desktop.yml, que sube el instalador de Windows.
 #
-#     git tag mobile-v0.2.0
-#     git push origin mobile-v0.2.0
+#     git tag v0.2.0
+#     git push origin v0.2.0
 #
 # Escritorio tiene su propio workflow (desktop.yml). Cada uno corre solo si cambio algo
 # que le afecta, y tienen grupos de concurrencia separados: no se cancelan entre si.
-# Los filtros de carpetas no aplican a los tags: un tag mobile-v* siempre compila.
+# Los filtros de carpetas no aplican a los tags: un tag v* siempre compila.
 on:
   push:
     branches: [main]
-    tags: ['mobile-v*']
+    tags: ['v*']
     paths:
       - 'apps/mobile/**'
       - 'plugins/**'
@@ -25,6 +26,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android.yml'
+      - '.github/scripts/release.sh'
   pull_request:
     paths:
       - 'apps/mobile/**'
@@ -36,6 +38,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android.yml'
+      - '.github/scripts/release.sh'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      RELEASE: ${{ startsWith(github.ref, 'refs/tags/mobile-v') }}
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -111,9 +114,9 @@ jobs:
         if: env.RELEASE == 'true'
         id: version
         run: |
-          V="${GITHUB_REF_NAME#mobile-v}"
+          V="${GITHUB_REF_NAME#v}"
           if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "El tag '$GITHUB_REF_NAME' no tiene la forma mobile-vMAYOR.MENOR.PARCHE" >&2
+            echo "El tag '$GITHUB_REF_NAME' no tiene la forma vMAYOR.MENOR.PARCHE" >&2
             exit 1
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
@@ -163,12 +166,4 @@ jobs:
             const [version, url, sha256] = process.argv.slice(1);
             require("fs").writeFileSync("latest-android.json", JSON.stringify({ version, url, sha256, pub_date: new Date().toISOString() }, null, 2));
           ' "$V" "$URL" "$SHA"
-
-          cat > notas.md <<NOTAS
-          Bajá \`Haze-$V-android.apk\` en el celular y abrilo. Android va a pedir permiso para instalar apps de esta fuente.
-
-          Si ya tenés Haze, no hace falta: se actualiza sola.
-          NOTAS
-          # --latest=false: "latest" es de escritorio, que busca ahi su latest.json.
-          gh release create "$GITHUB_REF_NAME" "Haze-$V-android.apk" latest-android.json \
-            --title "Haze para Android $V" --notes-file notas.md --latest=false
+          bash .github/scripts/release.sh "$V" "Haze-$V-android.apk" latest-android.json

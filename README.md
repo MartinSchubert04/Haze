@@ -82,12 +82,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-El workflow `Escritorio` compila el instalador y lo sube a Releases. La app avisa en Ajustes
-cuando hay una versión nueva.
-
-Android se publica aparte, con `git tag mobile-v0.2.0` (la firma y los secrets que
-necesita están en [docs/mobile.md](docs/mobile.md#publicar)). Se actualiza sola igual que
-escritorio.
+El tag compila las dos apps y cada Release trae el instalador de Windows y el APK de
+Android (la firma del APK y sus secrets están en [docs/mobile.md](docs/mobile.md#publicar)).
+Las dos se actualizan solas.
 
 Cada app tiene su workflow (`desktop.yml` y `android.yml`) y cada uno corre solo si el
 push toca algo que le afecta. `Android` deja un APK de debug como artefacto.
