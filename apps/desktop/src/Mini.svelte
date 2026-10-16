@@ -17,6 +17,20 @@
   const nextRepeat = $derived(p.repeat === "off" ? "all" : p.repeat === "all" ? "one" : "off");
   const repeatLabel = $derived(p.repeat === "off" ? "Repetir: no" : p.repeat === "all" ? "Repetir: todo" : "Repetir: una");
 
+  // Si el texto no entra, al pasar el mouse por la ventana se desliza hasta el final y
+  // vuelve, para que se lea completo.
+  function marquee(node: HTMLElement) {
+    const measure = () => {
+      const extra = node.scrollWidth - node.clientWidth;
+      node.style.setProperty("--shift", `${-Math.max(0, extra)}px`);
+      node.style.setProperty("--dur", `${Math.max(3, extra / 25 + 2)}s`);
+      node.classList.toggle("long", extra > 0);
+    };
+    const root = node.closest(".mini");
+    root?.addEventListener("mouseenter", measure);
+    return { destroy: () => root?.removeEventListener("mouseenter", measure) };
+  }
+
   onMount(async () => {
     await store.init();
     await win.show();
@@ -35,8 +49,8 @@
 
   <div class="side" data-tauri-drag-region>
     <div class="meta" data-tauri-drag-region>
-      <div class="t ellipsis" data-tauri-drag-region>{p.song?.title ?? "Nada sonando"}</div>
-      <div class="a ellipsis" data-tauri-drag-region>{p.song?.artist ?? ""}</div>
+      <div class="t scroll" use:marquee data-tauri-drag-region><span data-tauri-drag-region>{p.song?.title ?? "Nada sonando"}</span></div>
+      <div class="a scroll" use:marquee data-tauri-drag-region><span data-tauri-drag-region>{p.song?.artist ?? ""}</span></div>
     </div>
 
     <div class="controls">
@@ -65,8 +79,8 @@
     height: 100vh;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 12px 0 14px;
+    gap: 10px;
+    padding: 0 10px;
     overflow: hidden;
   }
   .cov {
@@ -77,27 +91,57 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
   }
   .meta {
     text-align: center;
-    padding: 0 30px;
+  }
+  /* Los botones de expandir y cerrar estan arriba a la derecha: el titulo no pasa por ahi. */
+  .t {
+    margin-right: 48px;
+  }
+  .scroll {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .scroll span {
+    display: inline-block;
+  }
+  .mini:hover .scroll:global(.long) {
+    text-overflow: clip;
+    text-align: left;
+  }
+  .mini:hover .scroll:global(.long) span {
+    animation: marquee var(--dur) ease-in-out 0.4s infinite alternate;
+  }
+  @keyframes marquee {
+    0%,
+    15% {
+      transform: translateX(0);
+    }
+    85%,
+    100% {
+      transform: translateX(var(--shift));
+    }
   }
   .t {
     font-weight: 600;
     font-size: 13.5px;
+    justify-self: left;
   }
   .a {
     color: var(--text-2);
     font-size: 12px;
     margin-top: 1px;
     min-height: 15px;
+    justify-self: left;
   }
   .controls {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 2px;
   }
   .controls .icon-btn {
     width: 30px;

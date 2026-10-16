@@ -439,7 +439,7 @@ pub fn open_mini(app: &AppHandle) {
     };
     let mut b = WebviewWindowBuilder::new(app, "mini", WebviewUrl::App("index.html#mini".into()))
         .title("Haze - mini")
-        .inner_size(380.0, 96.0)
+        .inner_size(240.0, 84.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
