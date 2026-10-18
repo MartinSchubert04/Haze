@@ -60,6 +60,8 @@ pub enum Control {
     PlayFolder(String),
     /// Un tema al azar de toda la biblioteca.
     PlayRandom,
+    /// Salta a la entrada de la cola con ese uid (desde HA).
+    JumpUid(u64),
 }
 
 fn songs_sorted(mut songs: Vec<Arc<Song>>) -> Vec<Arc<Song>> {
@@ -104,6 +106,7 @@ pub fn control(app: &AppHandle, c: Control) {
                 p.play_context(folder_songs.unwrap_or_default(), 0, name);
             }
             Control::PlayRandom => p.play_random(folder_songs.unwrap_or_default(), ALL_SONGS.into()),
+            Control::JumpUid(uid) => p.jump_uid(uid),
         }
     });
 }
@@ -135,6 +138,7 @@ impl mqtt::Hooks for Ha {
             C::Shuffle(on) => Control::Shuffle(on),
             C::Repeat(m) => Control::Repeat(m),
             C::PlayFolder(p) => Control::PlayFolder(p),
+            C::Jump(uid) => Control::JumpUid(uid),
         });
     }
 
@@ -145,6 +149,10 @@ impl mqtt::Hooks for Ha {
 
     fn cover(&self, song: &Song) -> Option<Vec<u8>> {
         media_keys::cover_bytes(song)
+    }
+
+    fn queue(&self) -> player::QueueView {
+        self.0.state::<AppState>().player.blocking_lock().queue_view()
     }
 }
 
