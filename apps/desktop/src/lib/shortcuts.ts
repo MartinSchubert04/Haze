@@ -24,7 +24,7 @@ export const shortcutList: [ShortcutKey, string][] = [
   ["previous", "Anterior"],
   ["volumeUp", "Subir volumen"],
   ["volumeDown", "Bajar volumen"],
-  ["mini", "Mini → ventana grande → minimizada"],
+  ["mini", "Mini → ventana grande → de fondo"],
   ["random", "Canción al azar"],
 ];
 

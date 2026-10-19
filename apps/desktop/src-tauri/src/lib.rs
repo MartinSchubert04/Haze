@@ -436,9 +436,11 @@ pub fn show_main(app: &AppHandle) {
     if OPENING_MAIN.swap(true, Ordering::SeqCst) {
         return;
     }
-    // Vuelve a donde estaba, salvo que ese lugar ya no este en ninguna pantalla.
+    // Vuelve a donde estaba y con el mismo tamaño. Si ese lugar ya no esta en ninguna
+    // pantalla (monitor desconectado), conserva el tamaño y aparece centrada.
     let saved = app.state::<AppState>().settings.lock().unwrap().behavior.main_window;
-    let saved = saved.filter(|b| b.width > 0 && b.height > 0 && on_screen(app, b.x, b.y));
+    let saved = saved.filter(|b| b.width > 0 && b.height > 0);
+    let place = saved.is_some_and(|b| on_screen(app, b.x, b.y));
     let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Haze")
         .inner_size(1120.0, 720.0)
@@ -447,7 +449,7 @@ pub fn show_main(app: &AppHandle) {
         .transparent(true)
         .shadow(true)
         .visible(false);
-    if saved.is_none() {
+    if !place {
         b = b.center();
     }
     if let Some(args) = browser_args() {
@@ -462,9 +464,17 @@ pub fn show_main(app: &AppHandle) {
 
     // En pixeles fisicos, como se guardo. Nace oculta: no se la ve saltar. Maximizar una
     // ventana oculta solo la marca, y se maximiza al mostrarse.
+    //
+    // Primero la posicion y despues el tamaño: si el lugar guardado esta en otro monitor
+    // con otra escala, al llegar ahi Windows la reescala, y el tamaño quedaria mal.
     if let Some(s) = saved {
+        if place {
+            let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+        }
         let _ = w.set_size(tauri::PhysicalSize::new(s.width, s.height));
-        let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+        if !place {
+            let _ = w.center();
+        }
         if s.maximized {
             let _ = w.maximize();
         }
@@ -520,8 +530,8 @@ pub fn show_main(app: &AppHandle) {
     });
 }
 
-/// El atajo del mini va rotando: mini -> grande -> minimizada -> mini. Sin ventanas (en
-/// la bandeja) cuenta como minimizada.
+/// El atajo del mini va rotando: mini -> grande -> de fondo (sin ventanas, sigue sonando)
+/// -> mini. Si la grande estaba minimizada u oculta, pasa al mini.
 fn cycle_windows(app: &AppHandle) {
     if app.get_webview_window("mini").is_some() {
         show_main(app);
@@ -532,8 +542,10 @@ fn cycle_windows(app: &AppHandle) {
         w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)
     });
     match main {
+        // Destruirla (no `close`) no pasa por "cerrar a la bandeja": queda de fondo aunque
+        // ese ajuste este apagado, y libera el WebView.
         Some(w) if showing => {
-            let _ = w.minimize();
+            let _ = w.destroy();
         }
         _ => open_mini(app),
     }
