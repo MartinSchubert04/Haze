@@ -1,6 +1,7 @@
 //! Home Assistant por MQTT. Con MQTT discovery las entidades aparecen solas en HA,
 //! agrupadas en un dispositivo: estado, cancion, artista, caratula, botones de
-//! anterior/play/siguiente, volumen, aleatorio, repetir y "reproducir carpeta".
+//! anterior/play/siguiente, volumen, aleatorio, repetir, "reproducir carpeta" y la cola
+//! (sensor con la lista de canciones; HA salta a una publicando su uid en `jump/set`).
 //!
 //! Lo usan las dos apps: cada una pone en [`Hooks`] como obedecer las ordenes, de donde
 //! salen las carpetas y las tapas, y donde mostrar si esta conectado.
@@ -15,11 +16,16 @@ use tokio::runtime::Handle;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-use crate::player::PlayerState;
+use crate::player::{PlayerState, QueueView};
 use crate::settings::HomeAssistant;
 use crate::song::Song;
 
 const REPEAT: &[(&str, &str)] = &[("off", "No"), ("all", "Todo"), ("one", "Una")];
+
+/// Canciones de la cola que se mandan a HA. "Todas las canciones" puede tener miles:
+/// se manda una ventana alrededor de la actual para no inflar los atributos del sensor.
+const QUEUE_BEFORE: usize = 50;
+const QUEUE_MAX: usize = 400;
 
 /// La opcion del selector de carpetas que reproduce toda la biblioteca.
 pub const ALL_SONGS: &str = "Todas las canciones";
@@ -38,6 +44,8 @@ pub enum Command {
     Repeat(String),
     /// La ruta de la carpeta, o [`ALL_SONGS`].
     PlayFolder(String),
+    /// Saltar a la entrada de la cola con ese uid.
+    Jump(u64),
 }
 
 /// Lo que pone cada app.
@@ -49,6 +57,8 @@ pub trait Hooks: Send + Sync + 'static {
     fn status(&self, s: &str);
     /// La tapa en JPEG. Puede bloquear: se llama fuera del runtime.
     fn cover(&self, song: &Song) -> Option<Vec<u8>>;
+    /// La cola. Puede bloquear: se llama fuera del runtime.
+    fn queue(&self) -> QueueView;
 }
 
 /// Como se presenta el dispositivo en HA.
@@ -148,6 +158,7 @@ fn parse(topic: &str, payload: &str, folders: &[(String, String)]) -> Option<Com
         "seek/set" => payload.parse().ok().map(Command::Seek),
         "shuffle/set" => Some(Command::Shuffle(payload == "ON")),
         "repeat/set" => REPEAT.iter().find(|(_, l)| *l == payload).map(|(k, _)| Command::Repeat(k.to_string())),
+        "jump/set" => payload.parse().ok().map(Command::Jump),
         "folder/set" => folders.iter().find(|(name, _)| name == payload).map(|(_, path)| Command::PlayFolder(path.clone())),
         _ => None,
     }
@@ -223,6 +234,8 @@ async fn run(cfg: HomeAssistant, device: Device, mut rx: watch::Receiver<PlayerS
     let state_topic = format!("{base}/state");
 
     let mut last_cover: Option<u64> = None;
+    // (version de la cola, cancion actual): si cambia, se vuelve a mandar la lista.
+    let mut last_queue: Option<(u64, Option<u64>)> = None;
     let mut last_folders: Vec<(String, String)> = Vec::new();
 
     loop {
@@ -235,6 +248,7 @@ async fn run(cfg: HomeAssistant, device: Device, mut rx: watch::Receiver<PlayerS
                 announce(&client, &base, &avail, &state_topic, &device, &last_folders).await;
                 let _ = client.publish(&avail, QoS::AtLeastOnce, true, "online").await;
                 last_cover = None;
+                last_queue = None;
             }
         }
         let s = rx.borrow_and_update().clone();
@@ -263,6 +277,15 @@ async fn run(cfg: HomeAssistant, device: Device, mut rx: watch::Receiver<PlayerS
         let _ = client.publish(&state_topic, QoS::AtLeastOnce, true, payload.to_string()).await;
 
         let id = song.map(|x| x.id);
+        let qkey = (s.queue_version, id);
+        if last_queue != Some(qkey) {
+            last_queue = Some(qkey);
+            let h = hooks.clone();
+            if let Ok(q) = tokio::task::spawn_blocking(move || h.queue()).await {
+                let _ = client.publish(format!("{base}/queue"), QoS::AtLeastOnce, true, queue_payload(&q, &base).to_string()).await;
+            }
+        }
+
         if id != last_cover {
             last_cover = id;
             let bytes = match song {
@@ -276,6 +299,25 @@ async fn run(cfg: HomeAssistant, device: Device, mut rx: watch::Receiver<PlayerS
         }
     }
     poll.abort();
+}
+
+fn queue_payload(q: &QueueView, base: &str) -> serde_json::Value {
+    let cur = q.current_index.unwrap_or(0);
+    let start = cur.saturating_sub(QUEUE_BEFORE);
+    let end = (start + QUEUE_MAX).min(q.entries.len());
+    let songs: Vec<_> = q.entries[start.min(end)..end]
+        .iter()
+        .map(|e| json!({ "u": e.uid, "t": e.song.title, "a": e.song.artist }))
+        .collect();
+    json!({
+        "total": q.entries.len(),
+        // Indice de la actual dentro de `songs`; `offset` es donde empieza la ventana en la cola.
+        "current": q.current_index.map(|i| i - start),
+        "offset": start,
+        "context": q.context,
+        "jump_topic": format!("{base}/jump/set"),
+        "songs": songs,
+    })
 }
 
 async fn publish_config(client: &AsyncClient, component: &str, id: &str, mut cfg: serde_json::Value, device: &serde_json::Value, avail: &str) {
@@ -310,6 +352,11 @@ async fn announce(
     publish_config(client, "sensor", &p("artista"), json!({
         "name": "Artista", "icon": "mdi:account-music", "state_topic": state,
         "value_template": "{{ value_json.artist[:250] }}",
+    }), device, avail).await;
+    let queue = format!("{base}/queue");
+    publish_config(client, "sensor", &p("cola"), json!({
+        "name": "Cola", "icon": "mdi:playlist-music", "state_topic": queue,
+        "value_template": "{{ value_json.total }}", "json_attributes_topic": queue,
     }), device, avail).await;
     publish_config(client, "image", &p("caratula"), json!({
         "name": "Caratula", "image_topic": format!("{base}/cover"), "content_type": "image/jpeg",
@@ -379,6 +426,8 @@ mod tests {
         assert_eq!(parse("shuffle/set", "OFF", &folders), Some(Command::Shuffle(false)));
         assert_eq!(parse("folder/set", "Rock", &folders), Some(Command::PlayFolder("Music/Rock".into())));
         assert_eq!(parse("folder/set", "Pop", &folders), None);
+        assert_eq!(parse("jump/set", "42", &folders), Some(Command::Jump(42)));
+        assert_eq!(parse("jump/set", "x", &folders), None);
         assert_eq!(parse("cmd", "dance", &folders), None);
     }
 }

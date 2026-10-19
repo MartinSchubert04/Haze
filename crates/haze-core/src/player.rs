@@ -457,6 +457,13 @@ impl Player {
         self.load_current(0.0);
     }
 
+    /// Salta a la entrada con ese uid; si ya no esta en la cola, no hace nada.
+    pub fn jump_uid(&mut self, uid: u64) {
+        if let Some(i) = self.queue.entries.iter().position(|e| e.uid == uid) {
+            self.jump(i);
+        }
+    }
+
     pub fn remove(&mut self, index: usize) {
         let removing_current = self.queue.current_index == Some(index);
         self.queue = self.queue.remove_at(index);

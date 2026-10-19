@@ -84,6 +84,8 @@ enum Control {
     Repeat(String),
     /// La ruta de la carpeta, o "Todas las canciones".
     PlayFolder(String),
+    /// Salta a la entrada de la cola con ese uid (desde HA).
+    JumpUid(u64),
 }
 
 // --------------------------------------------------------------------- comandos
@@ -205,6 +207,7 @@ async fn run_control(app: &AppHandle, control: Control) {
             let name = if path == ALL_SONGS { path } else { path.rsplit('/').next().unwrap_or(&path).to_string() };
             p.play_context(folder_songs.unwrap_or_default(), 0, name);
         }
+        Control::JumpUid(uid) => p.jump_uid(uid),
     }
 }
 
@@ -338,6 +341,7 @@ impl mqtt::Hooks for Ha {
             C::Shuffle(on) => Control::Shuffle(on),
             C::Repeat(m) => Control::Repeat(m),
             C::PlayFolder(p) => Control::PlayFolder(p),
+            C::Jump(uid) => Control::JumpUid(uid),
         };
         let app = self.0.clone();
         tauri::async_runtime::spawn(async move { run_control(&app, control).await });
@@ -350,6 +354,10 @@ impl mqtt::Hooks for Ha {
 
     fn cover(&self, song: &Song) -> Option<Vec<u8>> {
         self.0.haze_player().cover(&song.path, 512).ok().flatten()
+    }
+
+    fn queue(&self) -> QueueView {
+        self.0.state::<AppState>().player.blocking_lock().queue_view()
     }
 }
 
