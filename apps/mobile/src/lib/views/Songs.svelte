@@ -65,7 +65,14 @@
   {/if}
 {/snippet}
 
-<SongList songs={shown} context={query ? "Búsqueda" : ALL_SONGS} {header} onrefresh={() => api.rescan()} />
+<!-- Con una busqueda, tocar un tema lo hace sonar sin cambiar la cola por los resultados. -->
+<SongList
+  songs={shown}
+  context={ALL_SONGS}
+  {header}
+  onrefresh={() => api.rescan()}
+  onplay={query.trim() ? (song) => store.playNow(song) : undefined}
+/>
 
 <style>
   .top {

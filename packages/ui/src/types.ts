@@ -33,6 +33,8 @@ export type QueueView = { entries: QueueEntry[]; currentIndex: number | null; co
 
 export type Settings = {
   sources: string[];
+  /** Carpetas quitadas de la biblioteca (Android). */
+  hiddenFolders: string[];
   downloadFolders: string[];
   defaultDownloadFolder: string | null;
   appearance: {

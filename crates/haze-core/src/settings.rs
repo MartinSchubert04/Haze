@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     /// Carpetas de donde sale la biblioteca.
     pub sources: Vec<String>,
+    /// Carpetas que se quitaron de la biblioteca (Android: ahi la biblioteca es todo
+    /// MediaStore, asi que se oculta lo que no se quiere ver).
+    pub hidden_folders: Vec<String>,
     /// Carpetas favoritas para guardar lo que se baja de YouTube.
     pub download_folders: Vec<String>,
     /// La que se propone primero al bajar.
@@ -126,6 +129,7 @@ impl Default for Settings {
         let music = dirs_music();
         Self {
             sources: music.iter().cloned().collect(),
+            hidden_folders: Vec::new(),
             download_folders: music.iter().cloned().collect(),
             default_download_folder: music,
             appearance: Appearance::default(),

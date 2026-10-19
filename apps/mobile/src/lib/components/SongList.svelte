@@ -14,7 +14,15 @@
     context,
     header,
     onrefresh,
-  }: { songs: Song[]; context: string; header?: Snippet; onrefresh?: () => Promise<unknown> } = $props();
+    onplay,
+  }: {
+    songs: Song[];
+    context: string;
+    header?: Snippet;
+    onrefresh?: () => Promise<unknown>;
+    /** Reemplaza lo que hace tocar una fila (por defecto, sonar esta lista desde ahi). */
+    onplay?: (song: Song) => void;
+  } = $props();
 
   const ROW = 64;
   const EXTRA = 8;
@@ -38,7 +46,7 @@
         class="row press"
         class:current={song.id === current}
         style:top="{(first + k) * ROW}px"
-        onclick={() => store.play(songs, first + k, context)}
+        onclick={() => (onplay ? onplay(song) : store.play(songs, first + k, context))}
         use:longpress={() => store.open({ kind: "song", song })}
       >
         <Cover {song} size={46} radius={8} />

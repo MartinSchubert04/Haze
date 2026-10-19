@@ -6,6 +6,7 @@
   import TabBar from "./lib/components/TabBar.svelte";
   import MiniPlayer from "./lib/components/MiniPlayer.svelte";
   import SongSheet from "./lib/components/SongSheet.svelte";
+  import FolderSheet from "./lib/components/FolderSheet.svelte";
   import Access from "./lib/views/Access.svelte";
   import Songs from "./lib/views/Songs.svelte";
   import Folders from "./lib/views/Folders.svelte";
@@ -67,6 +68,7 @@
 
     {#if store.isOpen("nowPlaying") && store.player.song}<NowPlaying />{/if}
     {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />{/if}
+    {#if sheet?.kind === "folderOptions"}<FolderSheet path={sheet.path} />{/if}
     {#if sheet?.kind === "link"}<LinkSheet url={sheet.url} />{/if}
   </div>
 {/if}

@@ -512,6 +512,25 @@ pub fn show_main(app: &AppHandle) {
     });
 }
 
+/// El atajo del mini va rotando: mini -> grande -> minimizada -> mini. Sin ventanas (en
+/// la bandeja) cuenta como minimizada.
+fn cycle_windows(app: &AppHandle) {
+    if app.get_webview_window("mini").is_some() {
+        show_main(app);
+        return;
+    }
+    let main = app.get_webview_window("main");
+    let showing = main.as_ref().is_some_and(|w| {
+        w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)
+    });
+    match main {
+        Some(w) if showing => {
+            let _ = w.minimize();
+        }
+        _ => open_mini(app),
+    }
+}
+
 pub fn open_mini(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("mini") {
         let _ = w.show();
@@ -678,13 +697,7 @@ fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
                     Some("volumeUp") => control(app, Control::VolumeBy(5.0)),
                     Some("volumeDown") => control(app, Control::VolumeBy(-5.0)),
                     Some("random") => control(app, Control::PlayRandom),
-                    Some("mini") => {
-                        if app.get_webview_window("mini").is_some() {
-                            show_main(app);
-                        } else {
-                            open_mini(app);
-                        }
-                    }
+                    Some("mini") => cycle_windows(app),
                     _ => {}
                 }
             })

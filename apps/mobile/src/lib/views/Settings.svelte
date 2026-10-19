@@ -1,7 +1,7 @@
 <script lang="ts">
   // Ajustes del telefono: acento, fondo, reproduccion y Home Assistant.
-  import { ChevronLeft, Check, RefreshCw, Download } from "@lucide/svelte";
-  import { plural } from "@haze/ui/format";
+  import { ChevronLeft, ChevronDown, Check, RefreshCw, Download, Eye } from "@lucide/svelte";
+  import { folderName, plural } from "@haze/ui/format";
   import { api } from "../api";
   import { store } from "../store.svelte";
 
@@ -22,6 +22,9 @@
     ({ connected: "Conectado", error: "Sin conexión", network: "Falta permiso" } as Record<string, string>)[store.haStatus] ??
       "Conectando…",
   );
+
+  // Home Assistant se muestra plegado: casi nunca se toca.
+  let haOpen = $state(false);
 
   let checking = $state(false);
   let upToDate = $state(false);
@@ -134,7 +137,14 @@
       />
     </label>
 
-    <h2>Home Assistant</h2>
+    <button class="fold" aria-expanded={haOpen} onclick={() => (haOpen = !haOpen)}>
+      <h2>Home Assistant</h2>
+      {#if s.ha.enabled}
+        <span class="status" class:ok={store.haStatus === "connected"}>{haLabel}</span>
+      {/if}
+      <span class="chev" class:open={haOpen}><ChevronDown size={18} /></span>
+    </button>
+    {#if haOpen}
     <p class="hint">Por MQTT. Las entidades aparecen solas en HA, en el dispositivo "{s.ha.deviceName}".</p>
     <label class="row">
       <span>Conectar con Home Assistant</span>
@@ -158,6 +168,7 @@
       {/if}
       <button class="pill primary save" disabled={!haDirty} onclick={saveHa}>Guardar</button>
     </div>
+    {/if}
 
     <h2>Biblioteca</h2>
     <div class="row">
@@ -166,6 +177,18 @@
         <RefreshCw size={15} class={store.scanning ? "spin" : ""} /> Volver a buscar
       </button>
     </div>
+    {#if s.hiddenFolders?.length}
+      <p class="hint">Carpetas quitadas de la biblioteca</p>
+      {#each s.hiddenFolders as path (path)}
+        <div class="row hidden-folder">
+          <div class="folder-text">
+            <div class="ellipsis">{folderName(path) || "Almacenamiento"}</div>
+            <div class="hint ellipsis">{path || "/"}</div>
+          </div>
+          <button class="pill" onclick={() => store.showFolder(path)}><Eye size={15} /> Mostrar</button>
+        </div>
+      {/each}
+    {/if}
 
     <h2>Actualizaciones</h2>
     <div class="row">
@@ -219,6 +242,42 @@
     text-transform: uppercase;
     color: var(--text-3);
     margin: 28px 0 12px;
+  }
+  .fold {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 28px 0 12px;
+    text-align: left;
+    color: var(--text-3);
+  }
+  .fold h2 {
+    flex: 1;
+    margin: 0;
+  }
+  .fold .status {
+    font-size: 13px;
+    color: var(--text-3);
+  }
+  .fold .status.ok {
+    color: #a6e3a1;
+  }
+  .chev {
+    display: grid;
+    transition: transform 0.2s;
+  }
+  .chev.open {
+    transform: rotate(180deg);
+  }
+  .hidden-folder {
+    min-height: 56px;
+  }
+  .folder-text {
+    min-width: 0;
+  }
+  .folder-text .hint {
+    margin: 2px 0 0;
   }
   .swatches {
     display: grid;
