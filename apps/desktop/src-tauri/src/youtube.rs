@@ -31,9 +31,14 @@ pub async fn ensure_tool(app: &AppHandle, tool: Tool) -> Result<std::path::PathB
 }
 
 async fn ytdlp_json(app: &AppHandle, args: &[&str]) -> Result<Value, String> {
+    let mut all = yt::JSON_ARGS.to_vec();
+    all.extend_from_slice(args);
+    ytdlp_value(app, &all).await
+}
+
+async fn ytdlp_value(app: &AppHandle, args: &[&str]) -> Result<Value, String> {
     let ytdlp = ensure_tool(app, Tool::YtDlp).await?;
     let out = tools::async_command(&ytdlp)
-        .args(yt::JSON_ARGS)
         .args(args)
         .output()
         .await
@@ -51,6 +56,18 @@ pub async fn search(app: &AppHandle, query: &str) -> Result<Vec<Song>, String> {
 /// Que hay detras de un link pegado: un video o una playlist.
 pub async fn inspect(app: &AppHandle, url: &str) -> Result<LinkInfo, String> {
     yt::link_info(&ytdlp_json(app, &[url]).await?)
+}
+
+/// La URL directa del audio y los headers que pide, para el bot de Discord (que no pasa
+/// por mpv). Usa el mismo yt-dlp, con deno, que el resto de la app.
+pub async fn direct_audio(app: &AppHandle, url: &str) -> Result<(String, Vec<(String, String)>), String> {
+    let v = ytdlp_value(app, &["--ignore-config", "--no-warnings", "-j", "--no-playlist", "-f", "bestaudio/best", url]).await?;
+    let direct = v["url"].as_str().ok_or("yt-dlp no devolvio el audio")?.to_string();
+    let headers = v["http_headers"]
+        .as_object()
+        .map(|h| h.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect())
+        .unwrap_or_default();
+    Ok((direct, headers))
 }
 
 // ------------------------------------------------------------------ descargas

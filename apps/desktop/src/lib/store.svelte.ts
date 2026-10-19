@@ -1,7 +1,7 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
-import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
+import { api, type DiscordStatus, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 import { folderName, sortKey } from "@haze/ui/format";
 import { prettyShortcut } from "./shortcuts";
 
@@ -39,6 +39,7 @@ class Store {
   player = $state<PlayerState>(emptyState);
   scanning = $state(false);
   haStatus = $state("off");
+  discord = $state<DiscordStatus>({ state: "off", error: null, bot: null, invite: null, channel: null });
   downloads = $state<DownloadJob[]>([]);
   toolProgress = $state<{ tool: string; progress: number } | null>(null);
   view = $state<View>({ name: "songs" });
@@ -68,6 +69,7 @@ class Store {
     this.setPosition(b.position);
     this.scanning = b.scanning;
     this.haStatus = b.haStatus;
+    this.discord = b.discord;
     this.downloads = b.downloads;
     this.update = b.update;
     this.version = b.version;
@@ -89,6 +91,7 @@ class Store {
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
     listen<Settings>("settings://changed", (e) => (this.settings = e.payload));
     listen<string>("ha://status", (e) => (this.haStatus = e.payload));
+    listen<DiscordStatus>("discord://status", (e) => (this.discord = e.payload));
     listen<DownloadJob[]>("downloads://changed", (e) => (this.downloads = e.payload));
     listen<string>("downloads://done", (e) => this.toast(`Listo: ${e.payload}`));
     listen<{ tool: string; progress: number }>("tools://progress", (e) => {

@@ -56,6 +56,8 @@ export type Settings = {
     mainWindow: { x: number; y: number; width: number; height: number; maximized: boolean } | null;
   };
   ha: { enabled: boolean; host: string; port: number; username: string; password: string; deviceName: string };
+  /** Bot de Discord (escritorio). */
+  discord: { enabled: boolean; token: string; muteLocal: boolean };
   shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string; random: string };
   songSort: string;
   folderSort: string;

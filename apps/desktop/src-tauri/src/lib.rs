@@ -4,6 +4,7 @@
 //! Al cerrar la ventana se destruye el WebView entero: de fondo queda solo este proceso
 //! y mpv, que es lo que lo hace liviano.
 
+mod discord;
 mod library;
 mod media_keys;
 mod mpv;
@@ -40,6 +41,7 @@ pub struct AppState {
     pub ha_status: Mutex<String>,
     pub scanning: Mutex<bool>,
     pub update: Mutex<updater::Pending>,
+    pub discord: discord::Discord,
 }
 
 /// Ordenes que llegan de afuera de la interfaz: bandeja, teclas multimedia, HA.
@@ -169,6 +171,7 @@ struct Bootstrap {
     engine: bool,
     scanning: bool,
     ha_status: String,
+    discord: discord::Status,
     downloads: Vec<youtube::DownloadJob>,
     update: Option<updater::UpdateInfo>,
     version: String,
@@ -195,6 +198,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         engine,
         scanning,
         ha_status,
+        discord: discord::status(&app),
         downloads,
         update,
         version: env!("CARGO_PKG_VERSION").into(),
@@ -267,7 +271,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 #[tauri::command]
 fn settings_set(app: AppHandle, settings: Settings) {
     let state = app.state::<AppState>();
-    let (sources_changed, ha_changed, bg_changed, keys_changed) = {
+    let (sources_changed, ha_changed, bg_changed, keys_changed, bot_changed, mute_changed) = {
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
         // Lo que se baja tiene que aparecer en la biblioteca: las carpetas de descarga
@@ -288,6 +292,8 @@ fn settings_set(app: AppHandle, settings: Settings) {
             serde_json::to_string(&new.ha).ok() != serde_json::to_string(&cur.ha).ok(),
             new.appearance.background != cur.appearance.background,
             new.shortcuts != cur.shortcuts,
+            (new.discord.enabled, &new.discord.token) != (cur.discord.enabled, &cur.discord.token),
+            new.discord.mute_local != cur.discord.mute_local,
         );
         *cur = new;
         cur.save(&state.settings_path);
@@ -306,6 +312,15 @@ fn settings_set(app: AppHandle, settings: Settings) {
     }
     if keys_changed {
         apply_shortcuts(&app);
+    }
+    if mute_changed {
+        state.discord.mirror.set_mute_local(s.discord.mute_local);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { discord::refresh_local_volume(&app).await });
+    }
+    if bot_changed {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { discord::apply(&app).await });
     }
 }
 
@@ -833,6 +848,7 @@ pub fn quit_app(app: &AppHandle) {
 }
 
 pub(crate) fn shutdown(app: &AppHandle) {
+    discord::shutdown(app);
     let state = app.state::<AppState>();
     if let Ok(p) = state.player.try_lock() {
         p.save_session();
@@ -857,7 +873,8 @@ async fn start_engine(app: AppHandle, resume_playing: bool) {
         Ok(m) => {
             let resume = state.settings.lock().unwrap().playback.resume;
             let mut p = state.player.lock().await;
-            p.attach(m);
+            // El bot de Discord repite lo que hace mpv; sin canal no hace nada.
+            p.attach(discord::Tee { local: m, mirror: state.discord.mirror.clone() });
             if resume || resume_playing {
                 let lib = state.library.read().unwrap();
                 p.restore(|id| lib.get(id));
@@ -926,6 +943,7 @@ pub fn run() {
 
             let settings_path = config_dir.join("settings.json");
             let settings = Settings::load(&settings_path);
+            let discord_cfg = settings.discord.clone();
             let cache_path = data_dir.join("library.json");
             let mut library = Library::default();
             library.set(Library::load_cache(&cache_path));
@@ -957,7 +975,12 @@ pub fn run() {
                 ha_status: Mutex::new("off".into()),
                 scanning: Mutex::new(false),
                 update: Mutex::new(Default::default()),
+                discord: discord::Discord::new(discord_cfg.mute_local),
             });
+            if discord_cfg.enabled {
+                let h = handle.clone();
+                tauri::async_runtime::spawn(async move { discord::apply(&h).await });
+            }
 
             build_tray(&handle)?;
             register_shortcuts(&handle)?;

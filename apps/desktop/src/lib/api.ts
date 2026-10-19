@@ -6,6 +6,17 @@ export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Setting
 
 export type UpdateInfo = { version: string; status: "downloading" | "ready" };
 
+/** El bot de Discord. */
+export type DiscordStatus = {
+  state: "off" | "connecting" | "online" | "error";
+  error: string | null;
+  bot: string | null;
+  /** Link para sumar el bot a un servidor. */
+  invite: string | null;
+  /** Donde esta sonando: "Servidor · canal". */
+  channel: string | null;
+};
+
 export type Bootstrap = {
   settings: Settings;
   songs: Song[];
@@ -14,6 +25,7 @@ export type Bootstrap = {
   engine: boolean;
   scanning: boolean;
   haStatus: string;
+  discord: DiscordStatus;
   downloads: DownloadJob[];
   update: UpdateInfo | null;
   version: string;
