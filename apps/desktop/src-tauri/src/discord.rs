@@ -6,7 +6,7 @@
 //! gateway que late cada ~40 s. El audio (Opus) solo se arma con el bot dentro de un canal.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use haze_core::player::Engine;
@@ -17,9 +17,14 @@ use serenity::all::{
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, EditInteractionResponse, EventHandler,
     GatewayIntents, Guild, GuildId, Interaction, Ready, ResolvedValue, ShardManager, UserId, VoiceState,
 };
+use songbird::input::codecs::OpusDecoder;
 use songbird::input::{File as FileInput, HttpRequest, Input};
 use songbird::tracks::{PlayMode, Track, TrackHandle};
-use songbird::{Call, Event, EventContext, SerenityInit, Songbird, TrackEvent};
+use songbird::{Call, Config as VoiceConfig, Event, EventContext, SerenityInit, Songbird, TrackEvent};
+use symphonia::core::audio::{AsAudioBufferRef, AudioBuffer, AudioBufferRef, Channels, SignalSpec};
+use symphonia::core::codecs::{CodecDescriptor, CodecParameters, CodecRegistry, Decoder, DecoderOptions, FinalizeResult};
+use symphonia::core::errors::Error as SymphError;
+use symphonia::core::formats::Packet;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
 
@@ -118,7 +123,7 @@ pub async fn apply(app: &AppHandle) {
     }
     set_status(app, |s| *s = Status { state: "connecting".into(), ..Status::default() });
 
-    let voice = Songbird::serenity();
+    let voice = Songbird::serenity_from_config(VoiceConfig::default().codec_registry(codecs()));
     let handler = Handler { app: app.clone(), voice: voice.clone(), gen, owner: Mutex::new(None), moving: AsyncMutex::new(()) };
     // Solo hace falta saber de servidores y de quien esta en que canal de voz.
     let mut cache = serenity::cache::Settings::default();
@@ -778,6 +783,101 @@ fn direct_media(url: &str) -> bool {
         || [".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wav", ".aac", ".webm"].iter().any(|e| path.ends_with(e))
 }
 
+/// Decodificadores para el canal de voz. Songbird corta el tema entero al primer paquete
+/// que no se puede decodificar, y hay MP3 bajados de por ahi con cuadros rotos (sobre todo
+/// al principio) que la PC saltea sin que se note. Aca se hace lo mismo.
+fn codecs() -> &'static CodecRegistry {
+    static REGISTRY: OnceLock<CodecRegistry> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        use symphonia::default::codecs::{AacDecoder, AlacDecoder, FlacDecoder, MpaDecoder, VorbisDecoder};
+        let mut r = CodecRegistry::new();
+        symphonia::default::register_enabled_codecs(&mut r);
+        r.register_all::<OpusDecoder>();
+        tolerate::<MpaDecoder>(&mut r);
+        tolerate::<AacDecoder>(&mut r);
+        tolerate::<AlacDecoder>(&mut r);
+        tolerate::<FlacDecoder>(&mut r);
+        tolerate::<VorbisDecoder>(&mut r);
+        tolerate::<OpusDecoder>(&mut r);
+        r
+    })
+}
+
+/// Reemplaza los codecs de `D` por la version que saltea paquetes rotos.
+fn tolerate<D: Decoder + 'static>(r: &mut CodecRegistry) {
+    fn make<D: Decoder + 'static>(p: &CodecParameters, o: &DecoderOptions) -> symphonia::core::errors::Result<Box<dyn Decoder>> {
+        Ok(Box::new(Tolerant::new(Box::new(D::try_new(p, o)?))))
+    }
+    for d in D::supported_codecs() {
+        r.register(&CodecDescriptor { inst_func: make::<D>, ..*d });
+    }
+}
+
+/// Paquetes rotos seguidos que se aguantan antes de dar el tema por perdido (~5 s de MP3).
+const MAX_BAD_PACKETS: u32 = 200;
+
+struct Tolerant {
+    inner: Box<dyn Decoder>,
+    /// Lo que se devuelve por un paquete roto: nada, y songbird pasa al siguiente.
+    empty: AudioBuffer<f32>,
+    bad: u32,
+}
+
+impl Tolerant {
+    fn new(inner: Box<dyn Decoder>) -> Self {
+        let p = inner.codec_params();
+        let rate = p.sample_rate.unwrap_or(48_000);
+        let channels = p.channels.unwrap_or(Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        Self { inner, empty: AudioBuffer::new(0, SignalSpec::new(rate, channels)), bad: 0 }
+    }
+}
+
+impl Decoder for Tolerant {
+    fn try_new(_: &CodecParameters, _: &DecoderOptions) -> symphonia::core::errors::Result<Self> {
+        Err(SymphError::Unsupported("se arma con tolerate()"))
+    }
+
+    fn supported_codecs() -> &'static [CodecDescriptor] {
+        &[]
+    }
+
+    fn reset(&mut self) {
+        self.bad = 0;
+        self.inner.reset();
+    }
+
+    fn codec_params(&self) -> &CodecParameters {
+        self.inner.codec_params()
+    }
+
+    fn decode(&mut self, packet: &Packet) -> symphonia::core::errors::Result<AudioBufferRef<'_>> {
+        match self.inner.decode(packet) {
+            Ok(_) => self.bad = 0,
+            Err(SymphError::DecodeError(e)) if self.bad < MAX_BAD_PACKETS => {
+                if self.bad == 0 {
+                    log::debug!("discord: paquete roto salteado ({e})");
+                }
+                self.bad += 1;
+                return Ok(self.empty.as_audio_buffer_ref());
+            }
+            Err(e) => return Err(e),
+        }
+        Ok(self.inner.last_decoded())
+    }
+
+    fn finalize(&mut self) -> FinalizeResult {
+        self.inner.finalize()
+    }
+
+    fn last_decoded(&self) -> AudioBufferRef<'_> {
+        if self.bad > 0 {
+            self.empty.as_audio_buffer_ref()
+        } else {
+            self.inner.last_decoded()
+        }
+    }
+}
+
 struct TrackFailed(AppHandle, String);
 
 #[serenity::async_trait]
@@ -796,7 +896,67 @@ impl songbird::EventHandler for TrackFailed {
 
 #[cfg(test)]
 mod tests {
-    use super::direct_media;
+    use super::{codecs, direct_media, Tolerant, MAX_BAD_PACKETS};
+    use symphonia::core::audio::AudioBufferRef;
+    use symphonia::core::codecs::{CodecDescriptor, CodecParameters, Decoder, DecoderOptions, FinalizeResult};
+    use symphonia::core::errors::{decode_error, Result};
+    use symphonia::core::formats::{FormatOptions, Packet};
+    use symphonia::core::io::MediaSourceStream;
+
+    /// Un decodificador al que todo paquete le llega roto.
+    struct Broken(CodecParameters);
+
+    impl Decoder for Broken {
+        fn try_new(p: &CodecParameters, _: &DecoderOptions) -> Result<Self> {
+            Ok(Self(p.clone()))
+        }
+        fn supported_codecs() -> &'static [CodecDescriptor] {
+            &[]
+        }
+        fn reset(&mut self) {}
+        fn codec_params(&self) -> &CodecParameters {
+            &self.0
+        }
+        fn decode(&mut self, _: &Packet) -> Result<AudioBufferRef<'_>> {
+            decode_error("roto")
+        }
+        fn finalize(&mut self) -> FinalizeResult {
+            FinalizeResult::default()
+        }
+        fn last_decoded(&self) -> AudioBufferRef<'_> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn broken_packets_are_skipped() {
+        let mut dec = Tolerant::new(Box::new(Broken(CodecParameters::new())));
+        let pkt = Packet::new_from_slice(0, 0, 1152, &[0; 8]);
+        for _ in 0..MAX_BAD_PACKETS {
+            assert_eq!(dec.decode(&pkt).expect("se saltea").frames(), 0);
+        }
+        assert!(dec.decode(&pkt).is_err(), "demasiados seguidos: se rinde");
+    }
+
+    /// Con un MP3 de cuadros rotos: `HAZE_BROKEN_MP3=ruta cargo test -- --ignored`.
+    #[test]
+    #[ignore]
+    fn real_broken_mp3_plays_through() {
+        let path = std::env::var("HAZE_BROKEN_MP3").expect("falta HAZE_BROKEN_MP3");
+        let mss = MediaSourceStream::new(Box::new(std::fs::File::open(path).unwrap()), Default::default());
+        let probed = songbird::input::codecs::get_probe()
+            .format(&Default::default(), mss, &FormatOptions::default(), &Default::default())
+            .unwrap();
+        let mut format = probed.format;
+        let track = format.default_track().unwrap().clone();
+        let mut dec = codecs().make(&track.codec_params, &DecoderOptions::default()).unwrap();
+        let (mut frames, mut packets) = (0, 0);
+        while let Ok(pkt) = format.next_packet() {
+            frames += dec.decode(&pkt).expect("ningun paquete corta el tema").frames();
+            packets += 1;
+        }
+        assert!(packets > 0 && frames > 0);
+    }
 
     #[test]
     fn direct_links_skip_ytdlp() {
