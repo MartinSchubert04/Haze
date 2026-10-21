@@ -16,7 +16,7 @@ pub const AUDIO_EXTENSIONS: &[&str] =
 /// Nombres que se buscan en la carpeta cuando el archivo no trae la tapa adentro.
 const FOLDER_COVERS: &[&str] = &["cover", "folder", "front", "albumart", "album"];
 
-pub use haze_core::song::{id_for, Song, SongKind};
+pub use haze_core::song::{file_key, id_for, Song, SongKind};
 
 pub fn normalize(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
@@ -88,7 +88,7 @@ pub fn scan(sources: &[String], cached: &[Song]) -> Vec<Song> {
     let by_path: HashMap<&str, &Song> = cached.iter().map(|s| (s.path.as_str(), s)).collect();
 
     let mut fresh = Vec::new();
-    let mut to_read: Vec<(PathBuf, i64)> = Vec::new();
+    let mut to_read: Vec<(PathBuf, i64, u64)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
     for source in sources {
@@ -102,10 +102,14 @@ pub fn scan(sources: &[String], cached: &[Song]) -> Vec<Song> {
             if !seen.insert(norm.to_lowercase()) {
                 continue;
             }
-            let mtime = entry.metadata().map(|m| mtime_of(&m)).unwrap_or(0);
+            let (mtime, size) = entry.metadata().map(|m| (mtime_of(&m), m.len())).unwrap_or((0, 0));
             match by_path.get(norm.as_str()) {
-                Some(s) if s.mtime == mtime => fresh.push((*s).clone()),
-                _ => to_read.push((p.to_path_buf(), mtime)),
+                Some(s) if s.mtime == mtime => {
+                    let mut s = (*s).clone();
+                    s.file = file_of(p, size);
+                    fresh.push(s);
+                }
+                _ => to_read.push((p.to_path_buf(), mtime, size)),
             }
         }
     }
@@ -116,7 +120,7 @@ pub fn scan(sources: &[String], cached: &[Song]) -> Vec<Song> {
     let read: Vec<Song> = std::thread::scope(|scope| {
         let handles: Vec<_> = to_read
             .chunks(chunk)
-            .map(|part| scope.spawn(move || part.iter().map(|(p, m)| read_song(p, *m)).collect::<Vec<_>>()))
+            .map(|part| scope.spawn(move || part.iter().map(|(p, m, n)| read_song(p, *m, *n)).collect::<Vec<_>>()))
             .collect();
         handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
     });
@@ -127,10 +131,16 @@ pub fn scan(sources: &[String], cached: &[Song]) -> Vec<Song> {
 
 pub fn read_file(path: &Path) -> Option<Song> {
     let meta = std::fs::metadata(path).ok()?;
-    Some(read_song(path, mtime_of(&meta)))
+    Some(read_song(path, mtime_of(&meta), meta.len()))
 }
 
-fn read_song(path: &Path, mtime: i64) -> Song {
+/// El mismo archivo en varias carpetas (hardlinks o copias) da la misma clave.
+fn file_of(path: &Path, size: u64) -> u64 {
+    let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+    file_key(&name, size)
+}
+
+fn read_song(path: &Path, mtime: i64, size: u64) -> Song {
     let norm = normalize(path);
     let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let folder = path.parent().map(normalize).unwrap_or_default();
@@ -147,6 +157,7 @@ fn read_song(path: &Path, mtime: i64) -> Song {
         kind: SongKind::Local,
         thumb: None,
         has_cover: false,
+        file: file_of(path, size),
     };
 
     if let Ok(tagged) = lofty::read_from_path(path) {

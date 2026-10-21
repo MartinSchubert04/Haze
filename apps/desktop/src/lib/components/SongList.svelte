@@ -7,6 +7,7 @@
   import { store } from "../store.svelte";
   import { songMenu } from "../menu.svelte";
   import { time, indexLetter } from "@haze/ui/format";
+  import { sameFile } from "@haze/ui/library";
   import Cover from "./Cover.svelte";
 
   let {
@@ -73,7 +74,7 @@
     <div class="rows" style:height="{songs.length * ROW}px">
       {#each visible as song, k (song.id + ":" + (start + k))}
         {@const i = start + k}
-        {@const current = store.player.song?.id === song.id}
+        {@const current = sameFile(store.player.song, song)}
         <div
           class="row"
           class:current

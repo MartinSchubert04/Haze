@@ -707,6 +707,7 @@ mod tests {
             kind: SongKind::Local,
             thumb: None,
             has_cover: false,
+            file: 0,
         })
     }
 

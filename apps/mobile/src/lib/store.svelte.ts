@@ -2,6 +2,7 @@
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
 import { folderName, sortKey } from "@haze/ui/format";
+import { uniqueFiles } from "@haze/ui/library";
 import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 
 export type Tab = "songs" | "folders" | "youtube" | "queue";
@@ -63,6 +64,8 @@ class Store {
   position = $state(0);
 
   folders = $derived.by(() => groupFolders(this.songs));
+  /** Una entrada por archivo: lo que muestra "Canciones". Las carpetas usan `songs`. */
+  uniqueSongs = $derived(uniqueFiles(this.songs));
 
   private toastId = 0;
 
@@ -254,7 +257,7 @@ class Store {
       api.playNow(song);
       return;
     }
-    const all = this.sortSongs(this.songs);
+    const all = this.sortSongs(this.uniqueSongs);
     this.play(all, Math.max(0, all.findIndex((s) => s.id === song.id)), ALL_SONGS);
   }
 

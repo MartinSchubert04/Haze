@@ -545,6 +545,7 @@ fn attachment_song(a: &Attachment) -> Result<Song, String> {
         kind: SongKind::Stream,
         thumb: None,
         has_cover: false,
+        file: 0,
     })
 }
 

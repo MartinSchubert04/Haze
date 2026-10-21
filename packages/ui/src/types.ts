@@ -12,6 +12,8 @@ export type Song = {
   kind: "local" | "stream";
   thumb: string | null;
   hasCover: boolean;
+  /** Clave del archivo: la misma para el tema en varias carpetas. 0 si no se sabe. */
+  file: number;
 };
 
 export type PlayerState = {

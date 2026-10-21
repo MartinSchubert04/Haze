@@ -3,6 +3,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { api, type DiscordStatus, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 import { folderName, sortKey } from "@haze/ui/format";
+import { uniqueFiles } from "@haze/ui/library";
 import { prettyShortcut } from "./shortcuts";
 
 export type View =
@@ -58,6 +59,8 @@ class Store {
   position = $state(0);
 
   folders = $derived.by(() => groupFolders(this.songs));
+  /** Una entrada por archivo: lo que muestra "Canciones". Las carpetas usan `songs`. */
+  uniqueSongs = $derived(uniqueFiles(this.songs));
 
   private toastId = 0;
 

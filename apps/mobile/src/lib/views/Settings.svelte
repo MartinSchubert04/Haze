@@ -172,7 +172,7 @@
 
     <h2>Biblioteca</h2>
     <div class="row">
-      <span>{plural(store.songs.length, "canción", "canciones")} en el teléfono</span>
+      <span>{plural(store.uniqueSongs.length, "canción", "canciones")} en el teléfono</span>
       <button class="pill" disabled={store.scanning} onclick={() => api.rescan()}>
         <RefreshCw size={15} class={store.scanning ? "spin" : ""} /> Volver a buscar
       </button>

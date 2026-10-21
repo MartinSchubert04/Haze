@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::settings::Settings;
+use haze_core::song::unique_files;
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -79,13 +80,13 @@ pub fn control(app: &AppHandle, c: Control) {
             Control::PlayFolder(path) => {
                 let lib = state.library.read().unwrap();
                 let songs: Vec<_> = if path == ALL_SONGS {
-                    lib.songs.clone()
+                    unique_files(&lib.songs)
                 } else {
                     lib.songs.iter().filter(|s| &s.folder == path).cloned().collect()
                 };
                 Some(songs_sorted(songs))
             }
-            Control::PlayRandom => Some(songs_sorted(state.library.read().unwrap().songs.clone())),
+            Control::PlayRandom => Some(songs_sorted(unique_files(&state.library.read().unwrap().songs))),
             _ => None,
         };
         let mut p = state.player.lock().await;

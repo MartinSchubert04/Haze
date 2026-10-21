@@ -14,7 +14,7 @@
 
   let query = $state("");
 
-  const sorted = $derived(store.sortSongs(store.songs));
+  const sorted = $derived(store.sortSongs(store.uniqueSongs));
   const shown = $derived.by(() => {
     const q = normalizeSearch(query.trim());
     if (!q) return sorted;
@@ -38,7 +38,7 @@
     </div>
     <div class="page-sub">
       {#if store.scanning}<LoaderCircle size={13} class="spin" /> Buscando música…
-      {:else}{plural(store.songs.length, "canción", "canciones")}{/if}
+      {:else}{plural(store.uniqueSongs.length, "canción", "canciones")}{/if}
     </div>
 
     <label class="search">

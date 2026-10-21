@@ -8,7 +8,7 @@
 //! En otras plataformas el plugin no hace nada.
 
 use haze_core::player::EngineEvent;
-use haze_core::song::{id_for, Song, SongKind};
+use haze_core::song::{file_key, id_for, Song, SongKind};
 use serde::Deserialize;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
@@ -53,6 +53,12 @@ pub struct Track {
     pub mtime: i64,
     /// Relativa al almacenamiento: "Music/Rock".
     pub folder: String,
+    /// Nombre del archivo y tamaño en bytes: las copias del mismo tema en varias
+    /// carpetas se reconocen por esto.
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub size: u64,
 }
 
 impl Track {
@@ -79,6 +85,7 @@ impl Track {
             // MediaStore no dice si hay tapa sin abrir el archivo: se intenta y, si no
             // hay, la interfaz muestra el icono.
             has_cover: true,
+            file: if self.name.is_empty() || self.size == 0 { 0 } else { file_key(&self.name, self.size) },
         }
     }
 }

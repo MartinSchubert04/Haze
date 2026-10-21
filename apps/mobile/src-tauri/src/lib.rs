@@ -14,7 +14,7 @@ use std::time::Duration;
 use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::player::{Listener, Player, PlayerState, QueueView, SharedPlayer};
 use haze_core::settings::Settings;
-use haze_core::song::Song;
+use haze_core::song::{unique_files, Song};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
@@ -213,7 +213,11 @@ async fn run_control(app: &AppHandle, control: Control) {
 
 /// Las canciones de una carpeta (o todas), por titulo, como las muestra la pantalla.
 fn folder_songs(lib: &Library, path: &str) -> Vec<Arc<Song>> {
-    let mut songs: Vec<_> = lib.songs.iter().filter(|s| path == ALL_SONGS || s.folder == path).cloned().collect();
+    let mut songs: Vec<_> = if path == ALL_SONGS {
+        unique_files(&lib.songs)
+    } else {
+        lib.songs.iter().filter(|s| s.folder == path).cloned().collect()
+    };
     songs.sort_by_cached_key(|s| s.title.to_lowercase());
     songs
 }

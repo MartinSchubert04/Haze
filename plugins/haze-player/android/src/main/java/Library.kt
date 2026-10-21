@@ -26,6 +26,7 @@ internal object Library {
       MediaStore.Audio.Media.ALBUM,
       MediaStore.Audio.Media.DURATION,
       MediaStore.Audio.Media.DATE_MODIFIED,
+      MediaStore.Audio.Media.SIZE,
       @Suppress("DEPRECATION") MediaStore.Audio.Media.DATA,
     )
     if (Build.VERSION.SDK_INT >= 29) columns += MediaStore.Audio.Media.RELATIVE_PATH
@@ -44,6 +45,7 @@ internal object Library {
       val album = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
       val duration = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
       val modified = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+      val size = c.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
       @Suppress("DEPRECATION") val data = c.getColumnIndex(MediaStore.Audio.Media.DATA)
       val relative = if (Build.VERSION.SDK_INT >= 29) c.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH) else -1
 
@@ -57,6 +59,8 @@ internal object Library {
         song.put("album", known(c.getString(album)))
         song.put("durationMs", c.getLong(duration))
         song.put("mtime", c.getLong(modified))
+        song.put("name", file)
+        song.put("size", c.getLong(size))
         song.put("folder", folder(c.getStringOrNull(relative), c.getStringOrNull(data)))
         out.put(song)
       }
