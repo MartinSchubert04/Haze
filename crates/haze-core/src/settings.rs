@@ -73,8 +73,9 @@ pub struct Behavior {
     pub main_window: Option<WindowBounds>,
 }
 
-/// Posicion y tamaño de una ventana, en pixeles fisicos. Si estaba maximizada, la
-/// posicion y el tamaño son los de antes de maximizar: a eso vuelve al restaurarla.
+/// Posicion y tamaño de una ventana, en pixeles fisicos y por afuera (con el borde
+/// invisible de la sombra). Si estaba maximizada, la posicion y el tamaño son los de antes
+/// de maximizar: a eso vuelve al restaurarla.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowBounds {

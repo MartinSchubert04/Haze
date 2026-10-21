@@ -485,9 +485,9 @@ pub fn show_main(app: &AppHandle) {
     // con otra escala, al llegar ahi Windows la reescala, y el tamaño quedaria mal.
     if let Some(s) = saved {
         if place {
-            let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+            place_outer(&w, Some((s.x, s.y)), None);
         }
-        let _ = w.set_size(tauri::PhysicalSize::new(s.width, s.height));
+        place_outer(&w, None, Some((s.width, s.height)));
         if !place {
             let _ = w.center();
         }
@@ -525,6 +525,8 @@ pub fn show_main(app: &AppHandle) {
             WindowEvent::Resized(size) => {
                 let max = maximized();
                 let prev = before_move.lock().unwrap().take();
+                // El de afuera, como se restaura (ver `place_outer`).
+                let outer = app2.get_webview_window("main").and_then(|w| w.outer_size().ok());
                 let mut s = state.settings.lock().unwrap();
                 let b = s.behavior.main_window.get_or_insert_with(Default::default);
                 if max || size.width == 0 || size.height == 0 {
@@ -534,8 +536,8 @@ pub fn show_main(app: &AppHandle) {
                     if max {
                         b.maximized = true;
                     }
-                } else {
-                    (b.width, b.height, b.maximized) = (size.width, size.height, false);
+                } else if let Some(o) = outer {
+                    (b.width, b.height, b.maximized) = (o.width, o.height, false);
                 }
             }
             WindowEvent::Destroyed => {
@@ -544,6 +546,42 @@ pub fn show_main(app: &AppHandle) {
             _ => {}
         }
     });
+}
+
+/// Mueve o agranda la ventana por afuera, en pixeles fisicos, en el acto.
+///
+/// No se usa `set_size`: ese fija el tamaño de adentro y, para saber cuanto agregar de
+/// borde, tao mira la ventana tal como esta. Recien creada y oculta todavia tiene el marco
+/// de Windows (barra de titulo incluida) y no el de la ventana sin bordes, asi que sumaba
+/// 30 px de alto de mas: cada vuelta desde el mini la ventana volvia mas alta.
+fn place_outer(w: &tauri::WebviewWindow, pos: Option<(i32, i32)>, size: Option<(u32, u32)>) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER};
+        let Ok(hwnd) = w.hwnd() else { return };
+        let (x, y) = pos.unwrap_or_default();
+        let (cx, cy) = size.unwrap_or_default();
+        let mut flags = SWP_NOZORDER | SWP_NOACTIVATE;
+        if pos.is_none() {
+            flags |= SWP_NOMOVE;
+        }
+        if size.is_none() {
+            flags |= SWP_NOSIZE;
+        }
+        unsafe {
+            let _ = SetWindowPos(HWND(hwnd.0), None, x, y, cx as i32, cy as i32, flags);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Some((x, y)) = pos {
+            let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        if let Some((width, height)) = size {
+            let _ = w.set_size(tauri::PhysicalSize::new(width, height));
+        }
+    }
 }
 
 /// El atajo del mini va rotando: mini -> grande -> de fondo (sin ventanas, sigue sonando)
