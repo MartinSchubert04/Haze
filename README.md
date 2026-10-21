@@ -20,12 +20,13 @@ ventana cerrada.
 
 ## Cómo está hecho
 
-Es un monorepo con dos apps:
+Es un monorepo con dos apps y un bot de Discord:
 
 | Carpeta | Qué es |
 |---|---|
 | `apps/desktop/` | La app de Windows. |
 | `apps/mobile/` | La app de Android. El plan y lo que falta están en [docs/mobile.md](docs/mobile.md). |
+| `apps/server/` | Bot de Discord: `/play` con búsqueda o link de YouTube en el canal de voz. Corre en Docker (el compose está en `docker-images/haze-bot`). |
 | `crates/haze-core/` | Cola, ajustes y reproductor, sin Tauri ni mpv. Lo comparten las dos apps. |
 | `plugins/haze-player/` | Plugin de Tauri en Kotlin: Media3/ExoPlayer y MediaStore para Android. |
 | `packages/ui/` | Tipos, formato, colores y tema que usan las dos interfaces. |

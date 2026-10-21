@@ -1,0 +1,6 @@
+target/
+**/node_modules/
+**/dist/
+.git/
+apps/desktop/src-tauri/gen/
+apps/mobile/src-tauri/gen/

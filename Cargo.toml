@@ -2,9 +2,9 @@
 # docs/mobile.md).
 [workspace]
 resolver = "2"
-members = ["apps/desktop/src-tauri", "apps/mobile/src-tauri", "crates/haze-core", "plugins/haze-player"]
+members = ["apps/desktop/src-tauri", "apps/mobile/src-tauri", "apps/server", "crates/haze-core", "plugins/haze-player"]
 # La app de Android solo compila para Android (la arma `tauri android build`): un
-# `cargo test` comun no la toca.
+# `cargo test` comun no la toca. El bot de Discord (apps/server) se compila en su Docker.
 default-members = ["apps/desktop/src-tauri", "crates/haze-core", "plugins/haze-player"]
 
 [profile.release]
