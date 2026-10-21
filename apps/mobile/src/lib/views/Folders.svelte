@@ -4,17 +4,22 @@
   import { api } from "../api";
   import { store } from "../store.svelte";
   import { pullToRefresh } from "../pull";
+  import { longpress } from "../longpress";
   import Cover from "../components/Cover.svelte";
 </script>
 
 <div class="scroller" use:pullToRefresh={() => api.rescan()}>
   <div class="page">
     <h1 class="page-title">Carpetas</h1>
-    <div class="page-sub">{plural(store.folders.length, "carpeta", "carpetas")}</div>
+    <div class="page-sub">{plural(store.folders.length, "carpeta", "carpetas")} · mantené apretada una para quitarla</div>
 
     <div class="list">
       {#each store.folders as f (f.path)}
-        <button class="folder press" onclick={() => store.open({ kind: "folder", path: f.path })}>
+        <button
+          class="folder press"
+          onclick={() => store.open({ kind: "folder", path: f.path })}
+          use:longpress={() => store.open({ kind: "folderOptions", path: f.path })}
+        >
           {#if f.coverSong}
             <Cover song={f.coverSong} size={56} radius={12} />
           {:else}

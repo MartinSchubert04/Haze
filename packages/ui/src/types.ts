@@ -12,6 +12,8 @@ export type Song = {
   kind: "local" | "stream";
   thumb: string | null;
   hasCover: boolean;
+  /** Clave del archivo: la misma para el tema en varias carpetas. 0 si no se sabe. */
+  file: number;
 };
 
 export type PlayerState = {
@@ -33,6 +35,8 @@ export type QueueView = { entries: QueueEntry[]; currentIndex: number | null; co
 
 export type Settings = {
   sources: string[];
+  /** Carpetas quitadas de la biblioteca (Android). */
+  hiddenFolders: string[];
   downloadFolders: string[];
   defaultDownloadFolder: string | null;
   appearance: {
@@ -54,6 +58,8 @@ export type Settings = {
     mainWindow: { x: number; y: number; width: number; height: number; maximized: boolean } | null;
   };
   ha: { enabled: boolean; host: string; port: number; username: string; password: string; deviceName: string };
+  /** Bot de Discord (escritorio). */
+  discord: { enabled: boolean; token: string; muteLocal: boolean };
   shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string; random: string };
   songSort: string;
   folderSort: string;

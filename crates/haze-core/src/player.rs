@@ -429,6 +429,18 @@ impl Player {
         }
     }
 
+    /// Suena ya, sin reemplazar la cola: entra como encolada a mano y, al terminar, sigue
+    /// lo que venia.
+    pub fn play_now(&mut self, song: Arc<Song>) {
+        let uid = self.uid();
+        self.queue = self.queue.play_next(song, uid);
+        if let Some(i) = self.queue.entries.iter().position(|e| e.uid == uid) {
+            self.queue = self.queue.move_to_index(i);
+        }
+        self.errors_in_a_row = 0;
+        self.load_current(0.0);
+    }
+
     pub fn add_to_queue(&mut self, song: Arc<Song>) {
         let was_empty = self.queue.current().is_none();
         let uid = self.uid();
@@ -695,6 +707,7 @@ mod tests {
             kind: SongKind::Local,
             thumb: None,
             has_cover: false,
+            file: 0,
         })
     }
 
@@ -783,6 +796,23 @@ mod tests {
         // A mano sí pasa a la siguiente.
         p.next();
         assert_eq!(playing(&p), Some(2));
+    }
+
+    #[test]
+    fn play_now_plays_without_replacing_the_queue() {
+        let (mut p, _log, rx) = player("all");
+        p.play_context((1..=3).map(song).collect(), 0, "Carpeta".into());
+        p.play_now(song(10));
+        assert_eq!(playing(&p), Some(10));
+        assert_eq!(rx.borrow().context, "Carpeta");
+        let ids: Vec<_> = p.queue_view().entries.iter().map(|e| e.song.id).collect();
+        assert_eq!(ids, vec![1, 10, 2, 3]);
+        p.next();
+        assert_eq!(playing(&p), Some(2));
+        // Sobre una cola vacia, queda sola.
+        let (mut p, _log, _rx) = player("all");
+        p.play_now(song(5));
+        assert_eq!(playing(&p), Some(5));
     }
 
     #[test]

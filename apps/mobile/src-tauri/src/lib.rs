@@ -14,7 +14,7 @@ use std::time::Duration;
 use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::player::{Listener, Player, PlayerState, QueueView, SharedPlayer};
 use haze_core::settings::Settings;
-use haze_core::song::Song;
+use haze_core::song::{unique_files, Song};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
@@ -213,7 +213,11 @@ async fn run_control(app: &AppHandle, control: Control) {
 
 /// Las canciones de una carpeta (o todas), por titulo, como las muestra la pantalla.
 fn folder_songs(lib: &Library, path: &str) -> Vec<Arc<Song>> {
-    let mut songs: Vec<_> = lib.songs.iter().filter(|s| path == ALL_SONGS || s.folder == path).cloned().collect();
+    let mut songs: Vec<_> = if path == ALL_SONGS {
+        unique_files(&lib.songs)
+    } else {
+        lib.songs.iter().filter(|s| s.folder == path).cloned().collect()
+    };
     songs.sort_by_cached_key(|s| s.title.to_lowercase());
     songs
 }
@@ -239,6 +243,14 @@ async fn enqueue(app: AppHandle, song: Song, next: bool) {
     }
 }
 
+/// Toca un tema suelto (por ejemplo, de una busqueda): suena ya y despues sigue la cola
+/// que habia, en vez de reemplazarla.
+#[tauri::command]
+async fn play_now(app: AppHandle, song: Song) {
+    let song = resolve(&app, vec![song]).remove(0);
+    app.state::<AppState>().player.lock().await.play_now(song);
+}
+
 #[tauri::command]
 async fn queue_get(app: AppHandle) -> QueueView {
     app.state::<AppState>().player.lock().await.queue_view()
@@ -259,7 +271,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 
 #[tauri::command]
 async fn settings_set(app: AppHandle, settings: Settings) {
-    let ha_changed = {
+    let (ha_changed, hidden_changed) = {
         let state = app.state::<AppState>();
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
@@ -267,11 +279,14 @@ async fn settings_set(app: AppHandle, settings: Settings) {
         // estar vieja.
         new.playback.shuffle = cur.playback.shuffle;
         new.playback.repeat = cur.playback.repeat.clone();
-        let changed = new.ha != cur.ha;
+        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders);
         *cur = new;
         cur.save(&state.settings_path);
         changed
     };
+    if hidden_changed {
+        load_library(&app).await;
+    }
     if ha_changed {
         start_mqtt(&app).await;
     }
@@ -379,7 +394,12 @@ async fn load_library(app: &AppHandle) {
     let found = tauri::async_runtime::spawn_blocking(move || h.haze_player().library()).await;
     match found {
         Ok(Ok(tracks)) => {
-            let songs: Vec<Song> = tracks.into_iter().map(|t| t.into_song()).collect();
+            let hidden = state.settings.lock().unwrap().hidden_folders.clone();
+            let songs: Vec<Song> = tracks
+                .into_iter()
+                .map(|t| t.into_song())
+                .filter(|s| !hidden.contains(&s.folder))
+                .collect();
             let mut lib = state.library.write().unwrap();
             lib.set(songs);
             let _ = app.emit("library://changed", &lib.songs);
@@ -558,6 +578,7 @@ pub fn run() {
             play_songs,
             player_control,
             enqueue,
+            play_now,
             queue_get,
             queue_action,
             settings_set,

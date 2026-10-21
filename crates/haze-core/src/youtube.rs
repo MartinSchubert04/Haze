@@ -144,6 +144,7 @@ pub fn stream_song(v: &Value) -> Option<Song> {
         kind: SongKind::Stream,
         thumb,
         has_cover: false,
+        file: 0,
     })
 }
 

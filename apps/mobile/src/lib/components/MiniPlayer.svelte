@@ -1,6 +1,6 @@
 <script lang="ts">
   // Lo que suena, encima de las pestañas. Tocarlo abre "Reproduciendo".
-  import { SkipForward } from "@lucide/svelte";
+  import { SkipBack, SkipForward } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
@@ -19,6 +19,16 @@
     <div class="title ellipsis">{p.song?.title}</div>
     <div class="sub ellipsis">{p.song?.artist || p.context}</div>
   </div>
+  <button
+    class="icon-btn"
+    aria-label="Anterior"
+    onclick={(e) => {
+      e.stopPropagation();
+      api.control({ type: "previous" });
+    }}
+  >
+    <SkipBack size={22} fill="currentColor" />
+  </button>
   <PlayButton size={44} />
   <button
     class="icon-btn"
@@ -38,7 +48,7 @@
     height: var(--mini);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     padding: 0 8px 0 12px;
     border-bottom: 1px solid var(--line);
   }
@@ -53,6 +63,7 @@
   .text {
     flex: 1;
     min-width: 0;
+    margin-left: 4px;
   }
   .title {
     font-weight: 600;

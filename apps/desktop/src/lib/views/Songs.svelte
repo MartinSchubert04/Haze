@@ -8,13 +8,13 @@
   const q = $derived(normalizeSearch(store.search.trim()));
   const filtered = $derived.by(() => {
     const list = q
-      ? store.songs.filter((s) => normalizeSearch(`${s.title} ${s.artist} ${s.album}`).includes(q))
-      : store.songs;
+      ? store.uniqueSongs.filter((s) => normalizeSearch(`${s.title} ${s.artist} ${s.album}`).includes(q))
+      : store.uniqueSongs;
     return store.sortSongs(list);
   });
   const sort = $derived(store.settings?.songSort ?? "title_asc");
   const sub = $derived(
-    (q ? `${plural(filtered.length, "resultado", "resultados")} para "${store.search.trim()}"` : plural(store.songs.length, "canción", "canciones")) +
+    (q ? `${plural(filtered.length, "resultado", "resultados")} para "${store.search.trim()}"` : plural(store.uniqueSongs.length, "canción", "canciones")) +
       (store.scanning ? " · escaneando…" : ""),
   );
 </script>

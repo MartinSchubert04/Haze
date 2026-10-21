@@ -2,6 +2,7 @@
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
 import { folderName, sortKey } from "@haze/ui/format";
+import { uniqueFiles } from "@haze/ui/library";
 import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 
 export type Tab = "songs" | "folders" | "youtube" | "queue";
@@ -15,6 +16,8 @@ export type Layer =
   | { kind: "nowPlaying" }
   | { kind: "settings" }
   | { kind: "song"; song: Song; queueIndex?: number }
+  /** Opciones de una carpeta: se abren al mantenerla apretada. */
+  | { kind: "folderOptions"; path: string }
   /** Un link pegado: escucharlo o bajarlo. */
   | { kind: "link"; url: string };
 
@@ -61,6 +64,8 @@ class Store {
   position = $state(0);
 
   folders = $derived.by(() => groupFolders(this.songs));
+  /** Una entrada por archivo: lo que muestra "Canciones". Las carpetas usan `songs`. */
+  uniqueSongs = $derived(uniqueFiles(this.songs));
 
   private toastId = 0;
 
@@ -241,6 +246,31 @@ class Store {
   async download(url: string, title: string, thumb: string | null, playlist = false) {
     await api.ytDownload(url, title, thumb, playlist);
     this.toast("Bajando a Music/Haze");
+  }
+
+  /**
+   * Un tema elegido a mano (de una busqueda): suena ya y despues sigue la cola que habia.
+   * Si no sonaba nada, arranca desde ahi con toda la biblioteca.
+   */
+  playNow(song: Song) {
+    if (this.player.song) {
+      api.playNow(song);
+      return;
+    }
+    const all = this.sortSongs(this.uniqueSongs);
+    this.play(all, Math.max(0, all.findIndex((s) => s.id === song.id)), ALL_SONGS);
+  }
+
+  /** Quita la carpeta de la biblioteca (no borra nada del telefono). */
+  async hideFolder(path: string) {
+    await this.goBack(this.layers.length);
+    this.songs = this.songs.filter((s) => s.folder !== path);
+    await this.saveSettings((x) => (x.hiddenFolders = [...new Set([...(x.hiddenFolders ?? []), path])]));
+    this.toast("Carpeta quitada. Se vuelve a mostrar desde Ajustes");
+  }
+
+  async showFolder(path: string) {
+    await this.saveSettings((x) => (x.hiddenFolders = (x.hiddenFolders ?? []).filter((p) => p !== path)));
   }
 
   async enqueue(song: Song, next: boolean) {

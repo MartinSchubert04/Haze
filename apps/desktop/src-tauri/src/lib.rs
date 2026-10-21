@@ -4,6 +4,7 @@
 //! Al cerrar la ventana se destruye el WebView entero: de fondo queda solo este proceso
 //! y mpv, que es lo que lo hace liviano.
 
+mod discord;
 mod library;
 mod media_keys;
 mod mpv;
@@ -18,6 +19,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::settings::Settings;
+use haze_core::song::unique_files;
 use serde::Deserialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -40,6 +42,7 @@ pub struct AppState {
     pub ha_status: Mutex<String>,
     pub scanning: Mutex<bool>,
     pub update: Mutex<updater::Pending>,
+    pub discord: discord::Discord,
 }
 
 /// Ordenes que llegan de afuera de la interfaz: bandeja, teclas multimedia, HA.
@@ -77,13 +80,13 @@ pub fn control(app: &AppHandle, c: Control) {
             Control::PlayFolder(path) => {
                 let lib = state.library.read().unwrap();
                 let songs: Vec<_> = if path == ALL_SONGS {
-                    lib.songs.clone()
+                    unique_files(&lib.songs)
                 } else {
                     lib.songs.iter().filter(|s| &s.folder == path).cloned().collect()
                 };
                 Some(songs_sorted(songs))
             }
-            Control::PlayRandom => Some(songs_sorted(state.library.read().unwrap().songs.clone())),
+            Control::PlayRandom => Some(songs_sorted(unique_files(&state.library.read().unwrap().songs))),
             _ => None,
         };
         let mut p = state.player.lock().await;
@@ -169,6 +172,7 @@ struct Bootstrap {
     engine: bool,
     scanning: bool,
     ha_status: String,
+    discord: discord::Status,
     downloads: Vec<youtube::DownloadJob>,
     update: Option<updater::UpdateInfo>,
     version: String,
@@ -195,6 +199,7 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         engine,
         scanning,
         ha_status,
+        discord: discord::status(&app),
         downloads,
         update,
         version: env!("CARGO_PKG_VERSION").into(),
@@ -267,7 +272,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 #[tauri::command]
 fn settings_set(app: AppHandle, settings: Settings) {
     let state = app.state::<AppState>();
-    let (sources_changed, ha_changed, bg_changed, keys_changed) = {
+    let (sources_changed, ha_changed, bg_changed, keys_changed, bot_changed, mute_changed) = {
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
         // Lo que se baja tiene que aparecer en la biblioteca: las carpetas de descarga
@@ -288,6 +293,8 @@ fn settings_set(app: AppHandle, settings: Settings) {
             serde_json::to_string(&new.ha).ok() != serde_json::to_string(&cur.ha).ok(),
             new.appearance.background != cur.appearance.background,
             new.shortcuts != cur.shortcuts,
+            (new.discord.enabled, &new.discord.token) != (cur.discord.enabled, &cur.discord.token),
+            new.discord.mute_local != cur.discord.mute_local,
         );
         *cur = new;
         cur.save(&state.settings_path);
@@ -306,6 +313,15 @@ fn settings_set(app: AppHandle, settings: Settings) {
     }
     if keys_changed {
         apply_shortcuts(&app);
+    }
+    if mute_changed {
+        state.discord.mirror.set_mute_local(s.discord.mute_local);
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { discord::refresh_local_volume(&app).await });
+    }
+    if bot_changed {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { discord::apply(&app).await });
     }
 }
 
@@ -436,9 +452,11 @@ pub fn show_main(app: &AppHandle) {
     if OPENING_MAIN.swap(true, Ordering::SeqCst) {
         return;
     }
-    // Vuelve a donde estaba, salvo que ese lugar ya no este en ninguna pantalla.
+    // Vuelve a donde estaba y con el mismo tamaño. Si ese lugar ya no esta en ninguna
+    // pantalla (monitor desconectado), conserva el tamaño y aparece centrada.
     let saved = app.state::<AppState>().settings.lock().unwrap().behavior.main_window;
-    let saved = saved.filter(|b| b.width > 0 && b.height > 0 && on_screen(app, b.x, b.y));
+    let saved = saved.filter(|b| b.width > 0 && b.height > 0);
+    let place = saved.is_some_and(|b| on_screen(app, b.x, b.y));
     let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("Haze")
         .inner_size(1120.0, 720.0)
@@ -447,7 +465,7 @@ pub fn show_main(app: &AppHandle) {
         .transparent(true)
         .shadow(true)
         .visible(false);
-    if saved.is_none() {
+    if !place {
         b = b.center();
     }
     if let Some(args) = browser_args() {
@@ -462,9 +480,17 @@ pub fn show_main(app: &AppHandle) {
 
     // En pixeles fisicos, como se guardo. Nace oculta: no se la ve saltar. Maximizar una
     // ventana oculta solo la marca, y se maximiza al mostrarse.
+    //
+    // Primero la posicion y despues el tamaño: si el lugar guardado esta en otro monitor
+    // con otra escala, al llegar ahi Windows la reescala, y el tamaño quedaria mal.
     if let Some(s) = saved {
-        let _ = w.set_size(tauri::PhysicalSize::new(s.width, s.height));
-        let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+        if place {
+            place_outer(&w, Some((s.x, s.y)), None);
+        }
+        place_outer(&w, None, Some((s.width, s.height)));
+        if !place {
+            let _ = w.center();
+        }
         if s.maximized {
             let _ = w.maximize();
         }
@@ -499,6 +525,8 @@ pub fn show_main(app: &AppHandle) {
             WindowEvent::Resized(size) => {
                 let max = maximized();
                 let prev = before_move.lock().unwrap().take();
+                // El de afuera, como se restaura (ver `place_outer`).
+                let outer = app2.get_webview_window("main").and_then(|w| w.outer_size().ok());
                 let mut s = state.settings.lock().unwrap();
                 let b = s.behavior.main_window.get_or_insert_with(Default::default);
                 if max || size.width == 0 || size.height == 0 {
@@ -508,8 +536,8 @@ pub fn show_main(app: &AppHandle) {
                     if max {
                         b.maximized = true;
                     }
-                } else {
-                    (b.width, b.height, b.maximized) = (size.width, size.height, false);
+                } else if let Some(o) = outer {
+                    (b.width, b.height, b.maximized) = (o.width, o.height, false);
                 }
             }
             WindowEvent::Destroyed => {
@@ -518,6 +546,63 @@ pub fn show_main(app: &AppHandle) {
             _ => {}
         }
     });
+}
+
+/// Mueve o agranda la ventana por afuera, en pixeles fisicos, en el acto.
+///
+/// No se usa `set_size`: ese fija el tamaño de adentro y, para saber cuanto agregar de
+/// borde, tao mira la ventana tal como esta. Recien creada y oculta todavia tiene el marco
+/// de Windows (barra de titulo incluida) y no el de la ventana sin bordes, asi que sumaba
+/// 30 px de alto de mas: cada vuelta desde el mini la ventana volvia mas alta.
+fn place_outer(w: &tauri::WebviewWindow, pos: Option<(i32, i32)>, size: Option<(u32, u32)>) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER};
+        let Ok(hwnd) = w.hwnd() else { return };
+        let (x, y) = pos.unwrap_or_default();
+        let (cx, cy) = size.unwrap_or_default();
+        let mut flags = SWP_NOZORDER | SWP_NOACTIVATE;
+        if pos.is_none() {
+            flags |= SWP_NOMOVE;
+        }
+        if size.is_none() {
+            flags |= SWP_NOSIZE;
+        }
+        unsafe {
+            let _ = SetWindowPos(HWND(hwnd.0), None, x, y, cx as i32, cy as i32, flags);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Some((x, y)) = pos {
+            let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        if let Some((width, height)) = size {
+            let _ = w.set_size(tauri::PhysicalSize::new(width, height));
+        }
+    }
+}
+
+/// El atajo del mini va rotando: mini -> grande -> de fondo (sin ventanas, sigue sonando)
+/// -> mini. Si la grande estaba minimizada u oculta, pasa al mini.
+fn cycle_windows(app: &AppHandle) {
+    if app.get_webview_window("mini").is_some() {
+        show_main(app);
+        return;
+    }
+    let main = app.get_webview_window("main");
+    let showing = main.as_ref().is_some_and(|w| {
+        w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)
+    });
+    match main {
+        // Destruirla (no `close`) no pasa por "cerrar a la bandeja": queda de fondo aunque
+        // ese ajuste este apagado, y libera el WebView.
+        Some(w) if showing => {
+            let _ = w.destroy();
+        }
+        _ => open_mini(app),
+    }
 }
 
 pub fn open_mini(app: &AppHandle) {
@@ -686,13 +771,7 @@ fn register_shortcuts(app: &AppHandle) -> tauri::Result<()> {
                     Some("volumeUp") => control(app, Control::VolumeBy(5.0)),
                     Some("volumeDown") => control(app, Control::VolumeBy(-5.0)),
                     Some("random") => control(app, Control::PlayRandom),
-                    Some("mini") => {
-                        if app.get_webview_window("mini").is_some() {
-                            show_main(app);
-                        } else {
-                            open_mini(app);
-                        }
-                    }
+                    Some("mini") => cycle_windows(app),
                     _ => {}
                 }
             })
@@ -808,6 +887,7 @@ pub fn quit_app(app: &AppHandle) {
 }
 
 pub(crate) fn shutdown(app: &AppHandle) {
+    discord::shutdown(app);
     let state = app.state::<AppState>();
     if let Ok(p) = state.player.try_lock() {
         p.save_session();
@@ -832,7 +912,8 @@ async fn start_engine(app: AppHandle, resume_playing: bool) {
         Ok(m) => {
             let resume = state.settings.lock().unwrap().playback.resume;
             let mut p = state.player.lock().await;
-            p.attach(m);
+            // El bot de Discord repite lo que hace mpv; sin canal no hace nada.
+            p.attach(discord::Tee { local: m, mirror: state.discord.mirror.clone() });
             if resume || resume_playing {
                 let lib = state.library.read().unwrap();
                 p.restore(|id| lib.get(id));
@@ -901,6 +982,7 @@ pub fn run() {
 
             let settings_path = config_dir.join("settings.json");
             let settings = Settings::load(&settings_path);
+            let discord_cfg = settings.discord.clone();
             let cache_path = data_dir.join("library.json");
             let mut library = Library::default();
             library.set(Library::load_cache(&cache_path));
@@ -932,7 +1014,12 @@ pub fn run() {
                 ha_status: Mutex::new("off".into()),
                 scanning: Mutex::new(false),
                 update: Mutex::new(Default::default()),
+                discord: discord::Discord::new(discord_cfg.mute_local),
             });
+            if discord_cfg.enabled {
+                let h = handle.clone();
+                tauri::async_runtime::spawn(async move { discord::apply(&h).await });
+            }
 
             build_tray(&handle)?;
             register_shortcuts(&handle)?;

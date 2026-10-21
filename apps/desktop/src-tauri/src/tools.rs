@@ -58,6 +58,11 @@ pub fn find(tool: Tool) -> Option<PathBuf> {
     if nested.is_file() {
         return Some(nested);
     }
+    // yt-dlp siempre el propio, que se actualiza solo: uno del PATH (por ejemplo el de pip)
+    // suele estar viejo y YouTube lo rechaza ("The page needs to be reloaded").
+    if tool == Tool::YtDlp {
+        return None;
+    }
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths).map(|d| d.join(tool.exe())).find(|p| p.is_file())
     })

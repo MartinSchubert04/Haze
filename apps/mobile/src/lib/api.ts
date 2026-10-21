@@ -42,6 +42,8 @@ export const api = {
   playSongs: (songs: Song[], start: number, context: string) => invoke("play_songs", { songs, start, context }),
   control: (control: Control) => invoke("player_control", { control }),
   enqueue: (song: Song, next: boolean) => invoke("enqueue", { song, next }),
+  /** Suena ya sin reemplazar la cola: despues sigue lo que venia. */
+  playNow: (song: Song) => invoke("play_now", { song }),
   queue: () => invoke<QueueView>("queue_get"),
   queueAction: (action: "jump" | "remove" | "move" | "clear", index = 0, to?: number) =>
     invoke("queue_action", { action, index, to }),

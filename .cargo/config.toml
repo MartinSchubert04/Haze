@@ -1,0 +1,3 @@
+[env]
+# Solo escritorio (Windows): ver opus-install.cmake.
+CMAKE_TOOLCHAIN_FILE_x86_64_pc_windows_msvc = { value = ".cargo/opus-install.cmake", relative = true }

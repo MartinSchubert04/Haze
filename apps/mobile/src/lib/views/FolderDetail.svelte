@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, Play, Shuffle } from "@lucide/svelte";
+  import { ChevronLeft, EllipsisVertical, Play, Shuffle } from "@lucide/svelte";
   import { folderName, plural } from "@haze/ui/format";
   import { api } from "../api";
   import { store } from "../store.svelte";
@@ -19,7 +19,12 @@
 <section class="layer">
   {#snippet header()}
     <div class="page">
-      <button class="icon-btn back" aria-label="Volver" onclick={() => store.close()}><ChevronLeft size={26} /></button>
+      <div class="top">
+        <button class="icon-btn back" aria-label="Volver" onclick={() => store.close()}><ChevronLeft size={26} /></button>
+        <button class="icon-btn more" aria-label="Opciones" onclick={() => store.open({ kind: "folderOptions", path })}>
+          <EllipsisVertical size={22} />
+        </button>
+      </div>
       <h1 class="page-title">{name}</h1>
       <div class="page-sub">{plural(songs.length, "canción", "canciones")} · {path || "/"}</div>
       <div class="actions">
@@ -45,8 +50,15 @@
       opacity: 0;
     }
   }
+  .top {
+    display: flex;
+    justify-content: space-between;
+  }
   .back {
     margin-left: -10px;
+  }
+  .more {
+    margin-right: -10px;
   }
   .page-sub {
     margin-bottom: 14px;

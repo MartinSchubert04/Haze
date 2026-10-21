@@ -14,7 +14,7 @@
 
   let query = $state("");
 
-  const sorted = $derived(store.sortSongs(store.songs));
+  const sorted = $derived(store.sortSongs(store.uniqueSongs));
   const shown = $derived.by(() => {
     const q = normalizeSearch(query.trim());
     if (!q) return sorted;
@@ -38,7 +38,7 @@
     </div>
     <div class="page-sub">
       {#if store.scanning}<LoaderCircle size={13} class="spin" /> Buscando música…
-      {:else}{plural(store.songs.length, "canción", "canciones")}{/if}
+      {:else}{plural(store.uniqueSongs.length, "canción", "canciones")}{/if}
     </div>
 
     <label class="search">
@@ -65,7 +65,14 @@
   {/if}
 {/snippet}
 
-<SongList songs={shown} context={query ? "Búsqueda" : ALL_SONGS} {header} onrefresh={() => api.rescan()} />
+<!-- Con una busqueda, tocar un tema lo hace sonar sin cambiar la cola por los resultados. -->
+<SongList
+  songs={shown}
+  context={ALL_SONGS}
+  {header}
+  onrefresh={() => api.rescan()}
+  onplay={query.trim() ? (song) => store.playNow(song) : undefined}
+/>
 
 <style>
   .top {

@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     /// Carpetas de donde sale la biblioteca.
     pub sources: Vec<String>,
+    /// Carpetas que se quitaron de la biblioteca (Android: ahi la biblioteca es todo
+    /// MediaStore, asi que se oculta lo que no se quiere ver).
+    pub hidden_folders: Vec<String>,
     /// Carpetas favoritas para guardar lo que se baja de YouTube.
     pub download_folders: Vec<String>,
     /// La que se propone primero al bajar.
@@ -21,6 +24,7 @@ pub struct Settings {
     pub playback: Playback,
     pub behavior: Behavior,
     pub ha: HomeAssistant,
+    pub discord: Discord,
     pub shortcuts: Shortcuts,
     pub song_sort: String,
     pub folder_sort: String,
@@ -69,8 +73,9 @@ pub struct Behavior {
     pub main_window: Option<WindowBounds>,
 }
 
-/// Posicion y tamaño de una ventana, en pixeles fisicos. Si estaba maximizada, la
-/// posicion y el tamaño son los de antes de maximizar: a eso vuelve al restaurarla.
+/// Posicion y tamaño de una ventana, en pixeles fisicos y por afuera (con el borde
+/// invisible de la sombra). Si estaba maximizada, la posicion y el tamaño son los de antes
+/// de maximizar: a eso vuelve al restaurarla.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowBounds {
@@ -121,17 +126,36 @@ pub struct HomeAssistant {
     pub device_name: String,
 }
 
+/// Bot de Discord (solo escritorio): entra al canal de voz donde este el dueño del bot y
+/// pone lo mismo que suena en Haze.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Discord {
+    pub enabled: bool,
+    pub token: String,
+    /// Mientras el bot esta en un canal, la PC no suena: se escucha por Discord.
+    pub mute_local: bool,
+}
+
+impl Default for Discord {
+    fn default() -> Self {
+        Self { enabled: false, token: String::new(), mute_local: true }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         let music = dirs_music();
         Self {
             sources: music.iter().cloned().collect(),
+            hidden_folders: Vec::new(),
             download_folders: music.iter().cloned().collect(),
             default_download_folder: music,
             appearance: Appearance::default(),
             playback: Playback::default(),
             behavior: Behavior::default(),
             ha: HomeAssistant::default(),
+            discord: Discord::default(),
             shortcuts: Shortcuts::default(),
             song_sort: "title_asc".into(),
             folder_sort: "name_asc".into(),

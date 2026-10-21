@@ -1,6 +1,7 @@
 <script lang="ts">
   import { shortcutList, defaultShortcuts, prettyShortcut, shortcutFromEvent, type ShortcutKey } from "../shortcuts";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
@@ -27,6 +28,15 @@
   // que se tipea reconectaria MQTT.
   let ha = $state({ ...store.settings!.ha });
   const haDirty = $derived(JSON.stringify(ha) !== JSON.stringify(s.ha));
+
+  // El token tambien va en borrador: cada letra reconectaria el bot.
+  let botToken = $state(store.settings!.discord.token);
+  const tokenDirty = $derived(botToken.trim() !== s.discord.token);
+  const botLabel = $derived(
+    ({ online: store.discord.channel ? "En un canal" : "Conectado", connecting: "Conectando…", error: "Error" } as Record<string, string>)[
+      store.discord.state
+    ] ?? "Apagado",
+  );
 
   async function addSource() {
     const dir = await open({ directory: true, multiple: true, title: "Carpetas con música" });
@@ -374,6 +384,72 @@
       </div>
     </details>
 
+    <!-- ------------------------------------------------------------ discord -->
+    <details class="fold">
+      <summary>
+        <div class="grow">
+          <h2>Discord</h2>
+          <p>Un bot que entra a tu canal de voz y pone lo que suena en Haze. Los demás del canal suman temas con /play.</p>
+        </div>
+        {#if s.discord.enabled}
+          <span class="status" class:ok={store.discord.state === "online"}>{botLabel}</span>
+        {/if}
+        <ChevronDown size={18} class="chev" />
+      </summary>
+      <label class="toggle">
+        <div>
+          <div>Prender el bot</div>
+          <div class="hint">Apagado no usa nada. Prendido, espera a que entres a un canal de voz de un servidor donde esté el bot.</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={s.discord.enabled}
+          onchange={(e) => {
+            const on = e.currentTarget.checked;
+            store.saveSettings((x) => (x.discord.enabled = on));
+          }}
+        />
+      </label>
+      <label class="toggle">
+        <div>
+          <div>Silenciar la PC mientras suena en Discord</div>
+          <div class="hint">Lo escuchás por Discord, igual que los demás, sin eco.</div>
+        </div>
+        <input
+          type="checkbox"
+          checked={s.discord.muteLocal}
+          onchange={(e) => {
+            const on = e.currentTarget.checked;
+            store.saveSettings((x) => (x.discord.muteLocal = on));
+          }}
+        />
+      </label>
+      <div class="form">
+        <label class="wide">
+          Token del bot<input type="password" bind:value={botToken} autocomplete="off" placeholder="Pegalo desde el portal de Discord" />
+          <span class="hint">
+            discord.com/developers → New Application → Bot → Reset Token. El bot sigue al dueño de la aplicación (vos).
+          </span>
+        </label>
+      </div>
+      {#if store.discord.state === "error" || store.discord.error}
+        <p class="bot-error">{store.discord.error}</p>
+      {/if}
+      {#if store.discord.state === "online"}
+        <p class="bot-info">
+          Conectado como <b>{store.discord.bot}</b>{#if store.discord.channel} · sonando en {store.discord.channel}{/if}
+        </p>
+      {/if}
+      <div class="save">
+        {#if store.discord.invite}
+          <button class="pill" onclick={() => openUrl(store.discord.invite!)}>Sumar a un servidor</button>
+        {/if}
+        <button class="pill primary" disabled={!tokenDirty} onclick={() => store.saveSettings((x) => (x.discord.token = botToken.trim()))}>
+          Guardar
+        </button>
+      </div>
+    </details>
+
     <!-- ------------------------------------------------------------ actualizaciones -->
     <section>
       <div class="sec-head">
@@ -447,6 +523,16 @@
   }
   .fold[open] :global(.chev) {
     transform: rotate(180deg);
+  }
+  .bot-error {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: #f38ba8;
+  }
+  .bot-info {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: var(--text-2);
   }
   .fold[open] {
     padding-bottom: 22px;
@@ -716,6 +802,7 @@
   .save {
     display: flex;
     justify-content: flex-end;
+    gap: 10px;
     margin-top: 14px;
   }
   .status {
