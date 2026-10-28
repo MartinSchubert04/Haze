@@ -33,10 +33,16 @@
     place-items: center;
     border-radius: 50%;
     flex: none;
-    transition: transform 0.12s;
+    transition:
+      transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s,
+      filter var(--release);
   }
-  .play:active {
-    transform: scale(0.92);
+  .play:global(.pressed) {
+    transform: scale(0.9);
+    filter: brightness(0.85);
+    transition:
+      transform 0.08s,
+      filter 0.05s;
   }
   .play.solid {
     background: var(--text);

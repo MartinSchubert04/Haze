@@ -20,6 +20,19 @@
     last.searched = searched;
   });
 
+  // Con una busqueda, "atras" la borra antes de cambiar de pestaña.
+  $effect(() => {
+    if (!text && !searched) return;
+    return store.onBack("page", () => {
+      text = "";
+      searched = "";
+      results = [];
+      error = null;
+      (document.activeElement as HTMLElement | null)?.blur();
+      return true;
+    });
+  });
+
   const link = $derived(isUrl(text));
   const active = $derived(store.downloads.filter((d) => d.status !== "done" || d.error));
   const done = $derived(store.downloads.filter((d) => d.status === "done").length);
@@ -65,7 +78,7 @@
       {#if link}<Link2 size={18} />{:else}<Search size={18} />{/if}
       <input type="search" enterkeyhint={link ? "go" : "search"} placeholder="Buscar o pegar un link" bind:value={text} />
       {#if loading}<LoaderCircle size={18} class="spin" />
-      {:else if text}<button type="button" aria-label="Borrar" onclick={() => (text = "")}><X size={18} /></button>{/if}
+      {:else if text}<button type="button" class="tap" aria-label="Borrar" onclick={() => (text = "")}><X size={18} /></button>{/if}
     </form>
 
     {#if active.length || done}
@@ -86,7 +99,7 @@
         {/each}
         <div class="downloads-foot">
           {#if done}<span>{done === 1 ? "1 bajada" : `${done} bajadas`} en Music/Haze</span>{/if}
-          <button class="chip" onclick={() => api.clearDownloads()}>Limpiar</button>
+          <button class="chip press" onclick={() => api.clearDownloads()}>Limpiar</button>
         </div>
       </div>
     {/if}

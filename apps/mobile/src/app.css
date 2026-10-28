@@ -86,12 +86,58 @@ input[type="search"] {
   margin: 4px 0 2px;
 }
 
-/* Lo que hace la app al tocar: un leve oscurecido, no el azul de Chrome. */
-.press {
-  transition: background 0.12s;
+/*
+ * Lo que hace la app al tocar: `.pressed` (lib/press.ts) se pone mientras el dedo esta
+ * apoyado y al soltar se apaga con un fade lento (un respiro y despues se va).
+ * Las clases: `.press` (filas y opciones: aclara el fondo), `.icon-btn` (circulo),
+ * `.tap` (circulo para botones chicos sin tamaño fijo), `.pill` (se hunde y aclara).
+ */
+:root {
+  --press-bg: rgba(255, 255, 255, 0.1);
+  --release: 0.45s ease-out 0.1s;
 }
-.press:active {
-  background: rgba(255, 255, 255, 0.06);
+.press,
+.icon-btn,
+.tap {
+  transition:
+    background-color var(--release),
+    color 0.15s;
+}
+.press.pressed,
+.icon-btn.pressed,
+.tap.pressed {
+  background-color: var(--press-bg);
+  transition:
+    background-color 0.05s,
+    color 0.15s;
+}
+.tap {
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  margin: -6px;
+  border-radius: 50%;
+}
+.pill {
+  transition:
+    background-color var(--release),
+    filter var(--release),
+    transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s;
+}
+.pill:active {
+  transform: none;
+}
+.pill.pressed {
+  background-color: rgba(255, 255, 255, 0.16);
+  transform: scale(0.96);
+  transition:
+    background-color 0.05s,
+    filter 0.05s,
+    transform 0.08s;
+}
+.pill.primary.pressed {
+  background-color: var(--accent);
+  filter: brightness(0.88);
 }
 
 .spacer-bottom {

@@ -145,8 +145,18 @@ select:focus-visible {
   transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
 }
-.pill:hover {
-  background: rgba(255, 255, 255, 0.12);
+/* Solo con mouse: en una pantalla tactil el :hover queda pegado despues del toque. */
+@media (hover: hover) {
+  .pill:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .pill.primary:hover {
+    filter: brightness(1.06);
+  }
+  .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+  }
 }
 .pill:active {
   transform: scale(0.97);
@@ -155,9 +165,6 @@ select:focus-visible {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: transparent;
-}
-.pill.primary:hover {
-  filter: brightness(1.06);
 }
 .pill:disabled {
   opacity: 0.45;
@@ -172,10 +179,6 @@ select:focus-visible {
   border-radius: 50%;
   color: var(--text-2);
   transition: background 0.15s, color 0.15s;
-}
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
 }
 .icon-btn.on {
   color: var(--accent);

@@ -2,6 +2,9 @@ import { mount } from "svelte";
 import "@haze/ui/theme.css";
 import "./app.css";
 import App from "./App.svelte";
+import { installPress } from "./lib/press";
+
+installPress();
 
 const app = mount(App, { target: document.getElementById("app")! });
 

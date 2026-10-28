@@ -80,10 +80,10 @@
 
     <h2>Fondo</h2>
     <div class="choices">
-      <button class="choice" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "haze"))}>
+      <button class="choice press" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "haze"))}>
         <span class="preview haze"></span> Bruma
       </button>
-      <button class="choice" class:on={a.background === "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "color"))}>
+      <button class="choice press" class:on={a.background === "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "color"))}>
         <span class="preview" style:background={a.backgroundColor}></span> Color
       </button>
     </div>
@@ -245,12 +245,17 @@
   }
   .fold {
     width: 100%;
+    transition: opacity var(--release);
     display: flex;
     align-items: center;
     gap: 10px;
     margin: 28px 0 12px;
     text-align: left;
     color: var(--text-3);
+  }
+  .fold:global(.pressed) {
+    opacity: 0.6;
+    transition: opacity 0.05s;
   }
   .fold h2 {
     flex: 1;
@@ -290,6 +295,12 @@
     display: grid;
     place-items: center;
     border: 1px solid var(--line-strong);
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s;
+  }
+  .swatch:global(.pressed) {
+    transform: scale(0.88);
+    transition-duration: 0.08s;
+    transition-delay: 0s;
   }
   .swatch.dark {
     color: #fff;

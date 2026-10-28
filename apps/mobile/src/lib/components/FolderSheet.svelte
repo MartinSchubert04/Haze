@@ -10,10 +10,8 @@
   const folder = $derived(store.folders.find((f) => f.path === path));
   const name = $derived(folderName(path) || "Almacenamiento");
 
-  async function open() {
+  function open() {
     store.close();
-    // Espera a que se cierre la hoja antes de abrir la carpeta encima.
-    await new Promise((r) => window.addEventListener("popstate", r, { once: true }));
     store.open({ kind: "folder", path });
   }
 </script>

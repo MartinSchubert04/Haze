@@ -14,6 +14,16 @@
 
   let query = $state("");
 
+  // Con una busqueda escrita, "atras" la borra y vuelve al listado entero.
+  $effect(() => {
+    if (!query) return;
+    return store.onBack("page", () => {
+      query = "";
+      (document.activeElement as HTMLElement | null)?.blur();
+      return true;
+    });
+  });
+
   const sorted = $derived(store.sortSongs(store.uniqueSongs));
   const shown = $derived.by(() => {
     const q = normalizeSearch(query.trim());
@@ -44,7 +54,7 @@
     <label class="search">
       <Search size={18} />
       <input type="search" placeholder="Buscar" bind:value={query} />
-      {#if query}<button aria-label="Borrar" onclick={() => (query = "")}><X size={18} /></button>{/if}
+      {#if query}<button class="tap" aria-label="Borrar" onclick={() => (query = "")}><X size={18} /></button>{/if}
     </label>
 
     <div class="actions">

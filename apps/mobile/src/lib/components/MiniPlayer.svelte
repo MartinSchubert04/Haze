@@ -12,7 +12,7 @@
   const open = () => store.open({ kind: "nowPlaying" });
 </script>
 
-<div class="mini" role="button" tabindex="0" onclick={open} onkeydown={(e) => e.key === "Enter" && open()}>
+<div class="mini press" role="button" tabindex="0" onclick={open} onkeydown={(e) => e.key === "Enter" && open()}>
   <div class="progress" style:width="{frac * 100}%"></div>
   <Cover song={p.song} size={44} radius={8} />
   <div class="text">

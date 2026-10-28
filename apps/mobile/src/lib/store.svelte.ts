@@ -1,16 +1,14 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
+import { onBackButtonPress } from "@tauri-apps/api/app";
 import { folderName, sortKey } from "@haze/ui/format";
 import { uniqueFiles } from "@haze/ui/library";
 import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
 
 export type Tab = "songs" | "folders" | "youtube" | "queue";
 
-/**
- * Lo que se abre encima de las pestañas. Cada capa suma una entrada al historial, asi el
- * boton "atras" de Android cierra la de arriba en vez de salir de la app.
- */
+/** Lo que se abre encima de las pestañas. "Atras" cierra la de arriba. */
 export type Layer =
   | { kind: "folder"; path: string }
   | { kind: "nowPlaying" }
@@ -21,8 +19,11 @@ export type Layer =
   /** Un link pegado: escucharlo o bajarlo. */
   | { kind: "link"; url: string };
 
-/** Lo que guarda cada entrada del historial. */
-type Nav = { tab: Tab; tabs: number; depth: number };
+/**
+ * Algo que "atras" puede cerrar antes de tocar las capas o las pestañas (un desplegable,
+ * una busqueda). Devuelve true si hizo algo.
+ */
+type BackHandler = { level: "popup" | "page"; run: () => boolean };
 
 export type Folder = { path: string; name: string; songs: Song[]; coverSong: Song | null };
 
@@ -107,25 +108,11 @@ class Store {
       this.access = e.payload;
     });
 
-    // Cada entrada del historial dice en que pestaña estaba (y cuantas habia en la pila)
-    // y cuantas capas habia abiertas: "atras" vuelve a eso.
-    //
-    // Debajo de todo hay una entrada centinela: si "atras" llega ahi (estando en
-    // Canciones sin nada abierto), la app se va al fondo en vez de cerrarse, y se vuelve a
-    // poner la entrada de inicio para la proxima vez.
-    const home: Nav = { tab: "songs", tabs: 1, depth: 0 };
-    history.replaceState({ sentinel: true }, "");
-    history.pushState(home, "");
-    window.addEventListener("popstate", (e) => {
-      if (e.state?.sentinel) {
-        history.pushState(home, "");
-        api.minimize();
-        return;
-      }
-      const nav = (e.state as Nav | null) ?? home;
-      this.tabs = this.tabs.slice(0, nav.tabs);
-      this.tab = nav.tab;
-      if (nav.depth < this.layers.length) this.layers = this.layers.slice(0, nav.depth);
+    // El boton "atras" de Android lo maneja la app (no el historial del WebView, que
+    // saltea entradas que no salieron de un toque y terminaba cerrando la app).
+    onBackButtonPress(() => this.back()).catch(() => {});
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") this.back();
     });
 
     setInterval(() => this.tick(), 250);
@@ -147,23 +134,51 @@ class Store {
 
   /** Pestañas por las que se paso, sin repetir: "atras" vuelve a la anterior. */
   private tabs: Tab[] = ["songs"];
+  private backHandlers: BackHandler[] = [];
 
   open(layer: Layer) {
     this.layers = [...this.layers, layer];
-    history.pushState({ tab: this.tab, tabs: this.tabs.length, depth: this.layers.length } satisfies Nav, "");
   }
 
-  /** Cierra la capa de arriba, igual que el boton "atras". */
+  /** Cierra la capa de arriba. */
   close() {
-    if (this.layers.length) history.back();
+    if (this.layers.length) this.layers = this.layers.slice(0, -1);
   }
 
-  /** Vuelve `n` entradas del historial y espera a que llegue el popstate. */
-  private async goBack(n: number) {
-    if (n <= 0) return;
-    const back = new Promise((resolve) => window.addEventListener("popstate", resolve, { once: true }));
-    history.go(-n);
-    await back;
+  /**
+   * Registra algo que "atras" cierra primero: un "popup" va antes que las capas, una
+   * "page" (la busqueda de una pestaña) despues. Devuelve la funcion para sacarlo.
+   */
+  onBack(level: BackHandler["level"], run: () => boolean) {
+    const h: BackHandler = { level, run };
+    this.backHandlers.push(h);
+    return () => {
+      this.backHandlers = this.backHandlers.filter((x) => x !== h);
+    };
+  }
+
+  private runHandlers(level: BackHandler["level"]) {
+    for (let i = this.backHandlers.length - 1; i >= 0; i--) {
+      const h = this.backHandlers[i];
+      if (h.level === level && h.run()) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Boton "atras": cierra lo de mas arriba (desplegable, capa, busqueda), si no vuelve a
+   * la pestaña anterior, y solo desde Canciones sin nada abierto manda la app al fondo.
+   */
+  back() {
+    if (this.runHandlers("popup")) return;
+    if (this.layers.length) return this.close();
+    if (this.runHandlers("page")) return;
+    if (this.tabs.length > 1) {
+      this.tabs = this.tabs.slice(0, -1);
+      this.tab = this.tabs.at(-1)!;
+      return;
+    }
+    api.minimize();
   }
 
   /**
@@ -171,22 +186,17 @@ class Store {
    * "atras" vuelve a la anterior; si ya estaba en la pila, se vuelve hasta ella, asi la
    * pila no crece y desde Canciones "atras" sale de la app.
    */
-  async setTab(tab: Tab) {
-    await this.goBack(this.layers.length);
+  setTab(tab: Tab) {
+    this.layers = [];
     if (tab === this.tab) return;
     const i = this.tabs.indexOf(tab);
-    if (i >= 0) {
-      await this.goBack(this.tabs.length - 1 - i);
-    } else {
-      this.tabs = [...this.tabs, tab];
-      this.tab = tab;
-      history.pushState({ tab, tabs: this.tabs.length, depth: 0 } satisfies Nav, "");
-    }
+    this.tabs = i >= 0 ? this.tabs.slice(0, i + 1) : [...this.tabs, tab];
+    this.tab = tab;
   }
 
   /** Cierra todo, pasa a Carpetas y abre esa. */
-  async goToFolder(path: string) {
-    await this.setTab("folders");
+  goToFolder(path: string) {
+    this.setTab("folders");
     this.open({ kind: "folder", path });
   }
 
@@ -263,7 +273,7 @@ class Store {
 
   /** Quita la carpeta de la biblioteca (no borra nada del telefono). */
   async hideFolder(path: string) {
-    await this.goBack(this.layers.length);
+    this.layers = [];
     this.songs = this.songs.filter((s) => s.folder !== path);
     await this.saveSettings((x) => (x.hiddenFolders = [...new Set([...(x.hiddenFolders ?? []), path])]));
     this.toast("Carpeta quitada. Se vuelve a mostrar desde Ajustes");

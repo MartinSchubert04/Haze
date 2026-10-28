@@ -4,6 +4,7 @@
   import type { Component } from "svelte";
   import { ChevronDown, Check } from "@lucide/svelte";
   import { ripple } from "../ripple";
+  import { store } from "../store.svelte";
 
   type Option = { id: T; label: string; icon?: Component<{ size?: number }> };
 
@@ -24,20 +25,20 @@
     if (o.id !== value) onchange(o.id);
   }
 
-  // Se cierra tocando afuera o con Escape.
+  // Se cierra tocando afuera o con "atras".
   $effect(() => {
     if (!open) return;
+    const off = store.onBack("popup", () => {
+      open = false;
+      return true;
+    });
     const outside = (e: PointerEvent) => {
       if (!root.contains(e.target as Node)) open = false;
     };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") open = false;
-    };
     window.addEventListener("pointerdown", outside, true);
-    window.addEventListener("keydown", key);
     return () => {
+      off();
       window.removeEventListener("pointerdown", outside, true);
-      window.removeEventListener("keydown", key);
     };
   });
 </script>

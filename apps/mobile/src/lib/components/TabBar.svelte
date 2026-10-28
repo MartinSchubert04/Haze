@@ -12,8 +12,8 @@
 
 <nav>
   {#each tabs as t (t.id)}
-    <button class:on={store.tab === t.id} onclick={() => store.setTab(t.id)}>
-      <t.icon size={22} strokeWidth={store.tab === t.id ? 2.2 : 1.8} />
+    <button class="tab" class:on={store.tab === t.id} onclick={() => store.setTab(t.id)}>
+      <span class="ind"><t.icon size={22} strokeWidth={store.tab === t.id ? 2.2 : 1.8} /></span>
       <span>{t.label}</span>
     </button>
   {/each}
@@ -37,5 +37,23 @@
   }
   button.on {
     color: var(--accent);
+  }
+  /* Al tocar se marca una pastilla detras del icono, como en Material 3. */
+  .ind {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 30px;
+    border-radius: 15px;
+    transition:
+      background-color var(--release),
+      transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s;
+  }
+  .tab:global(.pressed) .ind {
+    background-color: var(--press-bg);
+    transform: scale(0.94);
+    transition:
+      background-color 0.05s,
+      transform 0.08s;
   }
 </style>
