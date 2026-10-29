@@ -140,7 +140,7 @@
     gap: 14px;
     padding: 10px;
     border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--ov) / 0.07);
   }
   .accent {
     color: var(--accent);
@@ -177,7 +177,7 @@
     transition: background 0.12s;
   }
   .row:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgb(var(--ov) / 0.06);
   }
   .row.over {
     border-top-color: var(--accent);

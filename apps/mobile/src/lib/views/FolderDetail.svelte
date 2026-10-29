@@ -41,7 +41,7 @@
     position: fixed;
     inset: 0;
     z-index: 10;
-    background: #12171b;
+    background: var(--bg);
     animation: in 0.2s ease-out;
   }
   @keyframes in {

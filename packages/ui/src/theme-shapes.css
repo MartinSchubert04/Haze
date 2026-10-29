@@ -1,0 +1,183 @@
+/*
+  Lo que algunos temas cambian de forma, no solo de color (los colores estan en
+  themes.css). Los selectores llevan :root[data-theme] para ganarle a los estilos de
+  cada componente.
+
+  Athanor (del portfolio-athanor):
+  - Fuente bitmap PxPlus IBM VGA 8x16 (VileR, CC BY-SA 4.0). Solo es nitida a 16 px:
+    todo el texto va a 16 px y sin suavizado. Sin negrita: el enfasis es color.
+  - Titulos en Jacquard 24 (OFL).
+  - "Pixel clay": esquinas en escalera de 4 px, biseles duros arriba-izquierda y
+    abajo-derecha, y sombras duras en vez de difuminadas.
+
+  Poolsuite FM: bordes negros de 2 px (sale de --border) y sombras duras en lo que
+  flota y en las tarjetas.
+*/
+
+/* ---------------------------------------------------------------- Athanor */
+
+:root[data-theme="athanor"] {
+  --steps: polygon(
+    0 8px, 4px 8px, 4px 4px, 8px 4px, 8px 0,
+    calc(100% - 8px) 0, calc(100% - 8px) 4px, calc(100% - 4px) 4px, calc(100% - 4px) 8px, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 4px) calc(100% - 8px), calc(100% - 4px) calc(100% - 4px),
+    calc(100% - 8px) calc(100% - 4px), calc(100% - 8px) 100%,
+    8px 100%, 8px calc(100% - 4px), 4px calc(100% - 4px), 4px calc(100% - 8px), 0 calc(100% - 8px)
+  );
+}
+
+:root[data-theme="athanor"] body {
+  -webkit-font-smoothing: none;
+}
+:root[data-theme="athanor"] body *:not(svg):not(svg *) {
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+:root[data-theme="athanor"] body .page-title {
+  font-family: var(--display);
+  font-size: 48px !important;
+  line-height: 1;
+}
+
+/* Superficies apoyadas: escalera + bisel. La barra del reproductor no se recorta en
+   escalera: el volumen y la posicion se asoman por afuera. */
+:root[data-theme="athanor"] main {
+  clip-path: var(--steps);
+}
+:root[data-theme="athanor"] .glass,
+:root[data-theme="athanor"] main {
+  border: 0;
+  box-shadow:
+    inset 4px 4px 0 var(--clay-hi),
+    inset -4px -4px 0 var(--ink-deep),
+    inset 10px 10px 14px -6px var(--clay-glow),
+    inset -10px -10px 14px -6px var(--clay-shade);
+}
+
+/* Lo que flota: borde de 2 px y sombra dura. */
+:root[data-theme="athanor"] .toast,
+:root[data-theme="athanor"] .menu,
+:root[data-theme="athanor"] .dialog,
+:root[data-theme="athanor"] .sheet,
+:root[data-theme="athanor"] .ptr {
+  border: 2px solid var(--line-strong);
+  box-shadow: 8px 8px 0 var(--ink-deep);
+  backdrop-filter: none;
+}
+
+/* Botones de clay: suben un paso al pasar, se hunden al apretar. */
+:root[data-theme="athanor"] .pill {
+  --lift: 0px;
+  --face: var(--panel);
+  --hi: var(--clay-hi);
+  --lo: var(--ink-deep);
+  --shade: var(--umber);
+  position: relative;
+  isolation: isolate;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1));
+  transition: transform 0.08s steps(2);
+}
+:root[data-theme="athanor"] .pill::before,
+:root[data-theme="athanor"] .pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: var(--steps);
+  pointer-events: none;
+}
+:root[data-theme="athanor"] .pill::before {
+  z-index: -2;
+  background: repeating-conic-gradient(var(--shade) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  transform: translate(calc(4px + var(--lift)), calc(4px + var(--lift)));
+}
+:root[data-theme="athanor"] .pill::after {
+  z-index: -1;
+  background: var(--face);
+  box-shadow:
+    inset 4px 4px 0 var(--hi),
+    inset -4px -4px 0 var(--lo);
+}
+@media (hover: hover) {
+  :root[data-theme="athanor"] .pill:hover {
+    --lift: 2px;
+    filter: none;
+  }
+}
+:root[data-theme="athanor"] .pill:active {
+  --lift: -2px;
+}
+:root[data-theme="athanor"] .pill.primary {
+  --face: var(--accent);
+  --hi: var(--accent-hi);
+  --lo: var(--accent-lo);
+  --shade: var(--accent-lo);
+  color: var(--accent-ink) !important;
+}
+
+/* Campos hundidos, con el doble marco ambar al tener foco. */
+:root[data-theme="athanor"] input[type="text"],
+:root[data-theme="athanor"] input[type="password"],
+:root[data-theme="athanor"] input[type="number"],
+:root[data-theme="athanor"] input[type="search"],
+:root[data-theme="athanor"] select {
+  background: var(--ink-deep);
+  border: 2px solid var(--line);
+}
+/* Los buscadores con icono: el marco va en el contenedor, no en el campo. */
+:root[data-theme="athanor"] .search {
+  background: var(--ink-deep);
+  border: 2px solid var(--line);
+}
+:root[data-theme="athanor"] .search input,
+:root[data-theme="athanor"] .search input:focus-visible {
+  background: none;
+  border: 0;
+  outline: none;
+}
+:root[data-theme="athanor"] .search:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:root[data-theme="athanor"] input:focus-visible,
+:root[data-theme="athanor"] select:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:root[data-theme="athanor"] ::-webkit-scrollbar-thumb {
+  border-radius: 0;
+  background: var(--line-strong);
+  border: 3px solid var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="athanor"] .pill {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Poolsuite */
+
+:root[data-theme="poolsuite"] .toast,
+:root[data-theme="poolsuite"] .menu,
+:root[data-theme="poolsuite"] .dialog,
+:root[data-theme="poolsuite"] .sheet {
+  border: 2px solid var(--line);
+  box-shadow: var(--pop-shadow);
+  backdrop-filter: none;
+}
+:root[data-theme="poolsuite"] .pill:not(.primary) {
+  background: var(--panel);
+  box-shadow: var(--card-shadow);
+}
+:root[data-theme="poolsuite"] .pill:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--line);
+}

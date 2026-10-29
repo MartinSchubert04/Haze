@@ -107,7 +107,7 @@
     min-width: 0;
   }
   .card:hover {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--ov) / 0.07);
   }
   .card:active {
     transform: scale(0.985);
@@ -115,7 +115,7 @@
   .art {
     position: relative;
     aspect-ratio: 1;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--rs));
     overflow: hidden;
     margin-bottom: 12px;
     background: color-mix(in srgb, var(--folder) 14%, transparent);

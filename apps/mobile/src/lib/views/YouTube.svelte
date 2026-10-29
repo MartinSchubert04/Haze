@@ -127,9 +127,9 @@
     height: 46px;
     padding: 0 14px;
     margin-top: 14px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--line);
+    border-radius: calc(14px * var(--rs));
+    background: rgb(var(--ov) / 0.07);
+    border: var(--border) solid var(--line);
     color: var(--text-2);
   }
   .search input {
@@ -146,9 +146,9 @@
   .downloads {
     margin-top: 14px;
     padding: 6px 12px;
-    border-radius: 14px;
-    border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: calc(14px * var(--rs));
+    border: var(--border) solid var(--line);
+    background: rgb(var(--ov) / 0.04);
   }
   .job {
     display: flex;
@@ -158,10 +158,10 @@
     color: var(--text-2);
   }
   .job :global(.ok) {
-    color: #a6e3a1;
+    color: var(--ok);
   }
   .job :global(.bad) {
-    color: #f38ba8;
+    color: var(--danger);
   }
   .job-text {
     flex: 1;
@@ -176,7 +176,7 @@
   .bar {
     height: 3px;
     margin-top: 6px;
-    border-radius: 3px;
+    border-radius: calc(3px * var(--rs));
     background: var(--line);
     overflow: hidden;
   }
@@ -198,14 +198,14 @@
     margin-left: auto;
     height: 30px;
     padding: 0 12px;
-    border-radius: 999px;
+    border-radius: var(--round);
     font-size: 13px;
     color: var(--text-2);
-    border: 1px solid var(--line);
+    border: var(--border) solid var(--line);
   }
   .error {
     margin-top: 12px;
-    color: #f38ba8;
+    color: var(--danger);
     font-size: 13.5px;
   }
   .results {

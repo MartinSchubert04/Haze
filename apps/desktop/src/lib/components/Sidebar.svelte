@@ -129,11 +129,11 @@
     font-size: 13px;
   }
   .item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgb(var(--ov) / 0.05);
     color: var(--text);
   }
   .item.active {
-    background: rgba(255, 255, 255, 0.09);
+    background: rgb(var(--ov) / 0.09);
     color: var(--text);
   }
   .item.active :global(svg) {
@@ -144,7 +144,7 @@
     min-width: 20px;
     height: 20px;
     padding: 0 6px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--rs));
     background: var(--accent);
     color: var(--accent-ink);
     font-size: 11.5px;
@@ -157,10 +157,10 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #e67878;
+    background: var(--danger);
   }
   .dot.ok {
-    background: #82c896;
+    background: var(--ok);
   }
   .dot.new {
     background: var(--accent);

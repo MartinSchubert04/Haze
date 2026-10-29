@@ -46,7 +46,7 @@
   }
   .play.solid {
     background: var(--text);
-    color: #111;
+    color: var(--bg);
   }
   .play:disabled {
     opacity: 0.4;

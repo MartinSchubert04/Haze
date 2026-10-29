@@ -150,8 +150,9 @@
     min-width: 0;
     margin: 0 10px 10px 0;
     border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--main);
+    border: var(--border) solid var(--main-line);
+    box-shadow: var(--card-shadow);
     overflow: hidden;
   }
   .view {
@@ -173,7 +174,7 @@
     align-items: center;
     gap: 10px;
     padding: 10px 16px;
-    border-radius: 999px;
+    border-radius: var(--round);
     font-size: 13px;
     z-index: 60;
   }
@@ -192,16 +193,16 @@
   .toast {
     max-width: min(560px, 80vw);
     padding: 10px 16px;
-    border-radius: 12px;
-    background: rgba(30, 34, 39, 0.94);
-    border: 1px solid var(--line-strong);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border-radius: calc(12px * var(--rs));
+    background: var(--pop);
+    border: var(--border) solid var(--line-strong);
+    box-shadow: var(--pop-shadow);
     font-size: 13.5px;
     animation: toast 0.2s ease-out;
   }
   .toast.error {
-    border-color: rgba(243, 139, 168, 0.5);
-    color: #f5c2d0;
+    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+    color: color-mix(in srgb, var(--danger) 65%, var(--text));
   }
   @keyframes toast {
     from {

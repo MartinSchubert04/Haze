@@ -31,7 +31,7 @@
     display: grid;
     place-items: center;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--ov) / 0.07);
     color: var(--text-3);
   }
   img {

@@ -13,7 +13,14 @@ body {
   font-size: 15px;
   /* Sin "rebote" ni recarga al tirar hacia abajo. */
   overscroll-behavior: none;
-  background: #12171b;
+}
+/* Solo el html lleva color: si el body tambien, tapa el fondo del tema (que va con
+   z-index -1). */
+html {
+  background: var(--bg);
+}
+body {
+  background: transparent;
 }
 
 /* Lo que se scrollea no pasa por debajo de la hora y la bateria. */
@@ -23,8 +30,8 @@ body::after {
   inset: 0 0 auto;
   height: var(--safe-top);
   z-index: 100;
-  background: rgba(14, 18, 21, 0.86);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: var(--blur);
   pointer-events: none;
 }
 
@@ -42,10 +49,10 @@ button {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #1d2328;
-  border: 1px solid var(--line-strong);
+  background: var(--pop);
+  border: var(--border) solid var(--line-strong);
   color: var(--text-2);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--pop-shadow);
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -48px);
@@ -93,7 +100,7 @@ input[type="search"] {
  * `.tap` (circulo para botones chicos sin tamaño fijo), `.pill` (se hunde y aclara).
  */
 :root {
-  --press-bg: rgba(255, 255, 255, 0.1);
+  --press-bg: rgb(var(--ov) / 0.1);
   --release: 0.45s ease-out 0.1s;
 }
 .press,
@@ -128,7 +135,7 @@ input[type="search"] {
   transform: none;
 }
 .pill.pressed {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: rgb(var(--ov) / 0.16);
   transform: scale(0.96);
   transition:
     background-color 0.05s,

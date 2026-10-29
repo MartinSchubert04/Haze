@@ -44,7 +44,7 @@
     place-items: center;
     width: 56px;
     height: 30px;
-    border-radius: 15px;
+    border-radius: calc(15px * var(--rs));
     transition:
       background-color var(--release),
       transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s;

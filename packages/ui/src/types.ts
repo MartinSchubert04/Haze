@@ -40,13 +40,20 @@ export type Settings = {
   downloadFolders: string[];
   defaultDownloadFolder: string | null;
   appearance: {
+    /** Ver THEMES en @haze/ui/themes. */
+    theme: string;
+    /** Vacia: la primera del tema. */
+    palette: string;
+    /** Ya no se usa: el acento sale de la paleta. */
     accent: string;
-    background: "glass" | "haze" | "image" | "color";
+    /** "haze" es de antes de los temas: se toma como "theme". */
+    background: "theme" | "glass" | "haze" | "image" | "color";
     backgroundColor: string;
     backgroundImage: string | null;
     dim: number;
     blur: number;
     tintFromArtwork: boolean;
+    /** Vacio: el acento de la paleta. */
     folderColor: string;
   };
   playback: { volume: number; shuffle: boolean; repeat: string; resume: boolean };

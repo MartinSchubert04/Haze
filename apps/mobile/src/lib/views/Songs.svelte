@@ -102,9 +102,9 @@
     gap: 10px;
     height: 46px;
     padding: 0 14px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--line);
+    border-radius: calc(14px * var(--rs));
+    background: rgb(var(--ov) / 0.07);
+    border: var(--border) solid var(--line);
     color: var(--text-2);
   }
   .search input {

@@ -57,11 +57,11 @@
     z-index: 91;
     min-width: 220px;
     padding: 6px;
-    border-radius: 12px;
-    background: rgba(28, 32, 37, 0.92);
-    backdrop-filter: blur(24px);
-    border: 1px solid var(--line-strong);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    border-radius: calc(12px * var(--rs));
+    background: var(--pop);
+    backdrop-filter: var(--blur);
+    border: var(--border) solid var(--line-strong);
+    box-shadow: var(--pop-shadow);
     animation: pop 0.12s ease-out;
   }
   @keyframes pop {
@@ -77,7 +77,7 @@
     width: 100%;
     height: 34px;
     padding: 0 10px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--rs));
     text-align: left;
     font-size: 13.5px;
     color: var(--text);
@@ -86,10 +86,10 @@
     color: var(--text-2);
   }
   button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(var(--ov) / 0.08);
   }
   .danger {
-    color: #f38ba8;
+    color: var(--danger);
   }
   .sep {
     height: 1px;

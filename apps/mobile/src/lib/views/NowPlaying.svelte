@@ -89,7 +89,7 @@
     display: flex;
     flex-direction: column;
     padding: var(--safe-top) 20px calc(var(--safe-bottom) + 24px);
-    background: #101418;
+    background: var(--bg);
     animation: rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
     transition: transform 0.2s;
     overflow: hidden;

@@ -73,8 +73,8 @@
   .rail {
     width: 100%;
     height: 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.14);
+    border-radius: calc(4px * var(--rs));
+    background: rgb(var(--ov) / 0.14);
     overflow: hidden;
     transition: height 0.15s;
   }

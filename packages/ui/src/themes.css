@@ -1,0 +1,245 @@
+/*
+  Temas, los mismos que Ethereon. Cada tema es un bloque de variables: los componentes
+  usan solo variables, asi que sumar o cambiar un tema no toca ninguno. Las paletas de
+  cada tema estan en scripts/palettes.py (que genera palettes.css y palettes.gen.ts).
+  Agregar un tema = copiar un bloque, cambiar [data-theme] y sumarlo a THEMES en themes.ts.
+
+  --bg / --bg-image   fondo de la ventana (con "Fondo: tema" en Ajustes)
+  --sidebar, --panel, --panel-2   superficies, de mas atras a mas adelante
+  --blur              desenfoque detras de las superficies de vidrio
+  --line, --line-strong, --border   bordes y su grosor
+  --text, --text-2, --text-3        texto, de mas a menos importante
+  --accent, --accent-ink, --primary-bg   acento, su tinta y el fondo del boton principal
+  --danger, --warn, --ok
+  --radius, --radius-sm   radios; --rs escala los radios fijos de los componentes y
+                          --round es el de las pildoras (0 en Athanor)
+  --card-shadow, --pop-shadow   sombra de lo que esta apoyado y de lo que flota
+  --font, --mono, --display     fuentes del texto, de lo tecnico y de los titulos
+
+  Lo propio de Haze sale de esas, salvo que el tema lo pise:
+  --ov       "255 255 255" o "0 0 0": las superposiciones van con rgb(var(--ov) / .06),
+             blancas en los temas oscuros y negras en los claros
+  --main     el panel grande del contenido; --glass la barra del reproductor
+  --pop      lo que flota: menus, hojas, avisos (tiene que ser casi opaco)
+  --tile     las tarjetas de carpetas y ajustes
+
+  Athanor y Poolsuite ademas cambian formas: eso esta en theme-shapes.css.
+*/
+
+:root {
+  --ov: 255 255 255;
+  --blur: none;
+  --border: 1px;
+  --rs: 1;
+  --round: 999px;
+  --radius-lg: calc(var(--radius) * 1.55);
+  --card-shadow: none;
+  --pop-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --glass: var(--panel);
+  --glass-strong: var(--sidebar);
+  --main: var(--panel);
+  --main-line: var(--line);
+  --pop: var(--panel-2);
+  --tile: rgb(var(--ov) / 0.035);
+  --tile-hover: var(--hover);
+  --folder: var(--accent);
+  --font: "Inter Variable", system-ui, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --display: var(--font);
+}
+
+/* Default: grafito con acento menta. */
+:root[data-theme="default"] {
+  color-scheme: dark;
+  --bg: #0d0f14;
+  --bg-image: radial-gradient(70% 50% at 100% 0%, rgba(110, 231, 183, 0.05), transparent 70%);
+  --sidebar: #11141a;
+  --panel: #161a21;
+  --panel-2: #1c212a;
+  --hover: rgb(var(--ov) / 0.045);
+  --line: #242a35;
+  --line-strong: #323a48;
+  --text: #e7e9ee;
+  --text-2: #9aa3b2;
+  --text-3: #687183;
+  --accent: #6ee7b7;
+  --accent-ink: #052419;
+  --primary-bg: var(--accent);
+  --danger: #f87171;
+  --warn: #fbbf24;
+  --ok: #6ee7b7;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --pop-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+/* Warp: negro profundo, bloques redondeados y un gradiente violeta-cian. */
+:root[data-theme="warp"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-image:
+    radial-gradient(55% 45% at 85% -5%, rgba(139, 92, 246, 0.2), transparent 70%),
+    radial-gradient(45% 40% at 0% 100%, rgba(34, 211, 238, 0.1), transparent 70%);
+  --sidebar: rgba(255, 255, 255, 0.025);
+  --panel: rgba(255, 255, 255, 0.035);
+  --panel-2: rgba(255, 255, 255, 0.065);
+  --hover: rgba(255, 255, 255, 0.06);
+  --blur: blur(20px);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #f4f4f6;
+  --text-2: #a1a1aa;
+  --text-3: #71717a;
+  --accent: #a78bfa;
+  --accent-ink: #ffffff;
+  --primary-bg: linear-gradient(90deg, #8b5cf6, #22d3ee);
+  --danger: #fb7185;
+  --warn: #facc15;
+  --ok: #34d399;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --rs: 1.15;
+  --glass-strong: color-mix(in srgb, var(--bg) 85%, #1c1c22);
+  --pop: color-mix(in srgb, var(--bg) 88%, #26262e);
+  --tile: rgba(255, 255, 255, 0.035);
+}
+
+/* Poolsuite FM: claro, atardecer pastel, bordes negros gruesos y sombras duras. */
+:root[data-theme="poolsuite"] {
+  color-scheme: light;
+  --ov: 0 0 0;
+  --bg: #ffe9d6;
+  --bg-image: linear-gradient(180deg, #aee2ff 0%, #ffd3e1 55%, #ffeab8 100%);
+  --sidebar: #fffaf0;
+  --panel: #fffdf6;
+  --panel-2: #fff1dc;
+  --hover: rgba(255, 79, 154, 0.08);
+  --line: #1a1a1a;
+  --line-strong: #1a1a1a;
+  --border: 2px;
+  --text: #1a1a1a;
+  --text-2: #4b4b4b;
+  --text-3: #7c7c7c;
+  --accent: #ff4f9a;
+  --accent-ink: #ffffff;
+  --primary-bg: #ff4f9a;
+  --danger: #e63946;
+  --warn: #b86e00;
+  --ok: #10a37f;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --rs: 0.5;
+  --round: 6px;
+  --card-shadow: 3px 3px 0 var(--line);
+  --pop-shadow: 6px 6px 0 var(--line);
+  --pop: var(--panel);
+  --tile: var(--panel);
+}
+
+/* Haze: bruma calida y fria sobre gris azulado, paneles de vidrio, acento crema. */
+:root[data-theme="haze"] {
+  color-scheme: dark;
+  --bg: #12171b;
+  --bg-image:
+    radial-gradient(ellipse 45% 55% at 32% 48%, rgba(122, 108, 88, 0.42), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 78% 18%, rgba(72, 92, 112, 0.38), transparent 70%),
+    radial-gradient(ellipse 60% 45% at 65% 92%, rgba(38, 58, 64, 0.5), transparent 70%),
+    linear-gradient(160deg, #1b2126 0%, #12171b 55%, #0d1114 100%);
+  --sidebar: rgba(18, 22, 26, 0.55);
+  --panel: rgba(22, 27, 31, 0.55);
+  --panel-2: rgba(255, 255, 255, 0.06);
+  --hover: rgba(255, 255, 255, 0.06);
+  --blur: blur(24px) saturate(140%);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --text: #f1f1f1;
+  --text-2: rgba(255, 255, 255, 0.62);
+  --text-3: rgba(255, 255, 255, 0.4);
+  --accent: #f9e2af;
+  --accent-ink: #1a1a1a;
+  --primary-bg: var(--accent);
+  --danger: #f38ba8;
+  --warn: #fab387;
+  --ok: #a6e3a1;
+  --radius: 10.4px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --glass-strong: rgba(18, 22, 26, 0.78);
+  --main: rgba(255, 255, 255, 0.025);
+  --main-line: rgba(255, 255, 255, 0.05);
+  --pop: rgba(30, 34, 39, 0.94);
+  --tile: rgba(0, 0, 0, 0.15);
+}
+
+/* Athanor: paleta Srcery, fuente bitmap IBM VGA, titulos en Jacquard 24 y superficies
+   de "pixel clay" (theme-shapes.css). Un solo acento. */
+:root[data-theme="athanor"] {
+  color-scheme: dark;
+  --bg: #1c1b19;
+  --bg-image: none;
+  --sidebar: #1c1b19;
+  --panel: #2a2824;
+  --panel-2: #3c3a36;
+  --hover: #2a2824;
+  --line: #3c3a36;
+  --line-strong: #5c4c39;
+  --border: 2px;
+  --text: #fce8c3;
+  --text-2: #baa67f;
+  --text-3: #918175;
+  --accent: #fbb829;
+  --accent-ink: #1c1b19;
+  --primary-bg: #fbb829;
+  --danger: #f75341;
+  --warn: #fbb829;
+  --ok: #fed06e;
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-lg: 0px;
+  --rs: 0;
+  --round: 0px;
+  --pop-shadow: 8px 8px 0 var(--umber);
+  --pop: var(--panel);
+  --tile: var(--panel);
+  --font: "PxPlus IBM VGA 8x16", "Cascadia Mono", Consolas, monospace;
+  --mono: "PxPlus IBM VGA 8x16", "Cascadia Mono", Consolas, monospace;
+  --display: "Jacquard 24", "PxPlus IBM VGA 8x16", serif;
+  /* Tokens del pixel clay */
+  --ink-deep: #121110;
+  --clay-hi: #3c3a36;
+  --umber: #5c4c39;
+  --accent-hi: #fed06e;
+  --accent-lo: #a8760f;
+  --clay-glow: rgb(252 232 195 / 0.12);
+  --clay-shade: rgb(0 0 0 / 0.4);
+}
+
+/* Neovim: negro casi puro, grises y un solo blanco para lo importante. Bordes finos,
+   poco radio, todo en JetBrains Mono. */
+:root[data-theme="neovim"] {
+  color-scheme: dark;
+  --bg: #0c0c0c;
+  --bg-image: none;
+  --sidebar: #0c0c0c;
+  --panel: #131313;
+  --panel-2: #1b1b1b;
+  --hover: rgb(var(--ov) / 0.05);
+  --line: #262626;
+  --line-strong: #3a3a3a;
+  --text: #d4d4d4;
+  --text-2: #9a9a9a;
+  --text-3: #626262;
+  --accent: #d0d0d0;
+  --accent-ink: #0c0c0c;
+  --primary-bg: var(--accent);
+  --danger: #e06c75;
+  --warn: #d9bc6e;
+  --ok: #98c379;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --rs: 0.5;
+  --round: 4px;
+  --pop-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --font: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --display: var(--font);
+}

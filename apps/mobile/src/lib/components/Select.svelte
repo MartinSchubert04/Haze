@@ -91,8 +91,8 @@
     gap: 8px;
     height: 40px;
     padding: 0 10px 0 14px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: calc(12px * var(--rs));
+    background: rgb(var(--ov) / 0.04);
     color: var(--text);
     font-size: 14px;
     font-weight: 550;
@@ -100,15 +100,15 @@
     transition: background 0.2s;
   }
   .open .field {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--ov) / 0.07);
   }
   .outline {
     position: absolute;
     inset: -6px 0 0;
     margin: 0;
     padding: 0 8px;
-    border: 1px solid var(--line-strong);
-    border-radius: 12px;
+    border: var(--border) solid var(--line-strong);
+    border-radius: calc(12px * var(--rs));
     text-align: left;
     pointer-events: none;
     transition: border-color 0.2s;
@@ -166,13 +166,10 @@
     margin: 0;
     padding: 6px;
     list-style: none;
-    border-radius: 14px;
-    background: #1d2328;
-    border: 1px solid var(--line-strong);
-    box-shadow:
-      0 5px 5px -3px rgba(0, 0, 0, 0.3),
-      0 8px 10px 1px rgba(0, 0, 0, 0.22),
-      0 3px 14px 2px rgba(0, 0, 0, 0.2);
+    border-radius: calc(14px * var(--rs));
+    background: var(--pop);
+    border: var(--border) solid var(--line-strong);
+    box-shadow: var(--pop-shadow);
     transform-origin: top center;
     animation: grow 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
@@ -190,7 +187,7 @@
     gap: 12px;
     height: 46px;
     padding: 0 10px 0 12px;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--rs));
     font-size: 15px;
     color: var(--text);
     text-align: left;

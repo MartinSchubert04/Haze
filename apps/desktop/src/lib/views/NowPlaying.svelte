@@ -94,8 +94,8 @@
     z-index: 20;
     display: flex;
     flex-direction: column;
-    background: rgba(12, 15, 18, 0.88);
-    backdrop-filter: blur(40px) saturate(150%);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: var(--blur);
     animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     overflow: hidden;
   }
@@ -135,7 +135,7 @@
   .art {
     height: min(100%, 440px);
     aspect-ratio: 1;
-    border-radius: 18px;
+    border-radius: calc(18px * var(--rs));
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
   }
   .side {

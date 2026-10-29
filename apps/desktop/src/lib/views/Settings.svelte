@@ -7,6 +7,7 @@
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "@haze/ui/format";
+  import { THEMES, palettesOf, paletteOf, themeOf } from "@haze/ui/themes";
 
   const ACCENTS = [
     "#ffffff", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387",
@@ -14,13 +15,17 @@
   ];
   const BACKGROUNDS = ["#0f1720", "#000000", "#121212", "#1a1423", "#102019", "#1b1412", "#1d2328"];
   const MODES: [string, string, string][] = [
+    ["theme", "Tema", "El fondo del tema y su paleta"],
     ["glass", "Vidrio", "Desenfoca lo que hay detrás de la ventana"],
-    ["haze", "Bruma", "Un degradé oscuro y difuso"],
     ["image", "Imagen", "Una imagen tuya"],
     ["color", "Color", "Un color liso"],
   ];
 
   const s = $derived(store.settings!);
+  const theme = $derived(themeOf(s.appearance.theme));
+  const palette = $derived(paletteOf(theme, s.appearance.palette));
+  // "haze" es la bruma de antes de los temas.
+  const bgMode = $derived(s.appearance.background === "haze" ? "theme" : s.appearance.background);
   let autostart = $state(false);
   isEnabled().then((v) => (autostart = v), () => {});
 
@@ -217,11 +222,28 @@
       <h2>Apariencia</h2>
 
       <div class="field">
-        <div class="name">Color de acento</div>
-        <div class="swatches">
-          {#each ACCENTS as c}
-            <button class="sw" style:background={c} title={c} onclick={() => store.saveSettings((x) => (x.appearance.accent = c))}>
-              {#if s.appearance.accent === c}<Check size={14} color="#111" />{/if}
+        <div class="name">Tema</div>
+        <div class="themes">
+          {#each THEMES as t}
+            {@const sw = palettesOf(t.id)[0]?.swatch ?? []}
+            <button class="theme" class:sel={theme === t.id} onclick={() => store.saveSettings((x) => ((x.appearance.theme = t.id), (x.appearance.palette = "")))}>
+              <div class="tprev" style:background={sw[0]}>
+                <div class="tpanel" style:background={sw[1]}></div>
+                <div class="tdot" style:background={sw[2]}></div>
+              </div>
+              <div class="ml">{t.name}</div>
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="name">Paleta</div>
+        <div class="palettes">
+          {#each palettesOf(theme) as p}
+            <button class="palette" class:sel={palette === p.id} onclick={() => store.saveSettings((x) => ((x.appearance.theme = theme), (x.appearance.palette = p.id)))}>
+              <span class="psw">{#each p.swatch as c}<span style:background={c}></span>{/each}</span>
+              {p.name}
             </button>
           {/each}
         </div>
@@ -231,7 +253,7 @@
         <div class="name">Fondo</div>
         <div class="modes">
           {#each MODES as [k, label, hint]}
-            <button class="mode" class:sel={s.appearance.background === k} onclick={() => (k === "image" && !s.appearance.backgroundImage ? pickImage() : store.saveSettings((x) => (x.appearance.background = k as never)))}>
+            <button class="mode" class:sel={bgMode === k} onclick={() => (k === "image" && !s.appearance.backgroundImage ? pickImage() : store.saveSettings((x) => (x.appearance.background = k as never)))}>
               <div class="prev {k}" style:background-color={k === "color" ? s.appearance.backgroundColor : undefined} style:background-image={k === "image" && s.appearance.backgroundImage ? `url("${fileUrl(s.appearance.backgroundImage)}")` : undefined}></div>
               <div class="ml">{label}</div>
               <div class="hint">{hint}</div>
@@ -260,13 +282,13 @@
         </div>
       {/if}
 
-      {#if s.appearance.background !== "color"}
+      {#if bgMode === "image" || bgMode === "glass"}
         <div class="field">
           <div class="name">Oscurecer <span class="val">{Math.round(s.appearance.dim * 100)}%</span></div>
           <input type="range" min="0" max="0.9" step="0.01" value={s.appearance.dim} onchange={(e) => store.saveSettings((x) => (x.appearance.dim = +e.currentTarget.value))} oninput={(e) => store.settings && (store.settings.appearance.dim = +e.currentTarget.value)} />
         </div>
       {/if}
-      {#if s.appearance.background === "image" || s.appearance.background === "haze"}
+      {#if bgMode === "image" || bgMode === "theme"}
         <div class="field">
           <div class="name">Desenfoque <span class="val">{Math.round(s.appearance.blur)} px</span></div>
           <input type="range" min="0" max="40" step="1" value={s.appearance.blur} onchange={(e) => store.saveSettings((x) => (x.appearance.blur = +e.currentTarget.value))} oninput={(e) => store.settings && (store.settings.appearance.blur = +e.currentTarget.value)} />
@@ -276,6 +298,9 @@
       <div class="field">
         <div class="name">Color de las carpetas</div>
         <div class="swatches">
+          <button class="sw accent" title="El acento de la paleta" onclick={() => store.saveSettings((x) => (x.appearance.folderColor = ""))}>
+            {#if !s.appearance.folderColor}<Check size={14} />{/if}
+          </button>
           {#each ACCENTS as c}
             <button class="sw" style:background={c} onclick={() => store.saveSettings((x) => (x.appearance.folderColor = c))}>
               {#if s.appearance.folderColor === c}<Check size={14} color="#111" />{/if}
@@ -527,7 +552,7 @@
   .bot-error {
     margin: 12px 0 0;
     font-size: 13px;
-    color: #f38ba8;
+    color: var(--danger);
   }
   .bot-info {
     margin: 12px 0 0;
@@ -559,13 +584,13 @@
     font-size: 12px;
     color: var(--text-2);
     padding: 3px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--line-strong);
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: calc(6px * var(--rs));
+    border: var(--border) solid var(--line-strong);
+    background: rgb(var(--ov) / 0.04);
     transition: background 0.15s, border-color 0.15s;
   }
   .kbd:hover {
-    background: rgba(255, 255, 255, 0.09);
+    background: rgb(var(--ov) / 0.09);
     color: var(--text);
   }
   .kbd.none {
@@ -589,15 +614,15 @@
     padding: 12px 16px;
     border-radius: var(--radius);
     background: color-mix(in srgb, var(--accent) 16%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border: var(--border) solid color-mix(in srgb, var(--accent) 45%, transparent);
     color: var(--accent);
     font-weight: 580;
   }
   .update.ok {
     gap: 10px;
-    background: rgba(130, 200, 150, 0.12);
-    border-color: rgba(130, 200, 150, 0.3);
-    color: #a6e3a1;
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+    border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+    color: var(--ok);
   }
   section {
     margin-top: 18px;
@@ -634,7 +659,7 @@
     gap: 10px;
     padding: 8px 8px 8px 14px;
     border-radius: var(--radius);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgb(var(--ov) / 0.04);
   }
   .grow {
     flex: 1;
@@ -658,7 +683,7 @@
   }
   .add:hover {
     color: var(--text);
-    background: rgba(255, 255, 255, 0.04);
+    background: rgb(var(--ov) / 0.04);
   }
   .field {
     margin: 18px 0;
@@ -684,14 +709,14 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 0 1px rgb(var(--ov) / 0.12);
     transition: transform 0.12s;
   }
   .sw:hover {
     transform: scale(1.12);
   }
   .sw.dark {
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    box-shadow: inset 0 0 0 1px rgb(var(--ov) / 0.25);
   }
   .modes {
     display: grid;
@@ -701,32 +726,110 @@
   .mode {
     text-align: left;
     padding: 8px 8px 12px;
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--line);
+    border-radius: calc(14px * var(--rs));
+    background: rgb(var(--ov) / 0.04);
+    border: var(--border) solid var(--line);
     transition: border-color 0.15s, background 0.15s;
   }
   .mode:hover {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgb(var(--ov) / 0.07);
   }
   .mode.sel {
     border-color: var(--accent);
   }
   .prev {
     height: 64px;
-    border-radius: 9px;
+    border-radius: calc(9px * var(--rs));
     margin-bottom: 10px;
     background-size: cover;
     background-position: center;
   }
   .prev.glass {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)), #2a3038;
+    background: linear-gradient(135deg, rgb(var(--ov) / 0.18), rgb(var(--ov) / 0.04)), #2a3038;
   }
-  .prev.haze {
-    background: var(--haze-bg);
+  .prev.theme {
+    background-color: var(--bg);
+    background-image: var(--bg-image);
+  }
+  .sw.accent {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .themes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .theme {
+    text-align: left;
+    padding: 8px 8px 10px;
+    border-radius: calc(14px * var(--rs));
+    background: rgb(var(--ov) / 0.04);
+    border: var(--border) solid var(--line);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .theme:hover {
+    background: rgb(var(--ov) / 0.07);
+  }
+  .theme.sel {
+    border-color: var(--accent);
+  }
+  .tprev {
+    position: relative;
+    height: 54px;
+    border-radius: calc(9px * var(--rs));
+    margin-bottom: 8px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgb(var(--ov) / 0.1);
+  }
+  .tpanel {
+    position: absolute;
+    inset: 12px 12px 0 28px;
+    border-radius: calc(6px * var(--rs)) calc(6px * var(--rs)) 0 0;
+  }
+  .tdot {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+  .palettes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .palette {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 12px 0 8px;
+    border-radius: var(--round);
+    background: rgb(var(--ov) / 0.04);
+    border: var(--border) solid var(--line);
+    font-size: 13px;
+  }
+  .palette:hover {
+    background: rgb(var(--ov) / 0.08);
+  }
+  .palette.sel {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .psw {
+    display: inline-flex;
+    border-radius: var(--round);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgb(var(--ov) / 0.15);
+  }
+  .psw span {
+    width: 9px;
+    height: 18px;
   }
   .prev.image {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgb(var(--ov) / 0.06);
   }
   .ml {
     font-weight: 580;
@@ -754,8 +857,8 @@
     width: 40px;
     height: 23px;
     flex: none;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
+    border-radius: var(--round);
+    background: rgb(var(--ov) / 0.16);
     position: relative;
     cursor: pointer;
     transition: background 0.2s;
@@ -768,7 +871,7 @@
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--text);
     transition: transform 0.2s;
   }
   .toggle input:checked {
@@ -776,7 +879,7 @@
   }
   .toggle input:checked::after {
     transform: translateX(17px);
-    background: #1a1a1a;
+    background: var(--accent-ink);
   }
   .form {
     display: grid;
@@ -808,13 +911,13 @@
   .status {
     font-size: 12.5px;
     padding: 5px 10px;
-    border-radius: 999px;
-    background: rgba(230, 120, 120, 0.15);
-    color: #f38ba8;
+    border-radius: var(--round);
+    background: color-mix(in srgb, var(--danger) 15%, transparent);
+    color: var(--danger);
     white-space: nowrap;
   }
   .status.ok {
-    background: rgba(130, 200, 150, 0.15);
-    color: #a6e3a1;
+    background: color-mix(in srgb, var(--ok) 15%, transparent);
+    color: var(--ok);
   }
 </style>

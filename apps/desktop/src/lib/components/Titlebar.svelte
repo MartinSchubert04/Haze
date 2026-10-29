@@ -95,14 +95,14 @@
     gap: 8px;
     height: 34px;
     padding: 0 6px 0 12px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--line);
+    border-radius: var(--round);
+    background: rgb(var(--ov) / 0.06);
+    border: var(--border) solid var(--line);
     color: var(--text-3);
     transition: background 0.15s, border-color 0.15s;
   }
   .search:focus-within {
-    background: rgba(255, 255, 255, 0.09);
+    background: rgb(var(--ov) / 0.09);
     border-color: var(--line-strong);
     color: var(--text-2);
   }
@@ -121,8 +121,8 @@
     font: inherit;
     font-size: 11px;
     color: var(--text-3);
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    border: var(--border) solid var(--line);
+    border-radius: calc(6px * var(--rs));
     padding: 2px 6px;
   }
   .right {
@@ -138,7 +138,7 @@
     height: 28px;
     padding: 0 12px;
     margin-right: 8px;
-    border-radius: 999px;
+    border-radius: var(--round);
     font-size: 12.5px;
     font-weight: 600;
     background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -157,7 +157,7 @@
     transition: background 0.12s, color 0.12s;
   }
   .win:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(var(--ov) / 0.08);
     color: var(--text);
   }
   .win.close:hover {

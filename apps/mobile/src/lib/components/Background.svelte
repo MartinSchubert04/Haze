@@ -1,23 +1,14 @@
 <script lang="ts">
-  // Fondo y color de acento segun los ajustes. En el telefono no hay vidrio: la bruma
-  // ocupa su lugar.
+  // Fondo, tema y paleta segun los ajustes. En el telefono no hay vidrio: el fondo es el
+  // del tema o un color.
+  import { applyTheme } from "@haze/ui/themes";
   import { store } from "../store.svelte";
 
   const a = $derived(store.settings?.appearance);
 
-  // Texto oscuro sobre acentos claros (todos los pastel lo son).
-  function ink(hex: string) {
-    const n = parseInt(hex.slice(1), 16);
-    const l = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-    return l > 0.6 ? "#1a1a1a" : "#ffffff";
-  }
-
   $effect(() => {
     if (!a) return;
-    const root = document.documentElement.style;
-    root.setProperty("--accent", a.accent);
-    root.setProperty("--accent-ink", ink(a.accent));
-    root.setProperty("--folder", a.folderColor);
+    applyTheme(a.theme, a.palette);
   });
 </script>
 
@@ -25,8 +16,7 @@
   {#if a?.background === "color"}
     <div class="layer" style:background={a.backgroundColor}></div>
   {:else}
-    <div class="layer haze"></div>
-    <div class="layer" style:background={`rgba(6, 8, 10, ${a?.dim ?? 0.45})`}></div>
+    <div class="layer theme"></div>
   {/if}
 </div>
 
@@ -41,8 +31,9 @@
     position: absolute;
     inset: 0;
   }
-  .haze {
+  .theme {
     inset: -40px;
-    background: var(--haze-bg);
+    background-color: var(--bg);
+    background-image: var(--bg-image);
   }
 </style>

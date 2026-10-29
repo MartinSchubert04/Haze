@@ -152,11 +152,11 @@
     position: relative;
     width: min(560px, calc(100vw - 40px));
     padding: 24px;
-    border-radius: 20px;
-    background: rgba(26, 30, 35, 0.9);
-    backdrop-filter: blur(30px) saturate(140%);
-    border: 1px solid var(--line-strong);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+    border-radius: calc(20px * var(--rs));
+    background: var(--pop);
+    backdrop-filter: var(--blur);
+    border: var(--border) solid var(--line-strong);
+    box-shadow: var(--pop-shadow);
     animation: up 0.18s ease-out;
   }
   @keyframes up {
@@ -181,9 +181,9 @@
     width: 136px;
     aspect-ratio: 16/9;
     object-fit: cover;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--rs));
     flex: none;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgb(var(--ov) / 0.06);
     display: grid;
     place-items: center;
     color: var(--text-3);
@@ -212,7 +212,7 @@
     font-size: 12px;
   }
   .err {
-    color: #f38ba8;
+    color: var(--danger);
     font-size: 13px;
     margin-top: 4px;
   }
@@ -248,18 +248,18 @@
     gap: 6px;
     height: 32px;
     padding: 0 12px;
-    border-radius: 999px;
+    border-radius: var(--round);
     font-size: 13px;
     font-weight: 520;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--line);
+    background: rgb(var(--ov) / 0.06);
+    border: var(--border) solid var(--line);
     max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .chip:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgb(var(--ov) / 0.1);
   }
   .chip.sel {
     background: color-mix(in srgb, var(--accent) 18%, transparent);

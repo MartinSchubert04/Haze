@@ -1,18 +1,17 @@
 <script lang="ts">
-  // Ajustes del telefono: acento, fondo, reproduccion y Home Assistant.
+  // Ajustes del telefono: tema, paleta, fondo, reproduccion y Home Assistant.
   import { ChevronLeft, ChevronDown, Check, RefreshCw, Download, Eye } from "@lucide/svelte";
   import { folderName, plural } from "@haze/ui/format";
+  import { THEMES, palettesOf, paletteOf, themeOf } from "@haze/ui/themes";
   import { api } from "../api";
   import { store } from "../store.svelte";
 
-  const ACCENTS = [
-    "#ffffff", "#f5e0dc", "#f2cdcd", "#f5c2e7", "#cba6f7", "#f38ba8", "#eba0ac", "#fab387",
-    "#f9e2af", "#a6e3a1", "#94e2d5", "#89dceb", "#74c7ec", "#89b4fa", "#b4befe",
-  ];
   const BACKGROUNDS = ["#0f1720", "#000000", "#121212", "#1a1423", "#102019", "#1b1412", "#1d2328"];
 
   const s = $derived(store.settings!);
   const a = $derived(s.appearance);
+  const theme = $derived(themeOf(a.theme));
+  const palette = $derived(paletteOf(theme, a.palette));
 
   // Home Assistant se edita en un borrador y se guarda con un boton: si no, cada letra
   // reconectaria al broker.
@@ -61,27 +60,42 @@
     <button class="icon-btn back" aria-label="Volver" onclick={() => store.close()}><ChevronLeft size={26} /></button>
     <h1 class="page-title">Ajustes</h1>
 
-    <h2>Color de acento</h2>
-    <div class="swatches">
-      {#each ACCENTS as c (c)}
+    <h2>Tema</h2>
+    <div class="themes">
+      {#each THEMES as t (t.id)}
+        {@const sw = palettesOf(t.id)[0]?.swatch ?? []}
         <button
-          class="swatch"
-          style:background={c}
-          aria-label={c}
-          onclick={() => store.saveSettings((x) => {
-            x.appearance.accent = c;
-            x.appearance.folderColor = c;
-          })}
+          class="theme press"
+          class:on={theme === t.id}
+          onclick={() => store.saveSettings((x) => ((x.appearance.theme = t.id), (x.appearance.palette = "")))}
         >
-          {#if a.accent === c}<Check size={16} color="#1a1a1a" strokeWidth={3} />{/if}
+          <span class="tprev" style:background={sw[0]}>
+            <span class="tpanel" style:background={sw[1]}></span>
+            <span class="tdot" style:background={sw[2]}></span>
+          </span>
+          <span class="ellipsis">{t.name}</span>
+        </button>
+      {/each}
+    </div>
+
+    <h2>Paleta</h2>
+    <div class="palettes">
+      {#each palettesOf(theme) as p (p.id)}
+        <button
+          class="palette press"
+          class:on={palette === p.id}
+          onclick={() => store.saveSettings((x) => ((x.appearance.theme = theme), (x.appearance.palette = p.id)))}
+        >
+          <span class="psw">{#each p.swatch as c}<span style:background={c}></span>{/each}</span>
+          {p.name}
         </button>
       {/each}
     </div>
 
     <h2>Fondo</h2>
     <div class="choices">
-      <button class="choice press" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "haze"))}>
-        <span class="preview haze"></span> Bruma
+      <button class="choice press" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "theme"))}>
+        <span class="preview theme"></span> Del tema
       </button>
       <button class="choice press" class:on={a.background === "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "color"))}>
         <span class="preview" style:background={a.backgroundColor}></span> Color
@@ -95,21 +109,6 @@
           </button>
         {/each}
       </div>
-    {:else}
-      <label class="row">
-        <span>Oscurecer</span>
-        <input
-          type="range"
-          min="0"
-          max="0.85"
-          step="0.05"
-          value={a.dim}
-          onchange={(e) => {
-            const v = Number(e.currentTarget.value);
-            store.saveSettings((x) => (x.appearance.dim = v));
-          }}
-        />
-      </label>
     {/if}
 
     <label class="row">
@@ -223,7 +222,7 @@
     inset: 0;
     z-index: 10;
     overflow-y: auto;
-    background: #12171b;
+    background: var(--bg);
     animation: in 0.2s ease-out;
   }
   @keyframes in {
@@ -266,7 +265,7 @@
     color: var(--text-3);
   }
   .fold .status.ok {
-    color: #a6e3a1;
+    color: var(--ok);
   }
   .chev {
     display: grid;
@@ -294,7 +293,7 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    border: 1px solid var(--line-strong);
+    border: var(--border) solid var(--line-strong);
     transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.06s;
   }
   .swatch:global(.pressed) {
@@ -316,8 +315,8 @@
     align-items: center;
     gap: 10px;
     padding: 10px;
-    border-radius: 14px;
-    border: 1px solid var(--line);
+    border-radius: calc(14px * var(--rs));
+    border: var(--border) solid var(--line);
   }
   .choice.on {
     border-color: var(--accent);
@@ -325,10 +324,82 @@
   .preview {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: calc(8px * var(--rs));
   }
-  .preview.haze {
-    background: var(--haze-bg);
+  .preview.theme {
+    background-color: var(--bg);
+    background-image: var(--bg-image);
+    border: var(--border) solid var(--line);
+  }
+  .themes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .theme {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 10px;
+    border-radius: calc(14px * var(--rs));
+    border: var(--border) solid var(--line);
+    background: rgb(var(--ov) / 0.04);
+    font-size: 13.5px;
+    text-align: left;
+  }
+  .theme.on {
+    border-color: var(--accent);
+  }
+  .tprev {
+    position: relative;
+    display: block;
+    height: 46px;
+    border-radius: calc(9px * var(--rs));
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgb(var(--ov) / 0.1);
+  }
+  .tpanel {
+    position: absolute;
+    inset: 10px 10px 0 24px;
+    border-radius: calc(6px * var(--rs)) calc(6px * var(--rs)) 0 0;
+  }
+  .tdot {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+  }
+  .palettes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .palette {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px 0 9px;
+    border-radius: var(--round);
+    border: var(--border) solid var(--line);
+    background: rgb(var(--ov) / 0.04);
+    font-size: 14px;
+  }
+  .palette.on {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .psw {
+    display: inline-flex;
+    border-radius: var(--round);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgb(var(--ov) / 0.15);
+  }
+  .psw span {
+    width: 9px;
+    height: 20px;
   }
   .row {
     display: flex;
@@ -342,11 +413,6 @@
     height: 22px;
     accent-color: var(--accent);
   }
-  input[type="range"] {
-    flex: 1;
-    max-width: 50%;
-    accent-color: var(--accent);
-  }
   .hint {
     font-size: 13px;
     color: var(--text-3);
@@ -358,7 +424,7 @@
     color: var(--text-3);
   }
   .row .status.ok {
-    color: #a6e3a1;
+    color: var(--ok);
   }
   .form {
     display: flex;
@@ -380,9 +446,9 @@
   .form input {
     height: 46px;
     padding: 0 14px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.05);
+    border-radius: calc(12px * var(--rs));
+    border: var(--border) solid var(--line);
+    background: rgb(var(--ov) / 0.05);
     color: var(--text);
     font: inherit;
     font-size: 16px;

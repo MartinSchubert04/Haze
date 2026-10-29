@@ -1,4 +1,12 @@
-/* Tema de Haze, igual en escritorio y Android: fuente, colores y piezas comunes. */
+/* Tema de Haze, igual en escritorio y Android: fuentes, temas y piezas comunes. Los
+   colores salen del tema y la paleta elegidos (themes.css, palettes.css). */
+
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-700.css";
+@import "@fontsource/jacquard-24/latin-400.css";
+@import "./themes.css";
+@import "./palettes.css";
+@import "./theme-shapes.css";
 
 @font-face {
   font-family: "Inter Variable";
@@ -19,30 +27,10 @@
     U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* La app es siempre oscura: el fondo es vidrio, bruma, una imagen o un color. */
-:root {
-  --accent: #f9e2af;
-  --accent-ink: #1a1a1a;
-  --folder: #f9e2af;
-  --text: #f1f1f1;
-  --text-2: rgba(255, 255, 255, 0.62);
-  --text-3: rgba(255, 255, 255, 0.4);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --tile: rgba(0, 0, 0, 0.15);
-  --tile-hover: rgba(255, 255, 255, 0.06);
-  --glass: rgba(22, 27, 31, 0.55);
-  --glass-strong: rgba(18, 22, 26, 0.78);
-  --radius: 10.4px;
-  --radius-lg: 16px;
-  --font: "Inter Variable", system-ui, "Segoe UI", sans-serif;
-  /* Bruma: luces calidas y frias muy difusas sobre gris azulado. */
-  --haze-bg:
-    radial-gradient(ellipse 45% 55% at 32% 48%, rgba(122, 108, 88, 0.42), transparent 70%),
-    radial-gradient(ellipse 50% 40% at 78% 18%, rgba(72, 92, 112, 0.38), transparent 70%),
-    radial-gradient(ellipse 60% 45% at 65% 92%, rgba(38, 58, 64, 0.5), transparent 70%),
-    linear-gradient(160deg, #1b2126 0%, #12171b 55%, #0d1114 100%);
-  color-scheme: dark;
+@font-face {
+  font-family: "PxPlus IBM VGA 8x16";
+  src: url("./fonts/PxPlus_IBM_VGA_8x16.ttf") format("truetype");
+  font-display: swap;
 }
 
 * {
@@ -87,9 +75,9 @@ input[type="password"],
 input[type="number"],
 input[type="search"],
 select {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: rgb(var(--ov) / 0.06);
+  border: var(--border) solid var(--line);
+  border-radius: calc(10px * var(--rs));
   padding: 9px 12px;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
@@ -99,7 +87,7 @@ select {
 input:focus-visible,
 select:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--ov) / 0.08);
 }
 
 :focus-visible {
@@ -112,13 +100,13 @@ select:focus-visible {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: rgb(var(--ov) / 0.12);
+  border-radius: calc(10px * var(--rs));
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.22);
+  background-color: rgb(var(--ov) / 0.22);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -128,8 +116,9 @@ select:focus-visible {
 
 .glass {
   background: var(--glass);
-  backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid var(--line);
+  backdrop-filter: var(--blur);
+  border: var(--border) solid var(--line);
+  box-shadow: var(--card-shadow);
 }
 
 .pill {
@@ -138,9 +127,9 @@ select:focus-visible {
   gap: 8px;
   height: 38px;
   padding: 0 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--line);
+  border-radius: var(--round);
+  background: rgb(var(--ov) / 0.07);
+  border: var(--border) solid var(--line);
   font-weight: 550;
   transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
@@ -148,13 +137,13 @@ select:focus-visible {
 /* Solo con mouse: en una pantalla tactil el :hover queda pegado despues del toque. */
 @media (hover: hover) {
   .pill:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgb(var(--ov) / 0.12);
   }
   .pill.primary:hover {
     filter: brightness(1.06);
   }
   .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(var(--ov) / 0.08);
     color: var(--text);
   }
 }
@@ -162,7 +151,7 @@ select:focus-visible {
   transform: scale(0.97);
 }
 .pill.primary {
-  background: var(--accent);
+  background: var(--primary-bg);
   color: var(--accent-ink);
   border-color: transparent;
 }
@@ -189,6 +178,7 @@ select:focus-visible {
 }
 
 .page-title {
+  font-family: var(--display);
   font-size: 30px;
   font-weight: 650;
   letter-spacing: -0.02em;

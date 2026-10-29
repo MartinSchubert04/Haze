@@ -152,10 +152,10 @@
   }
   .row:hover,
   .row:focus-visible {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgb(var(--ov) / 0.06);
   }
   .row.current {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(var(--ov) / 0.08);
   }
   .row.current .t {
     color: var(--accent);
@@ -174,7 +174,7 @@
     opacity: 1;
   }
   .menu-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgb(var(--ov) / 0.1);
     color: var(--text);
   }
   .cov {
@@ -187,7 +187,7 @@
     display: grid;
     place-items: center;
     background: rgba(0, 0, 0, 0.5);
-    border-radius: 8px;
+    border-radius: calc(8px * var(--rs));
     color: var(--accent);
   }
   .eq :global(svg) {
@@ -236,7 +236,7 @@
     display: flex;
     flex-direction: column;
     padding: 6px 2px;
-    border-radius: 12px;
+    border-radius: calc(12px * var(--rs));
     background: rgba(0, 0, 0, 0.18);
   }
   .az button {
@@ -245,7 +245,7 @@
     font-size: 10.5px;
     font-weight: 600;
     color: var(--text-3);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--rs));
   }
   .az button:hover {
     color: var(--accent);
@@ -257,14 +257,14 @@
     transform: translateY(-50%);
     width: 64px;
     height: 64px;
-    border-radius: 16px;
+    border-radius: calc(16px * var(--rs));
     display: grid;
     place-items: center;
     font-size: 30px;
     font-weight: 700;
     color: var(--accent);
     background: var(--glass-strong);
-    backdrop-filter: blur(20px);
+    backdrop-filter: var(--blur);
     pointer-events: none;
   }
 </style>

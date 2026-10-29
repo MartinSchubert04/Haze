@@ -101,8 +101,8 @@
     bottom: 0;
     z-index: 30;
     padding-bottom: var(--safe-bottom);
-    background: linear-gradient(to top, rgba(10, 13, 16, 0.96) 60%, rgba(10, 13, 16, 0.75));
-    backdrop-filter: blur(24px) saturate(140%);
+    background: linear-gradient(to top, color-mix(in srgb, var(--bg) 96%, transparent) 60%, color-mix(in srgb, var(--bg) 75%, transparent));
+    backdrop-filter: var(--blur);
     border-top: 1px solid var(--line);
   }
   .toasts {
@@ -120,16 +120,16 @@
   .toast {
     max-width: 100%;
     padding: 10px 16px;
-    border-radius: 12px;
-    background: rgba(30, 34, 39, 0.96);
-    border: 1px solid var(--line-strong);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border-radius: calc(12px * var(--rs));
+    background: var(--pop);
+    border: var(--border) solid var(--line-strong);
+    box-shadow: var(--pop-shadow);
     font-size: 14px;
     animation: toast 0.2s ease-out;
   }
   .toast.error {
-    border-color: rgba(243, 139, 168, 0.5);
-    color: #f5c2d0;
+    border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+    color: color-mix(in srgb, var(--danger) 65%, var(--text));
   }
   @keyframes toast {
     from {

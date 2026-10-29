@@ -60,8 +60,8 @@
                 {#if d.status === "queued"}<Clock size={13} /> En espera
                 {:else if d.status === "downloading"}<LoaderCircle size={13} class="spin" /> Bajando {Math.round(d.progress * 100)}%{d.item ? ` · ${d.item}` : ""}
                 {:else if d.status === "converting"}<LoaderCircle size={13} class="spin" /> Pasando a MP3{d.item ? ` · ${d.item}` : ""}
-                {:else if d.status === "done"}<CircleCheck size={13} color="#82c896" /> Listo{d.files.length > 1 ? ` · ${d.files.length} canciones` : ""} · {folderName(d.folder)}
-                {:else}<CircleAlert size={13} color="#f38ba8" /> {d.error}{/if}
+                {:else if d.status === "done"}<CircleCheck size={13} class="ok" /> Listo{d.files.length > 1 ? ` · ${d.files.length} canciones` : ""} · {folderName(d.folder)}
+                {:else}<CircleAlert size={13} class="bad" /> {d.error}{/if}
               </div>
               {#if d.status === "done" && d.error}<div class="warn ellipsis">Algunos videos fallaron: {d.error}</div>{/if}
               {#if d.status === "downloading" || d.status === "converting"}
@@ -82,6 +82,12 @@
 </div>
 
 <style>
+  .s :global(.ok) {
+    color: var(--ok);
+  }
+  .s :global(.bad) {
+    color: var(--danger);
+  }
   .scroll {
     height: 100%;
     overflow-y: auto;
@@ -125,8 +131,8 @@
     width: 96px;
     aspect-ratio: 16/9;
     object-fit: cover;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    border-radius: calc(8px * var(--rs));
+    background: rgb(var(--ov) / 0.06);
   }
   .t {
     font-weight: 560;
@@ -140,14 +146,14 @@
     margin-top: 4px;
   }
   .warn {
-    color: #fab387;
+    color: var(--warn);
     font-size: 12px;
     margin-top: 3px;
   }
   .bar {
     height: 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    border-radius: calc(4px * var(--rs));
+    background: rgb(var(--ov) / 0.1);
     margin-top: 8px;
     overflow: hidden;
   }

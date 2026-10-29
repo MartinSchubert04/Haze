@@ -33,8 +33,15 @@ pub struct Settings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Appearance {
+    /// Tema de la interfaz: "default", "warp", "poolsuite", "haze", "athanor" o "neovim"
+    /// (ver `packages/ui/src/themes.css`).
+    pub theme: String,
+    /// Paleta del tema. Vacia: la primera del tema.
+    pub palette: String,
+    /// Ya no se elige: el acento sale de la paleta. Queda para leer ajustes viejos.
     pub accent: String,
-    /// "glass" (escritorio desenfocado), "haze" (bruma), "image" o "color".
+    /// "theme" (el fondo del tema), "glass" (escritorio desenfocado), "image" o "color".
+    /// "haze" (la bruma, de antes de los temas) se toma como "theme".
     pub background: String,
     pub background_color: String,
     pub background_image: Option<String>,
@@ -44,6 +51,7 @@ pub struct Appearance {
     pub blur: f32,
     /// Teñir la pantalla de reproduccion con el color de la caratula.
     pub tint_from_artwork: bool,
+    /// Color de las carpetas. Vacio: el acento de la paleta.
     pub folder_color: String,
 }
 
@@ -166,14 +174,16 @@ impl Default for Settings {
 impl Default for Appearance {
     fn default() -> Self {
         Self {
+            theme: "haze".into(),
+            palette: String::new(),
             accent: "#f9e2af".into(),
-            background: "glass".into(),
+            background: "theme".into(),
             background_color: "#0f1720".into(),
             background_image: None,
             dim: 0.45,
             blur: 0.0,
             tint_from_artwork: true,
-            folder_color: "#f9e2af".into(),
+            folder_color: String::new(),
         }
     }
 }

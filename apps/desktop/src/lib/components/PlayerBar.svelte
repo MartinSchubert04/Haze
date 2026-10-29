@@ -79,7 +79,7 @@
   }
   .cover-btn {
     position: relative;
-    border-radius: 10px;
+    border-radius: calc(10px * var(--rs));
     overflow: hidden;
     flex: none;
   }

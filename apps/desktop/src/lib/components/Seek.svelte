@@ -93,8 +93,8 @@
     position: relative;
     width: 100%;
     height: 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.14);
+    border-radius: calc(4px * var(--rs));
+    background: rgb(var(--ov) / 0.14);
     overflow: hidden;
     transition: height 0.15s;
   }
@@ -124,7 +124,7 @@
     height: 12px;
     margin: -6px 0 0 -6px;
     border-radius: 50%;
-    background: #fff;
+    background: var(--text);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
     opacity: 0;
     transition: opacity 0.15s;
@@ -138,7 +138,7 @@
     bottom: 20px;
     transform: translateX(-50%);
     padding: 3px 7px;
-    border-radius: 6px;
+    border-radius: calc(6px * var(--rs));
     background: var(--glass-strong);
     font-size: 11px;
     font-variant-numeric: tabular-nums;

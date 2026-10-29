@@ -174,7 +174,7 @@
     right: 0;
     bottom: 0;
     height: 3px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgb(var(--ov) / 0.08);
   }
   .fill {
     height: 100%;

@@ -18,7 +18,10 @@ ventana cerrada.
 - **Home Assistant por MQTT:** las entidades aparecen solas (estado, canción, tapa, botones,
   volumen, aleatorio, repetir y "reproducir carpeta").
 - **Teclas multimedia** y el panel de medios de Windows.
-- **Personalización:** acento pastel, fondo de vidrio, bruma, una imagen o un color.
+- **Temas y paletas:** los mismos de Ethereon (Default, Warp, Poolsuite FM, Haze, Athanor y
+  Neovim), cada uno con sus paletas. El fondo puede ser el del tema, vidrio, una imagen o un
+  color. Los temas están en `packages/ui/src/themes.css` y las paletas en
+  `packages/ui/scripts/palettes.py`, que genera `palettes.css` y `palettes.gen.ts`.
 
 ## Cómo está hecho
 
@@ -31,7 +34,7 @@ Es un monorepo con dos apps y un bot de Discord:
 | `apps/server/` | Bot de Discord: `/play` con búsqueda o link de YouTube en el canal de voz. Corre en Docker (el compose está en `docker-images/haze-bot`). |
 | `crates/haze-core/` | Cola, ajustes y reproductor, sin Tauri ni mpv. Lo comparten las dos apps. |
 | `plugins/haze-player/` | Plugin de Tauri en Kotlin: Media3/ExoPlayer y MediaStore para Android. |
-| `packages/ui/` | Tipos, formato, colores y tema que usan las dos interfaces. |
+| `packages/ui/` | Tipos, formato, temas, paletas y fuentes que usan las dos interfaces. |
 | `assets/` | Fuente del ícono. |
 
 Dentro de `apps/desktop/`:

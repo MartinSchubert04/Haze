@@ -83,14 +83,14 @@
     align-items: center;
     gap: 10px;
     padding: 6px 6px 6px 16px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--line);
+    border-radius: var(--round);
+    background: rgb(var(--ov) / 0.06);
+    border: var(--border) solid var(--line);
     color: var(--text-3);
   }
   .bar:focus-within {
     border-color: var(--line-strong);
-    background: rgba(255, 255, 255, 0.09);
+    background: rgb(var(--ov) / 0.09);
   }
   .bar input {
     flex: 1;
@@ -102,7 +102,7 @@
   }
   .error {
     margin-top: 12px;
-    color: #f38ba8;
+    color: var(--danger);
     font-size: 13px;
   }
   .results {
@@ -124,8 +124,8 @@
   kbd {
     font: inherit;
     font-size: 12px;
-    border: 1px solid var(--line-strong);
-    border-radius: 6px;
+    border: var(--border) solid var(--line-strong);
+    border-radius: calc(6px * var(--rs));
     padding: 1px 6px;
   }
 </style>
