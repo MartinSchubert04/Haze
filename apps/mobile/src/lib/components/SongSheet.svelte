@@ -13,9 +13,10 @@
     await store.enqueue(song, next);
   }
 
+  // Como en escritorio: primero se lee el link y recien ahi se baja.
   function download() {
     store.close();
-    store.download(song.path, song.title, song.thumb);
+    store.open({ kind: "link", url: song.path, preview: song });
   }
 
   function remove() {
@@ -58,13 +59,16 @@
   }
   .sheet {
     position: fixed;
+    /* --pop puede ser translucido: debajo va el fondo del tema, asi no se ven las
+       pestañas a traves. */
+    background-color: var(--bg);
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 61;
     padding: 8px 8px calc(var(--safe-bottom) + 12px);
     border-radius: calc(20px * var(--rs)) calc(20px * var(--rs)) 0 0;
-    background: var(--pop);
+    background-image: linear-gradient(var(--pop), var(--pop));
     border-top: 1px solid var(--line-strong);
     animation: up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }

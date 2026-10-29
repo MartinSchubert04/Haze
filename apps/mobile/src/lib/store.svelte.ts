@@ -16,8 +16,9 @@ export type Layer =
   | { kind: "song"; song: Song; queueIndex?: number }
   /** Opciones de una carpeta: se abren al mantenerla apretada. */
   | { kind: "folderOptions"; path: string }
-  /** Un link pegado: escucharlo o bajarlo. */
-  | { kind: "link"; url: string };
+  /** Un link (pegado o de una busqueda): se lee y despues se escucha o se baja. Con
+   *  `preview` se muestran titulo y tapa mientras se lee. */
+  | { kind: "link"; url: string; preview?: Song };
 
 /**
  * Algo que "atras" puede cerrar antes de tocar las capas o las pestañas (un desplegable,
@@ -260,16 +261,19 @@ class Store {
     }
   }
 
-  async download(url: string, title: string, thumb: string | null, playlist = false) {
+  /** Pide la descarga. Devuelve su id (para seguirla en `downloads`) o null si fallo. */
+  async download(url: string, title: string, thumb: string | null, playlist = false): Promise<number | null> {
     // Encolar contesta enseguida: si no, algo quedo trabado y se avisa igual.
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject("la app no respondió"), 15000),
     );
     try {
-      await Promise.race([api.ytDownload(url, title, thumb, playlist), timeout]);
+      const id = await Promise.race([api.ytDownload(url, title, thumb, playlist), timeout]);
       this.toast("Bajando a Music/Haze");
+      return id;
     } catch (e) {
       this.toast(`No se pudo empezar a bajar ${title}: ${e}`, "error");
+      return null;
     }
   }
 

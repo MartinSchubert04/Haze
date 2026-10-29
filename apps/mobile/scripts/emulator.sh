@@ -43,7 +43,8 @@ case "${1:-}" in
     cp "$ROOT/target/x86_64-linux-android/debug/libhaze_mobile_lib.so" "$GEN/app/src/main/jniLibs/x86_64/"
     (cd "$GEN" && ./gradlew.bat assembleX86_64Debug -x rustBuildX86_64Debug)
     git -C "$ROOT" checkout -- apps/mobile/src-tauri/gen/android/gradlew 2>/dev/null || true
-    "$ADB" install -r "$GEN/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk"
+    # adb.exe necesita la ruta de Windows (MSYS_NO_PATHCONV la deja como /c/...).
+    "$ADB" install -r "$(cygpath -w "$GEN/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk")"
     "$ADB" shell pm grant app.haze.player android.permission.READ_MEDIA_AUDIO
     "$ADB" shell pm grant app.haze.player android.permission.POST_NOTIFICATIONS
     "$ADB" shell monkey -p app.haze.player -c android.intent.category.LAUNCHER 1 >/dev/null

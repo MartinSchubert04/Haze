@@ -69,7 +69,7 @@
     {#if store.isOpen("nowPlaying") && store.player.song}<NowPlaying />{/if}
     {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />{/if}
     {#if sheet?.kind === "folderOptions"}<FolderSheet path={sheet.path} />{/if}
-    {#if sheet?.kind === "link"}<LinkSheet url={sheet.url} />{/if}
+    {#if sheet?.kind === "link"}<LinkSheet url={sheet.url} preview={sheet.preview} />{/if}
   </div>
 {/if}
 

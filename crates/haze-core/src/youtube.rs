@@ -21,6 +21,8 @@ pub const DOWNLOAD_ARGS: &[&str] = &[
     "--ignore-config",
     "--no-warnings",
     "--newline",
+    // `--print` deja a yt-dlp en silencio, avance incluido: sin esto la barra no se movia.
+    "--progress",
     "-x",
     "--audio-format",
     "mp3",
@@ -53,7 +55,7 @@ pub const DOWNLOAD_ARGS: &[&str] = &[
 /// Sin ffmpeg no se puede convertir ni meter tags: se baja el audio tal cual lo da
 /// YouTube (m4a casi siempre), con el nombre "Artista - Tema" que arma [`output_template`].
 pub fn download_args_without_ffmpeg() -> Vec<&'static str> {
-    let mut out = vec!["--ignore-config", "--no-warnings", "--newline", "-f", "bestaudio[ext=m4a]/bestaudio"];
+    let mut out = vec!["--ignore-config", "--no-warnings", "--newline", "--progress", "-f", "bestaudio[ext=m4a]/bestaudio"];
     // Lo que limpia titulo y artista sirve igual para el nombre del archivo.
     let i = DOWNLOAD_ARGS.iter().position(|a| *a == "--replace-in-metadata").unwrap();
     out.extend_from_slice(&DOWNLOAD_ARGS[i..]);
@@ -227,6 +229,8 @@ mod tests {
         let args = download_args_without_ffmpeg();
         assert!(!args.contains(&"-x") && !args.contains(&"--embed-thumbnail"));
         assert!(args.contains(&"--parse-metadata") && args.contains(&"--print"));
+        // Con --print, yt-dlp no muestra el avance si no se lo pide.
+        assert!(args.contains(&"--progress") && DOWNLOAD_ARGS.contains(&"--progress"));
         assert!(missing_ffmpeg("Postprocessing: ffprobe and ffmpeg not found. Please install"));
         assert!(!missing_ffmpeg("Video unavailable"));
         assert_eq!(error_line("WARNING: x\nERROR: Video unavailable\n").as_deref(), Some("Video unavailable"));
