@@ -8,19 +8,27 @@
 
   let { song, queueIndex }: { song: Song; queueIndex?: number } = $props();
 
+  // Las props salen de la capa abierta: despues de store.close() ya no existe y leerlas
+  // tira una excepcion. Por eso cada accion toma lo que necesita antes de cerrar (asi
+  // "Bajar como MP3" no hacia nada).
   async function enqueue(next: boolean) {
+    const s = song;
     store.close();
-    await store.enqueue(song, next);
+    await store.enqueue(s, next);
   }
 
-  // Como en escritorio: primero se lee el link y recien ahi se baja.
+  // Un resultado de busqueda ya trae titulo y tapa: se baja directo, de fondo. El avance
+  // se ve en la notificacion y en la pestaña YouTube.
   function download() {
-    store.replace({ kind: "link", url: song.path, preview: song });
+    const { path, title, thumb } = song;
+    store.close();
+    store.download(path, title, thumb);
   }
 
   function remove() {
+    const index = queueIndex;
     store.close();
-    if (queueIndex !== undefined) api.queueAction("remove", queueIndex);
+    if (index !== undefined) api.queueAction("remove", index);
   }
 </script>
 

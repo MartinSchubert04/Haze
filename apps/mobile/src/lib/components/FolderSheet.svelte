@@ -10,9 +10,10 @@
   const folder = $derived(store.folders.find((f) => f.path === path));
   const name = $derived(folderName(path) || "Almacenamiento");
 
+  // `path` sale de la capa: se lee antes de cerrarla (despues ya no existe).
   function open() {
-    store.close();
-    store.open({ kind: "folder", path });
+    const p = path;
+    store.replace({ kind: "folder", path: p });
   }
 </script>
 

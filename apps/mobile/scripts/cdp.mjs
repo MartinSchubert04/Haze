@@ -16,7 +16,10 @@ ws.onmessage = (m) => {
   if (d.id && pending.has(d.id)) pending.get(d.id)(d.result ?? d.error);
   else if (d.method === "Runtime.consoleAPICalled")
     console.log("console." + d.params.type + ":", d.params.args.map((a) => a.value ?? a.description).join(" "));
-  else if (d.method === "Runtime.exceptionThrown") console.log("EXCEPTION:", JSON.stringify(d.params.exceptionDetails).slice(0, 800));
+  else if (d.method === "Runtime.exceptionThrown") {
+    const x = d.params.exceptionDetails;
+    console.log("EXCEPTION:", x.exception?.description ?? x.text);
+  }
   else if (d.method === "Log.entryAdded") console.log("log:", d.params.entry.level, d.params.entry.text, d.params.entry.url ?? "");
 };
 await new Promise((r) => (ws.onopen = r));
