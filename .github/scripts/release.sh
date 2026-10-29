@@ -23,4 +23,16 @@ NOTAS
 if ! gh release view "$TAG" >/dev/null 2>&1; then
   gh release create "$TAG" --title "Haze $V" --notes-file notas.md --latest || gh release view "$TAG" >/dev/null
 fi
-gh release upload "$TAG" "$@" --clobber
+# Primero los instaladores y despues latest*.json: si suben juntos, el JSON (chico)
+# termina antes y las apps encuentran la version nueva con un APK que todavia no existe
+# ("GitHub respondio 404" al actualizar).
+BINARIOS=()
+MANIFIESTOS=()
+for f in "$@"; do
+  case "$(basename "$f")" in
+    latest*.json) MANIFIESTOS+=("$f") ;;
+    *) BINARIOS+=("$f") ;;
+  esac
+done
+if [ ${#BINARIOS[@]} -gt 0 ]; then gh release upload "$TAG" "${BINARIOS[@]}" --clobber; fi
+if [ ${#MANIFIESTOS[@]} -gt 0 ]; then gh release upload "$TAG" "${MANIFIESTOS[@]}" --clobber; fi
