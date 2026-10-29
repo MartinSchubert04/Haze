@@ -47,3 +47,12 @@ En Windows, `tauri android build` necesita el modo de desarrollador activado
 (Configuración → Sistema → Para programadores), porque crea enlaces simbólicos.
 
 Los registros del lado nativo salen en `adb logcat`, filtrando por `haze` o `Tauri`.
+
+## Probar en el emulador
+
+`scripts/emulator.sh` arranca el emulador sin ventana, compila e instala la app para x86_64
+(sin el modo desarrollador de Windows) y reenvía las DevTools del WebView. Con
+`scripts/cdp.mjs` se corre JS en la app, por ejemplo un comando de Rust con
+`window.__TAURI_INTERNALS__.invoke(...)`, se sacan capturas y se ve la consola. Las
+instrucciones están al principio de `scripts/emulator.sh`.
+

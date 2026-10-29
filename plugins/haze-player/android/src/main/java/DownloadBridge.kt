@@ -1,5 +1,6 @@
 package app.haze.player.plugin
 
+import app.tauri.Logger
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -17,12 +18,18 @@ object DownloadBridge {
   @JvmStatic
   fun download(id: Long, args: String): String {
     val out = JSONObject()
+    // Rust llama desde un hilo propio, enganchado a la JVM sin class loader de contexto, y
+    // commons-io (que usa youtubedl-android al actualizar yt-dlp) lo necesita: sin esto
+    // tiraba ExceptionInInitializerError y ninguna descarga andaba.
+    val thread = Thread.currentThread()
+    if (thread.contextClassLoader == null) thread.contextClassLoader = DownloadBridge::class.java.classLoader
     try {
       val context = Playback.app ?: throw IllegalStateException("El reproductor todavia no arranco")
       val list = JSONArray(args).let { a -> List(a.length()) { a.getString(it) } }
       out.put("saved", Youtube.download(context, id, list) { line -> Playback.download(id, line) })
     } catch (e: Throwable) {
-      out.put("error", e.message ?: "yt-dlp fallo")
+      Logger.error("haze-player: la descarga $id fallo: ${e.stackTraceToString()}")
+      out.put("error", describe(e))
     }
     return out.toString()
   }
@@ -49,5 +56,12 @@ object DownloadBridge {
         o.optString("detail"),
       )
     }
+  }
+
+  /** El mensaje de la excepcion, o su tipo (y el de su causa) si no trae ninguno. */
+  internal fun describe(e: Throwable): String {
+    e.message?.takeIf { it.isNotBlank() }?.let { return it }
+    val cause = e.cause?.let { c -> c.message?.takeIf { it.isNotBlank() } ?: c.javaClass.simpleName }
+    return listOfNotNull(e.javaClass.simpleName, cause).joinToString(": ")
   }
 }
