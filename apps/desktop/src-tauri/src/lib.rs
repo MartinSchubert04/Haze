@@ -443,6 +443,7 @@ static OPENING_MAIN: AtomicBool = AtomicBool::new(false);
 static OPENING_MINI: AtomicBool = AtomicBool::new(false);
 
 pub fn show_main(app: &AppHandle) {
+    youtube::keep_running();
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.show();
@@ -508,7 +509,13 @@ pub fn show_main(app: &AppHandle) {
             WindowEvent::CloseRequested { .. } => {
                 let to_tray = state.settings.lock().unwrap().behavior.close_to_tray;
                 if !to_tray {
-                    quit_app(&app2);
+                    // Con descargas en curso la ventana se cierra igual, pero la app sigue
+                    // en la bandeja hasta que terminen.
+                    if youtube::busy(&app2) {
+                        youtube::quit_when_done();
+                    } else {
+                        quit_app(&app2);
+                    }
                 }
             }
             WindowEvent::Moved(p) => {
@@ -606,6 +613,7 @@ fn cycle_windows(app: &AppHandle) {
 }
 
 pub fn open_mini(app: &AppHandle) {
+    youtube::keep_running();
     if let Some(w) = app.get_webview_window("mini") {
         let _ = w.show();
         let _ = w.set_focus();
@@ -703,7 +711,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let sep2 = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&toggle, &prev, &next, &sep1, &mini, &open, &sep2, &quit])?;
 
-    let tray = TrayIconBuilder::with_id("main")
+    TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().cloned().unwrap())
         .tooltip("Haze")
         .menu(&menu)
@@ -724,23 +732,40 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    // El tooltip muestra lo que suena.
+    // El tooltip muestra lo que suena y lo que se esta bajando.
     let mut rx = app.state::<AppState>().player_rx.clone();
+    let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while rx.changed().await.is_ok() {
-            let s = rx.borrow_and_update().clone();
-            let tip = match &s.song {
-                Some(song) if song.artist.is_empty() => song.title.clone(),
-                Some(song) => format!("{} - {}", song.title, song.artist),
-                None => "Haze".into(),
-            };
-            // Windows corta el tooltip en 127 caracteres.
-            let tip: String = tip.chars().take(120).collect();
-            let _ = tray.set_tooltip(Some(&tip));
-            let _ = toggle.set_text(if s.playing { "Pausar" } else { "Reproducir" });
+            let playing = rx.borrow_and_update().playing;
+            refresh_tray(&app);
+            let _ = toggle.set_text(if playing { "Pausar" } else { "Reproducir" });
         }
     });
     Ok(())
+}
+
+/// Pone en el tooltip de la bandeja lo que suena y, abajo, la descarga en curso.
+pub fn refresh_tray(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id("main") else { return };
+    let state = app.state::<AppState>();
+    let song = match &state.player_rx.borrow().song {
+        Some(song) if song.artist.is_empty() => song.title.clone(),
+        Some(song) => format!("{} - {}", song.title, song.artist),
+        None => "Haze".into(),
+    };
+    let download = youtube::tray_line(app);
+    // Windows corta el tooltip en 127 caracteres.
+    let tip = match download {
+        Some(d) => {
+            let d: String = d.chars().take(60).collect();
+            let song: String = song.chars().take(120 - d.chars().count()).collect();
+            format!("{song}
+{d}")
+        }
+        None => song.chars().take(120).collect(),
+    };
+    let _ = tray.set_tooltip(Some(&tip));
 }
 
 // --------------------------------------------------------------------- atajos globales

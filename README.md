@@ -10,7 +10,9 @@ ventana cerrada.
   son cosas distintas; lo encolado suena antes y después se retoma el contexto.
 - **YouTube:** buscar y escuchar sin bajar, o pegar un link (Ctrl V en cualquier lado, o
   arrastrarlo a la ventana) y bajarlo como MP3 con título, artista y tapa cuadrada.
-  Sirven también las playlists y los links de SoundCloud o Bandcamp.
+  Sirven también las playlists y los links de SoundCloud o Bandcamp. Las descargas siguen
+  con la ventana cerrada: el ícono de la bandeja muestra el avance y, si "cerrar a la
+  bandeja" está apagado, la app sale sola cuando terminan.
 - **Carpetas favoritas:** son los destinos de descarga y los accesos de la barra lateral.
 - **Mini reproductor:** una ventanita fija, siempre arriba.
 - **Home Assistant por MQTT:** las entidades aparecen solas (estado, canción, tapa, botones,

@@ -2,6 +2,7 @@
 //! sin bajar y bajar como MP3 con titulo, artista y tapa.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use haze_core::youtube::{self as yt, Progress};
@@ -101,6 +102,45 @@ fn emit_jobs(app: &AppHandle) {
     let state = app.state::<AppState>();
     let jobs = state.downloads.lock().unwrap().jobs.clone();
     let _ = app.emit("downloads://changed", jobs);
+    crate::refresh_tray(app);
+}
+
+fn pending(j: &DownloadJob) -> bool {
+    j.status == "queued" || j.status == "downloading" || j.status == "converting"
+}
+
+/// Hay algo bajandose o en cola. Las descargas siguen con la ventana cerrada.
+pub fn busy(app: &AppHandle) -> bool {
+    app.state::<AppState>().downloads.lock().unwrap().jobs.iter().any(pending)
+}
+
+/// Se cerro la ventana con "cerrar a la bandeja" apagado mientras se bajaba algo: la app
+/// sale sola cuando termine la cola.
+static QUIT_WHEN_DONE: AtomicBool = AtomicBool::new(false);
+
+pub fn quit_when_done() {
+    QUIT_WHEN_DONE.store(true, Ordering::SeqCst);
+}
+
+/// Se volvio a abrir una ventana: ya no se sale sola.
+pub fn keep_running() {
+    QUIT_WHEN_DONE.store(false, Ordering::SeqCst);
+}
+
+/// Lo que muestra la bandeja mientras baja: "Bajando 42%: Tema (+2 en cola)".
+pub fn tray_line(app: &AppHandle) -> Option<String> {
+    let state = app.state::<AppState>();
+    let d = state.downloads.lock().unwrap();
+    let current = d.jobs.iter().find(|j| j.status == "downloading" || j.status == "converting")?;
+    let queued = d.jobs.iter().filter(|j| j.status == "queued").count();
+    let what = if current.status == "converting" {
+        "Convirtiendo".to_string()
+    } else {
+        format!("Bajando {:.0}%", current.progress * 100.0)
+    };
+    let item = current.item.as_ref().map(|i| format!(" ({i})")).unwrap_or_default();
+    let more = if queued > 0 { format!(" +{queued} en cola") } else { String::new() };
+    Some(format!("{what}{item}{more}: {}", current.title))
 }
 
 fn update_job(app: &AppHandle, id: u64, f: impl FnOnce(&mut DownloadJob)) {
@@ -151,7 +191,7 @@ pub fn enqueue(app: &AppHandle, url: String, title: String, thumb: Option<String
 pub fn clear_finished(app: &AppHandle) {
     {
         let state = app.state::<AppState>();
-        state.downloads.lock().unwrap().jobs.retain(|j| j.status == "queued" || j.status == "downloading" || j.status == "converting");
+        state.downloads.lock().unwrap().jobs.retain(pending);
     }
     emit_jobs(app);
 }
@@ -168,7 +208,13 @@ async fn worker(app: AppHandle) {
             }
             next
         };
-        let Some(job) = next else { return };
+        let Some(job) = next else {
+            let no_windows = app.get_webview_window("main").is_none() && app.get_webview_window("mini").is_none();
+            if QUIT_WHEN_DONE.load(Ordering::SeqCst) && no_windows {
+                crate::quit_app(&app);
+            }
+            return;
+        };
         if let Err(e) = run_job(&app, &job).await {
             update_job(&app, job.id, |j| {
                 j.status = "error".into();

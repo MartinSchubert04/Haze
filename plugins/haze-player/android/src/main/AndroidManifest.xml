@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Seguir bajando de YouTube con la app en el fondo, con el avance en una notificacion. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Actualizaciones: instalar el APK nuevo que baja Haze. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -27,6 +31,10 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <service
+            android:name="app.haze.player.plugin.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name="app.haze.player.plugin.InstallResult"
             android:exported="false" />

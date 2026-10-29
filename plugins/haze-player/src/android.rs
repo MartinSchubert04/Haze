@@ -11,7 +11,7 @@ use tauri::plugin::mobile::PluginInvokeError;
 use tauri::plugin::PluginHandle;
 use tauri::{Manager, Runtime};
 
-use crate::{parse, PlayerEvent, Release, Track};
+use crate::{parse, DownloadsStatus, PlayerEvent, Release, Track};
 
 pub struct HazePlayer<R: Runtime>(PluginHandle<R>);
 
@@ -44,9 +44,8 @@ impl<R: Runtime> HazePlayer<R> {
         std::thread::Builder::new()
             .name("haze-player".into())
             .spawn(move || {
-                let mut bridge = None;
                 for (command, payload) in rx {
-                    if let Err(e) = bridge::call(&mut bridge, command, &payload.to_string()) {
+                    if let Err(e) = bridge::call(command, &payload.to_string()) {
                         log::warn!("haze-player: {command} fallo: {e}");
                     }
                 }
@@ -109,13 +108,40 @@ impl<R: Runtime> HazePlayer<R> {
     }
 
     /// Baja con yt-dlp y guarda en Music/Haze. El progreso llega como
-    /// `PlayerEvent::Download`. Devuelve cuantos archivos guardo.
-    pub fn yt_download(&self, id: u64, args: &[&str]) -> Result<usize, PluginInvokeError> {
+    /// `PlayerEvent::Download`. Devuelve cuantos archivos guardo. Va por JNI y no por el
+    /// plugin para que siga sin la Activity (app en el fondo o sacada de recientes).
+    /// Bloquea hasta que termina: llamar fuera del runtime.
+    pub fn yt_download(&self, id: u64, args: &[&str]) -> Result<usize, String> {
         #[derive(Deserialize)]
-        struct Saved {
-            saved: usize,
+        struct Out {
+            saved: Option<usize>,
+            error: Option<String>,
         }
-        Ok(self.call::<Saved>("ytDownload", json!({ "id": id, "args": args }))?.saved)
+        let args = serde_json::to_string(args).map_err(|e| e.to_string())?;
+        let out = bridge::download(id as i64, &args).map_err(|e| e.to_string())?;
+        let out: Out = serde_json::from_str(&out).map_err(|e| e.to_string())?;
+        match (out.saved, out.error) {
+            (Some(n), _) => Ok(n),
+            (None, e) => Err(e.unwrap_or_else(|| "yt-dlp fallo".into())),
+        }
+    }
+
+    /// Como va la cola de descargas: arranca, actualiza o cierra el servicio en primer
+    /// plano que las sostiene con la app en el fondo. No espera.
+    pub fn downloads_status(&self, status: DownloadsStatus) {
+        if let Err(e) = bridge::download_status(&status.to_json().to_string()) {
+            log::warn!("haze-player: no se pudo avisar el estado de las descargas: {e}");
+        }
+    }
+
+    /// Pide permiso para mostrar notificaciones (Android 13+), que es donde se ve el avance
+    /// de las descargas en el fondo.
+    pub fn request_notifications(&self) -> Result<bool, PluginInvokeError> {
+        #[derive(Deserialize)]
+        struct Access {
+            granted: bool,
+        }
+        Ok(self.call::<Access>("requestNotifications", ())?.granted)
     }
 
     /// Manda la app al fondo (como el boton de inicio), sin cerrarla.
@@ -209,37 +235,98 @@ impl Engine for AndroidEngine {
     }
 }
 
-/// `EngineBridge.call(command, json)` en Kotlin, por JNI.
+/// Las clases de Kotlin que se llaman por JNI: `EngineBridge` y `DownloadBridge`.
 mod bridge {
-    use jni::objects::{GlobalRef, JClass, JObject, JValue};
-    use jni::JavaVM;
+    use std::sync::Mutex;
 
-    const CLASS: &str = "app.haze.player.plugin.EngineBridge";
+    use jni::objects::{GlobalRef, JClass, JObject, JString, JValue};
+    use jni::{JNIEnv, JavaVM};
 
-    /// La clase se busca una vez con el class loader de la app (desde un hilo de Rust,
-    /// `FindClass` solo ve las del sistema) y se guarda.
-    pub fn call(class: &mut Option<GlobalRef>, command: &str, json: &str) -> jni::errors::Result<()> {
+    const ENGINE: &str = "app.haze.player.plugin.EngineBridge";
+    const DOWNLOADS: &str = "app.haze.player.plugin.DownloadBridge";
+
+    static ENGINE_CLASS: Mutex<Option<GlobalRef>> = Mutex::new(None);
+    static DOWNLOAD_CLASS: Mutex<Option<GlobalRef>> = Mutex::new(None);
+
+    /// Corre `f` con el JNIEnv del hilo (que queda enganchado a la VM) dentro de un marco
+    /// propio: los hilos de Rust no vuelven a Java, y sin el marco las referencias locales
+    /// se acumularian en cada llamada. Si Kotlin tiro una excepcion, se limpia.
+    fn with_env<T>(f: impl FnOnce(&mut JNIEnv) -> jni::errors::Result<T>) -> jni::errors::Result<T> {
         let ctx = ndk_context::android_context();
         let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
         let mut env = vm.attach_current_thread_permanently()?;
-        if class.is_none() {
-            let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-            let loader = env.call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
-            let name = env.new_string(CLASS)?;
-            let found = env
-                .call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?
-                .l()?;
-            *class = Some(env.new_global_ref(found)?);
+        let out = env.with_local_frame(16, |env| f(env));
+        if out.is_err() && env.exception_check().unwrap_or(false) {
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
         }
-        let class: &JClass = class.as_ref().unwrap().as_obj().into();
-        let command = env.new_string(command)?;
-        let json = env.new_string(json)?;
-        env.call_static_method(
-            class,
-            "call",
-            "(Ljava/lang/String;Ljava/lang/String;)V",
-            &[JValue::Object(&command), JValue::Object(&json)],
-        )?;
-        Ok(())
+        out
+    }
+
+    /// La clase, buscada una vez con el class loader de la app (desde un hilo de Rust,
+    /// `FindClass` solo ve las del sistema).
+    fn class(env: &mut JNIEnv, cache: &Mutex<Option<GlobalRef>>, name: &str) -> jni::errors::Result<GlobalRef> {
+        let mut cache = cache.lock().unwrap();
+        if let Some(c) = cache.as_ref() {
+            return Ok(c.clone());
+        }
+        let ctx = ndk_context::android_context();
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        let loader = env.call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?.l()?;
+        let name = env.new_string(name)?;
+        let found = env
+            .call_method(&loader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;", &[JValue::Object(&name)])?
+            .l()?;
+        let global = env.new_global_ref(found)?;
+        *cache = Some(global.clone());
+        Ok(global)
+    }
+
+    /// `EngineBridge.call(command, json)`.
+    pub fn call(command: &str, json: &str) -> jni::errors::Result<()> {
+        with_env(|env| {
+            let class = class(env, &ENGINE_CLASS, ENGINE)?;
+            let class: &JClass = class.as_obj().into();
+            let command = env.new_string(command)?;
+            let json = env.new_string(json)?;
+            env.call_static_method(
+                class,
+                "call",
+                "(Ljava/lang/String;Ljava/lang/String;)V",
+                &[JValue::Object(&command), JValue::Object(&json)],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// `DownloadBridge.download(id, argsJson)`: bloquea hasta que termina.
+    pub fn download(id: i64, args: &str) -> jni::errors::Result<String> {
+        with_env(|env| {
+            let class = class(env, &DOWNLOAD_CLASS, DOWNLOADS)?;
+            let class: &JClass = class.as_obj().into();
+            let args = env.new_string(args)?;
+            let out = env
+                .call_static_method(
+                    class,
+                    "download",
+                    "(JLjava/lang/String;)Ljava/lang/String;",
+                    &[JValue::Long(id), JValue::Object(&args)],
+                )?
+                .l()?;
+            let out = JString::from(out);
+            let text: String = env.get_string(&out)?.into();
+            Ok(text)
+        })
+    }
+
+    /// `DownloadBridge.status(json)`.
+    pub fn download_status(json: &str) -> jni::errors::Result<()> {
+        with_env(|env| {
+            let class = class(env, &DOWNLOAD_CLASS, DOWNLOADS)?;
+            let class: &JClass = class.as_obj().into();
+            let json = env.new_string(json)?;
+            env.call_static_method(class, "status", "(Ljava/lang/String;)V", &[JValue::Object(&json)])?;
+            Ok(())
+        })
     }
 }

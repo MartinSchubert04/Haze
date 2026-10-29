@@ -51,12 +51,6 @@ class YtRunArgs {
 }
 
 @InvokeArg
-class YtDownloadArgs {
-  var id: Long = 0
-  lateinit var args: List<String>
-}
-
-@InvokeArg
 class PausedArgs {
   var paused: Boolean = false
 }
@@ -86,6 +80,7 @@ class CoverArgs {
     Permission(strings = [Manifest.permission.READ_MEDIA_AUDIO], alias = "audio"),
     Permission(strings = [Manifest.permission.READ_EXTERNAL_STORAGE], alias = "storage"),
     Permission(strings = [LOCAL_NETWORK], alias = "network"),
+    Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
   ]
 )
 class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
@@ -208,20 +203,34 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
-  /** Baja y guarda en Music/Haze. Cada linea de yt-dlp va por el canal como "download". */
+  // Las descargas no pasan por aca sino por [DownloadBridge]: tienen que seguir sin la
+  // Activity.
+
+  /**
+   * Android 13 pide permiso para mostrar notificaciones: sin el, el avance de las
+   * descargas en el fondo no se ve. Antes no existia: se da por concedido.
+   */
+  private fun notificationsGranted() =
+    Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED
+
   @Command
-  fun ytDownload(invoke: Invoke) {
-    val a = invoke.parseArgs(YtDownloadArgs::class.java)
-    yt.execute {
-      try {
-        val saved = Youtube.download(context, a.id, a.args) { line -> Playback.download(a.id, line) }
-        val result = JSObject()
-        result.put("saved", saved)
-        invoke.resolve(result)
-      } catch (e: Throwable) {
-        invoke.reject(e.message ?: "yt-dlp fallo")
-      }
+  fun requestNotifications(invoke: Invoke) {
+    if (notificationsGranted()) {
+      resolveNotifications(invoke)
+    } else {
+      requestPermissionForAlias("notifications", invoke, "notificationsResult")
     }
+  }
+
+  @PermissionCallback
+  fun notificationsResult(invoke: Invoke) {
+    resolveNotifications(invoke)
+  }
+
+  private fun resolveNotifications(invoke: Invoke) {
+    val result = JSObject()
+    result.put("granted", notificationsGranted())
+    invoke.resolve(result)
   }
 
   /**
@@ -287,12 +296,22 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /** Con la app a la vista no hace falta el aviso de "descarga lista". */
+  override fun onResume() {
+    DownloadService.visible = true
+  }
+
+  override fun onPause() {
+    DownloadService.visible = false
+  }
+
   /**
    * Al salir de la app sin musica sonando, se instala lo que haya listo, si Android deja
    * hacerlo sin preguntar. Si no, queda para "Actualizar ahora" en Ajustes.
    */
   override fun onStop() {
-    if (Updater.ready != null && !Playback.playing && Updater.silent(context)) {
+    // Instalar cierra la app: tampoco en medio de una descarga.
+    if (Updater.ready != null && !Playback.playing && !DownloadService.active && Updater.silent(context)) {
       yt.execute {
         try {
           Updater.install(context)

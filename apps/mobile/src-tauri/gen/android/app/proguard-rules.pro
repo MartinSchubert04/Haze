@@ -27,5 +27,6 @@
 -dontwarn com.fasterxml.jackson.**
 -dontwarn org.apache.commons.compress.**
 
-# Rust llama a EngineBridge por JNI, por nombre.
+# Rust llama a EngineBridge y DownloadBridge por JNI, por nombre.
 -keep class app.haze.player.plugin.EngineBridge { *; }
+-keep class app.haze.player.plugin.DownloadBridge { *; }

@@ -117,7 +117,8 @@ async fn check_and_download(app: &AppHandle) -> Result<(), String> {
 
 async fn is_idle(app: &AppHandle) -> bool {
     let no_windows = app.get_webview_window("main").is_none() && app.get_webview_window("mini").is_none();
-    no_windows && !app.state::<AppState>().player.lock().await.state().playing
+    // Instalar reinicia la app: cortaria lo que se esta bajando de fondo.
+    no_windows && !crate::youtube::busy(app) && !app.state::<AppState>().player.lock().await.state().playing
 }
 
 /// Instala lo que se bajo. No vuelve: el instalador cierra la app y la vuelve a abrir.

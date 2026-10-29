@@ -9,7 +9,7 @@ use haze_core::youtube::{self as yt, LinkInfo, Progress};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_haze_player::HazePlayerExt;
+use tauri_plugin_haze_player::{DownloadsStatus, HazePlayerExt};
 
 use crate::AppState;
 
@@ -70,7 +70,31 @@ pub struct Downloads {
 
 fn emit_jobs(app: &AppHandle) {
     let jobs = app.state::<AppState>().downloads.lock().unwrap().jobs.clone();
+    notify(app, &jobs);
     let _ = app.emit("downloads://changed", jobs);
+}
+
+/// Pasa lo que se esta bajando a la notificacion del servicio que sostiene las descargas
+/// con la app en el fondo. Android la actualiza cada tanto, no en cada linea.
+fn notify(app: &AppHandle, jobs: &[DownloadJob]) {
+    let Some(current) = jobs.iter().find(|j| j.status == "downloading" || j.status == "converting") else { return };
+    let queued = jobs.iter().filter(|j| j.status == "queued").count();
+    let mut detail: Vec<String> = Vec::new();
+    if let Some(item) = &current.item {
+        detail.push(item.clone());
+    }
+    if current.status == "downloading" {
+        detail.push(format!("{:.0}%", current.progress * 100.0));
+    }
+    if queued > 0 {
+        detail.push(format!("+{queued} en cola"));
+    }
+    app.haze_player().downloads_status(DownloadsStatus::Progress {
+        title: current.title.clone(),
+        progress: current.progress,
+        converting: current.status == "converting",
+        detail: detail.join(" · "),
+    });
 }
 
 fn update_job(app: &AppHandle, id: u64, f: impl FnOnce(&mut DownloadJob)) {
@@ -127,13 +151,32 @@ pub fn yt_download(app: AppHandle, url: String, title: String, thumb: Option<Str
         );
         let start = !d.running;
         d.running = true;
+        // Con la app a la vista, que es cuando Android deja arrancar el servicio que la
+        // sostiene en el fondo. Bajo el lock: asi no se cruza con el aviso de que termino.
+        app.haze_player().downloads_status(DownloadsStatus::Start);
         (id, start)
     };
     emit_jobs(&app);
+    ask_notifications(&app);
     if start {
         tauri::async_runtime::spawn(worker(app.clone()));
     }
     id
+}
+
+/// El avance de las descargas en el fondo se ve en una notificacion: Android 13+ pide
+/// permiso. Se pregunta con la primera descarga, una vez por sesion.
+fn ask_notifications(app: &AppHandle) {
+    static ASKED: AtomicBool = AtomicBool::new(false);
+    if ASKED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let h = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(e) = h.haze_player().request_notifications() {
+            log::warn!("haze: no se pudo pedir el permiso de notificaciones: {e}");
+        }
+    });
 }
 
 #[tauri::command]
@@ -143,7 +186,7 @@ pub fn downloads_clear(app: AppHandle) {
         .lock()
         .unwrap()
         .jobs
-        .retain(|j| j.status == "queued" || j.status == "downloading" || j.status == "converting");
+        .retain(pending);
     emit_jobs(&app);
 }
 
@@ -151,8 +194,13 @@ pub fn downloads_clear(app: AppHandle) {
 /// 16 KB). Despues del primer fallo se baja sin convertir.
 static NO_FFMPEG: AtomicBool = AtomicBool::new(false);
 
+fn pending(j: &DownloadJob) -> bool {
+    j.status == "queued" || j.status == "downloading" || j.status == "converting"
+}
+
 /// Baja de a una: varias en paralelo solo harian que YouTube limite la velocidad.
 async fn worker(app: AppHandle) {
+    let (mut done, mut failed, mut last) = (0, 0, String::new());
     loop {
         let next = {
             let state = app.state::<AppState>();
@@ -160,10 +208,13 @@ async fn worker(app: AppHandle) {
             let next = d.jobs.iter().rev().find(|j| j.status == "queued").cloned();
             if next.is_none() {
                 d.running = false;
+                // Se va el servicio y, con la app en el fondo, queda un aviso de como termino.
+                app.haze_player().downloads_status(DownloadsStatus::Idle { done, failed, last: last.clone() });
             }
             next
         };
         let Some(job) = next else { return };
+        last = job.title.clone();
         update_job(&app, job.id, |j| j.status = "downloading".into());
         let mut result = download(&app, &job, !NO_FFMPEG.load(Ordering::Relaxed)).await;
         if let Err(e) = &result {
@@ -174,22 +225,31 @@ async fn worker(app: AppHandle) {
         }
         let id = job.id;
         match result {
-            Ok(saved) => {
+            // yt-dlp termino bien pero no quedo ningun audio: es una falla.
+            Ok(0) => {
+                failed += 1;
+                update_job(&app, id, |j| {
+                    j.status = "error".into();
+                    j.error = Some("No se guardó ningún archivo".into());
+                });
+            }
+            Ok(_) => {
+                done += 1;
                 update_job(&app, id, |j| {
                     j.status = "done".into();
                     j.progress = 1.0;
-                    if saved == 0 {
-                        j.error = Some("No se guardó ningún archivo".into());
-                    }
                 });
                 let _ = app.emit("downloads://done", job.title.clone());
                 // MediaStore ya los tiene: se vuelve a leer la biblioteca.
                 crate::load_library(&app).await;
             }
-            Err(e) => update_job(&app, id, |j| {
-                j.status = "error".into();
-                j.error = Some(e);
-            }),
+            Err(e) => {
+                failed += 1;
+                update_job(&app, id, |j| {
+                    j.status = "error".into();
+                    j.error = Some(e);
+                });
+            }
         }
     }
 }
@@ -217,5 +277,5 @@ async fn download(app: &AppHandle, job: &DownloadJob, ffmpeg: bool) -> Result<us
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e| clean_error(&e.to_string()))
+    .map_err(|e| clean_error(&e))
 }

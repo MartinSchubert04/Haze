@@ -103,6 +103,14 @@ la URL del audio y se la pasa a ExoPlayer. Lo bajado se guarda en `Music/Haze` p
 MediaStore, así aparece en la biblioteca y en otras apps de música. El APK crece unos 50 MB
 por arquitectura.
 
+Las descargas siguen con la app en el fondo, con la pantalla apagada o sacada de recientes.
+Mientras hay algo en la cola corre `DownloadService`, un servicio en primer plano
+(`dataSync`) con el avance en una notificación. Al terminar, si la app no está a la vista,
+deja un aviso con cuántas se bajaron. Rust maneja la cola y llama a Kotlin por JNI
+(`DownloadBridge`), no por el plugin, porque los comandos del plugin necesitan la Activity.
+El permiso de notificaciones (Android 13+) se pide con la primera descarga; sin él la
+descarga sigue igual, pero la notificación no se ve.
+
 El ffmpeg de `youtubedl-android` 0.18.1 está alineado a páginas de 4 KB y no carga en
 celulares con páginas de 16 KB (algunos con Android 15 o más nuevo, y el emulador de 16 KB).
 Ahí Haze se da cuenta en la primera descarga y baja el audio tal cual lo da YouTube (m4a),

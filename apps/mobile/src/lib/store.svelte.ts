@@ -99,7 +99,14 @@ class Store {
       this.update = e.payload;
       if (e.payload?.status === "ready" && was !== "ready") this.toast(`Haze ${e.payload.version} está lista: se instala al salir`);
     });
-    listen<DownloadJob[]>("downloads://changed", (e) => (this.downloads = e.payload));
+    listen<DownloadJob[]>("downloads://changed", (e) => {
+      // Una descarga que acaba de fallar: se avisa, no solo en la lista de YouTube.
+      const before = new Map(this.downloads.map((d) => [d.id, d]));
+      for (const d of e.payload) {
+        if (d.error && !before.get(d.id)?.error) this.toast(`No se pudo bajar ${d.title}: ${d.error}`, "error");
+      }
+      this.downloads = e.payload;
+    });
     listen<string>("downloads://done", (e) => this.toast(`Bajada: ${e.payload}`));
     listen<string>("ha://status", (e) => (this.haStatus = e.payload));
     listen<string>("app://error", (e) => this.toast(e.payload, "error"));
@@ -254,8 +261,12 @@ class Store {
   }
 
   async download(url: string, title: string, thumb: string | null, playlist = false) {
-    await api.ytDownload(url, title, thumb, playlist);
-    this.toast("Bajando a Music/Haze");
+    try {
+      await api.ytDownload(url, title, thumb, playlist);
+      this.toast("Bajando a Music/Haze");
+    } catch (e) {
+      this.toast(`No se pudo empezar a bajar ${title}: ${e}`, "error");
+    }
   }
 
   /**

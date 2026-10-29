@@ -32,6 +32,36 @@ pub enum PlayerEvent {
     UpdateProgress(f64),
 }
 
+/// Como va la cola de descargas, para el servicio en primer plano de Android y su
+/// notificacion.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DownloadsStatus {
+    /// Entro algo a la cola: arranca el servicio (la app tiene que estar a la vista).
+    Start,
+    /// Lo que se esta bajando. `detail` va abajo: "3 de 12 · +2 en cola".
+    Progress { title: String, progress: f32, converting: bool, detail: String },
+    /// Se vacio la cola: cuantas se bajaron, cuantas fallaron y el titulo de la ultima.
+    Idle { done: usize, failed: usize, last: String },
+}
+
+impl DownloadsStatus {
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    fn to_json(&self) -> serde_json::Value {
+        use serde_json::json;
+        match self {
+            Self::Start => json!({ "active": true, "start": true }),
+            Self::Progress { title, progress, converting, detail } => json!({
+                "active": true,
+                "title": title,
+                "progress": progress,
+                "converting": converting,
+                "detail": detail,
+            }),
+            Self::Idle { done, failed, last } => json!({ "active": false, "done": done, "failed": failed, "last": last }),
+        }
+    }
+}
+
 /// Una version publicada en GitHub (`latest-android.json`).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Release {
@@ -184,6 +214,8 @@ mod tests {
             duration_ms: 1000,
             mtime: 0,
             folder: "Music".into(),
+            name: String::new(),
+            size: 0,
         };
         let s = t.into_song();
         assert_eq!(s.id, id_for(uri));
@@ -200,6 +232,8 @@ mod tests {
             duration_ms: 0,
             mtime: 0,
             folder: String::new(),
+            name: String::new(),
+            size: 0,
         };
         let s = track("jawed - Me at the zoo", "").into_song();
         assert_eq!((s.title.as_str(), s.artist.as_str()), ("Me at the zoo", "jawed"));
