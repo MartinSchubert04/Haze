@@ -67,9 +67,15 @@
     </div>
 
     {#if store.isOpen("nowPlaying") && store.player.song}<NowPlaying />{/if}
-    {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />{/if}
-    {#if sheet?.kind === "folderOptions"}<FolderSheet path={sheet.path} />{/if}
-    {#if sheet?.kind === "link"}<LinkSheet url={sheet.url} preview={sheet.preview} />{/if}
+    <!-- Cada capa arma su hoja de cero: si la hoja se actualizara con la capa nueva, la
+         vieja leeria lo que ya no existe (sheet.song de un link) y la excepcion cortaba
+         el cambio: "Bajar como MP3" cerraba las opciones y no abria nada. -->
+    {#key sheet}
+      {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />
+      {:else if sheet?.kind === "folderOptions"}<FolderSheet path={sheet.path} />
+      {:else if sheet?.kind === "link"}<LinkSheet url={sheet.url} preview={sheet.preview} />
+      {/if}
+    {/key}
   </div>
 {/if}
 

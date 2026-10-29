@@ -148,6 +148,11 @@ class Store {
     this.layers = [...this.layers, layer];
   }
 
+  /** Cambia la capa de arriba por otra, de una vez (sin quedar un momento sin ninguna). */
+  replace(layer: Layer) {
+    this.layers = [...this.layers.slice(0, -1), layer];
+  }
+
   /** Cierra la capa de arriba. */
   close() {
     if (this.layers.length) this.layers = this.layers.slice(0, -1);

@@ -15,8 +15,7 @@
 
   // Como en escritorio: primero se lee el link y recien ahi se baja.
   function download() {
-    store.close();
-    store.open({ kind: "link", url: song.path, preview: song });
+    store.replace({ kind: "link", url: song.path, preview: song });
   }
 
   function remove() {
