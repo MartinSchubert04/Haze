@@ -261,8 +261,12 @@ class Store {
   }
 
   async download(url: string, title: string, thumb: string | null, playlist = false) {
+    // Encolar contesta enseguida: si no, algo quedo trabado y se avisa igual.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject("la app no respondió"), 15000),
+    );
     try {
-      await api.ytDownload(url, title, thumb, playlist);
+      await Promise.race([api.ytDownload(url, title, thumb, playlist), timeout]);
       this.toast("Bajando a Music/Haze");
     } catch (e) {
       this.toast(`No se pudo empezar a bajar ${title}: ${e}`, "error");

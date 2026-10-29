@@ -126,8 +126,11 @@ pub fn on_line(app: &AppHandle, id: u64, line: &str) {
     }
 }
 
+/// Async, como el resto de los comandos del telefono: uno sincronico corre en el hilo
+/// que atiende el pedido del WebView, y en Android ahi quedaba sin contestar (no
+/// aparecia ni la descarga ni el error).
 #[tauri::command]
-pub fn yt_download(app: AppHandle, url: String, title: String, thumb: Option<String>, playlist: bool) -> u64 {
+pub async fn yt_download(app: AppHandle, url: String, title: String, thumb: Option<String>, playlist: bool) -> u64 {
     let state = app.state::<AppState>();
     let (id, start) = {
         let mut d = state.downloads.lock().unwrap();
@@ -180,7 +183,7 @@ fn ask_notifications(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn downloads_clear(app: AppHandle) {
+pub async fn downloads_clear(app: AppHandle) {
     app.state::<AppState>()
         .downloads
         .lock()
