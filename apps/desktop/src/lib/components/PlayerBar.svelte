@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tip } from "../shortcuts";
-  import { Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Maximize2 } from "@lucide/svelte";
+  import { Shuffle, MoveRight, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Maximize2 } from "@lucide/svelte";
   import { api } from "../api";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
@@ -31,8 +31,8 @@
 
   <div class="center">
     <div class="controls">
-      <button class="icon-btn" class:on={p.shuffle} title="Aleatorio" onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
-        <Shuffle size={17} />
+      <button class="icon-btn" class:on={p.shuffle} title={p.shuffle ? "Aleatorio" : "Orden normal"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
+        {#if p.shuffle}<Shuffle size={17} />{:else}<MoveRight size={17} />{/if}
       </button>
       <button class="icon-btn" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}>
         <SkipBack size={19} fill="currentColor" />

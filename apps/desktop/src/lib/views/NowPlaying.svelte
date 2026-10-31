@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tip } from "../shortcuts";
-  import { ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Download } from "@lucide/svelte";
+  import { ChevronDown, Shuffle, MoveRight, SkipBack, SkipForward, Repeat, Repeat1, ListMusic, PictureInPicture2, Download } from "@lucide/svelte";
   import { api, coverUrl, type QueueView } from "../api";
   import { store } from "../store.svelte";
   import { dominantColor } from "@haze/ui/color";
@@ -48,8 +48,8 @@
       <div class="seek"><Seek /></div>
 
       <div class="controls">
-        <button class="icon-btn big" class:on={p.shuffle} title="Aleatorio" onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
-          <Shuffle size={20} />
+        <button class="icon-btn big" class:on={p.shuffle} title={p.shuffle ? "Aleatorio" : "Orden normal"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
+          {#if p.shuffle}<Shuffle size={20} />{:else}<MoveRight size={20} />{/if}
         </button>
         <button class="icon-btn big" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}><SkipBack size={26} fill="currentColor" /></button>
         <PlayButton size={76} solid />

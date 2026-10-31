@@ -4,7 +4,7 @@
   // Reemplaza a la ventana grande: al abrirse la cierra, y al expandirla se cierra ella.
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { SkipBack, SkipForward, X, Maximize2, Shuffle, Repeat, Repeat1 } from "@lucide/svelte";
+  import { SkipBack, SkipForward, X, Maximize2, Shuffle, MoveRight, Repeat, Repeat1 } from "@lucide/svelte";
   import { api } from "./lib/api";
   import { store } from "./lib/store.svelte";
   import Background from "./lib/components/Background.svelte";
@@ -55,7 +55,7 @@
 
     <div class="controls">
       <button class="icon-btn sm" class:on={p.shuffle} title={p.shuffle ? "Aleatorio: sí" : "Aleatorio: no (orden normal)"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
-        <Shuffle size={14} />
+        {#if p.shuffle}<Shuffle size={14} />{:else}<MoveRight size={14} />{/if}
       </button>
       <button class="icon-btn" title={tip("Anterior", "previous")} onclick={() => api.control({ type: "previous" })}><SkipBack size={16} fill="currentColor" /></button>
       <PlayButton size={36} ring={false} solid />

@@ -1,7 +1,7 @@
 <script lang="ts">
   // "Reproduciendo" a pantalla completa. Se cierra con "atras", la flecha o deslizando
   // hacia abajo.
-  import { ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1, ListMusic } from "@lucide/svelte";
+  import { ChevronDown, Shuffle, MoveRight, SkipBack, SkipForward, Repeat, Repeat1, ListMusic } from "@lucide/svelte";
   import { dominantColor } from "@haze/ui/color";
   import { api, coverUrl } from "../api";
   import { store } from "../store.svelte";
@@ -69,8 +69,8 @@
   <div class="seek"><Seek /></div>
 
   <div class="controls">
-    <button class="icon-btn" class:on={p.shuffle} aria-label="Aleatorio" onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
-      <Shuffle size={22} />
+    <button class="icon-btn" class:on={p.shuffle} aria-label={p.shuffle ? "Aleatorio" : "Orden normal"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
+      {#if p.shuffle}<Shuffle size={22} />{:else}<MoveRight size={22} />{/if}
     </button>
     <button class="icon-btn big" aria-label="Anterior" onclick={() => api.control({ type: "previous" })}><SkipBack size={30} fill="currentColor" /></button>
     <PlayButton size={76} solid />
