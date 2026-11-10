@@ -11,7 +11,11 @@ serde_json = "1"
 tokio = { version = "1", features = ["sync"] }
 # Sin TLS: la conexion es TCP plana y rustls con aws-lc no compila facil para Android.
 rumqttc = { version = "0.25", default-features = false, optional = true }
+lofty = { version = "0.25", optional = true }
+walkdir = { version = "2", optional = true }
 
 [features]
 # Home Assistant por MQTT.
 mqtt = ["dep:rumqttc", "tokio/rt", "tokio/time", "tokio/macros"]
+# Recorrer carpetas y leer tags y tapas (escritorio y el server de la tele).
+library = ["dep:lofty", "dep:walkdir"]

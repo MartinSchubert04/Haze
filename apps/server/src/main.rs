@@ -4,6 +4,11 @@
 //!
 //! La cola es la de `haze-core`: todo lo que se pide con `/play` entra como encolado a
 //! mano, asi que lo que ya sono se consume solo y la cola es "la actual + lo que viene".
+//!
+//! Tambien sirve la biblioteca de la tele (`web.rs`, apps/tizen). El bot es opcional: sin
+//! `DISCORD_TOKEN` queda solo la biblioteca.
+
+mod web;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -511,14 +516,35 @@ async fn alone(ctx: &Context, bot: &Bot, guild: GuildId) -> bool {
     })
 }
 
+/// `docker stop` manda SIGTERM; en la PC (para probar), Ctrl+C.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn,haze_bot=info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn,lofty=error,haze_bot=info".into()),
         )
         .init();
-    let token = std::env::var("DISCORD_TOKEN").expect("Falta DISCORD_TOKEN (ver .env.example)");
+    tokio::spawn(keep_ytdlp_updated());
+    tokio::spawn(web::start());
+
+    let Some(token) = std::env::var("DISCORD_TOKEN").ok().filter(|t| !t.trim().is_empty()) else {
+        info!("sin DISCORD_TOKEN: solo la biblioteca de la tele");
+        shutdown_signal().await;
+        return;
+    };
 
     let http = Arc::new(Http::new(&token));
     let voice = Songbird::serenity();
@@ -528,7 +554,6 @@ async fn main() {
         web: reqwest::Client::new(),
         players: Mutex::new(HashMap::new()),
     });
-    tokio::spawn(keep_ytdlp_updated());
 
     let intents = GatewayIntents::GUILDS | GatewayIntents::GUILD_VOICE_STATES;
     let mut client = ClientBuilder::new(&token, intents)
@@ -537,14 +562,10 @@ async fn main() {
         .await
         .expect("no pude armar el cliente de Discord");
 
-    // `docker stop` manda SIGTERM: se desconecta prolijo.
+    // Se desconecta prolijo al apagar.
     let shards = client.shard_manager.clone();
     tokio::spawn(async move {
-        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        tokio::select! {
-            _ = term.recv() => {}
-            _ = tokio::signal::ctrl_c() => {}
-        }
+        shutdown_signal().await;
         info!("apagando");
         shards.shutdown_all().await;
     });

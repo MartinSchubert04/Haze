@@ -1,0 +1,3 @@
+# Lo arma build.ps1 (copia firmada y el .wgt).
+build/
+*.wgt

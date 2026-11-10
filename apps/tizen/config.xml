@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Haze para Samsung (Tizen): la app entera es local (index.html, app.js, app.css); la musica la
+     sirve el server de Haze (apps/server) en la red de casa. Ver docs/tizen.md. El id del paquete
+     tiene que tener 10 caracteres. -->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://github.com/MartinSchubert04/Haze" version="0.1.0" viewmodes="maximized">
+    <tizen:application id="HazeMusic1.Haze" package="HazeMusic1" required_version="2.3"/>
+    <content src="index.html"/>
+    <name>Haze</name>
+    <description>Haze for Samsung TVs</description>
+    <icon src="icon.png"/>
+    <!-- La direccion del server la elige el usuario: cualquier origen. -->
+    <access origin="*" subdomains="true"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                   encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

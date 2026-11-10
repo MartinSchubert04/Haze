@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Haze para Samsung (docs/tizen.md). Todo es local: la musica la sirve el server de Haze. -->
+    <meta name="viewport" content="width=1920" />
+    <title>Haze</title>
+    <link rel="stylesheet" href="app.css" />
+    <!-- Solo existe en la tele (apagar el protector de pantalla mientras suena). -->
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+  </head>
+  <body>
+    <div id="bg" aria-hidden="true">
+      <div class="bg-art"><img alt="" /></div>
+      <div class="bg-art"><img alt="" /></div>
+      <div class="bg-shade"></div>
+    </div>
+
+    <!-- Elegir el server -->
+    <section id="connect" class="connect" hidden>
+      <div class="connect-box">
+        <img class="connect-logo" src="icon.png" alt="" />
+        <h1>Haze</h1>
+        <p class="lead" id="connect-lead">Escribí la dirección del server de Haze en la red de tu casa.</p>
+        <label class="field">
+          <span>Dirección del server</span>
+          <input id="addr" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+                 placeholder="192.168.x.x" data-f />
+        </label>
+        <p class="hint">Sin <b>http://</b> ni puerto, usa <b>http://</b> y <b>:7790</b>.</p>
+        <p class="error" id="connect-error" role="alert"></p>
+        <div class="connect-row">
+          <button class="btn primary" id="connect-go" data-f>Conectar</button>
+          <button class="btn" id="connect-find" data-f>Buscar en esta red</button>
+        </div>
+        <div class="found" id="found"></div>
+      </div>
+    </section>
+
+    <!-- La app -->
+    <div id="app" hidden>
+      <nav id="rail">
+        <div class="rail-logo"><img src="icon.png" alt="" /><span>Haze</span></div>
+        <button class="rail-item" data-f data-view="home"><i data-icon="home"></i><span>Inicio</span></button>
+        <button class="rail-item" data-f data-view="songs"><i data-icon="songs"></i><span>Canciones</span></button>
+        <button class="rail-item" data-f data-view="search"><i data-icon="search"></i><span>Buscar</span></button>
+        <button class="rail-item" data-f data-view="youtube"><i data-icon="youtube"></i><span>YouTube</span></button>
+        <div class="rail-spacer"></div>
+        <button class="rail-item rail-now" id="rail-now" data-f hidden><i data-icon="disc"></i><span>Sonando</span></button>
+      </nav>
+
+      <main id="main">
+        <section class="view" id="v-home"></section>
+        <section class="view" id="v-list" hidden>
+          <header class="list-head">
+            <div class="list-art" id="list-art"></div>
+            <div class="list-meta">
+              <p class="eyebrow" id="list-kind">Carpeta</p>
+              <h1 id="list-title"></h1>
+              <p class="list-sub" id="list-sub"></p>
+              <div class="list-actions">
+                <button class="btn primary" id="list-play" data-f><i data-icon="play"></i>Reproducir</button>
+                <button class="btn" id="list-shuffle" data-f><i data-icon="shuffle"></i>Aleatorio</button>
+              </div>
+            </div>
+          </header>
+          <div class="vlist" id="list-rows" data-f tabindex="-1"></div>
+        </section>
+        <section class="view" id="v-search" hidden>
+          <header class="search-head">
+            <h1>Buscar</h1>
+            <div class="search-bar">
+              <i data-icon="search"></i>
+              <input id="search-input" type="text" autocomplete="off" spellcheck="false"
+                     placeholder="Tema, artista o álbum" data-f />
+            </div>
+            <button class="btn" id="search-yt" data-f hidden><i data-icon="youtube"></i><span>Buscar en YouTube</span></button>
+          </header>
+          <p class="empty" id="search-empty"></p>
+          <div class="vlist" id="search-rows" data-f tabindex="-1"></div>
+        </section>
+        <section class="view" id="v-youtube" hidden>
+          <header class="search-head">
+            <h1>YouTube</h1>
+            <div class="search-bar">
+              <i data-icon="youtube"></i>
+              <input id="yt-input" type="text" autocomplete="off" spellcheck="false"
+                     placeholder="Buscar en YouTube" data-f />
+            </div>
+          </header>
+          <p class="empty" id="yt-empty">Escuchá cualquier tema sin bajarlo. Con <b>Guardar</b> queda en el server, en la carpeta YouTube.</p>
+          <div class="vlist" id="yt-rows" data-f tabindex="-1"></div>
+        </section>
+      </main>
+
+      <button id="mini" data-f hidden>
+        <div class="mini-disc"><div class="mini-label"><img alt="" /></div></div>
+        <div class="mini-text">
+          <span class="mini-title"></span>
+          <span class="mini-artist"></span>
+        </div>
+        <div class="mini-state"><i data-icon="play"></i></div>
+        <div class="mini-progress"><div></div></div>
+      </button>
+    </div>
+
+    <!-- Sonando: el tocadiscos -->
+    <section id="np" hidden>
+      <div class="np-glow" aria-hidden="true"></div>
+      <div class="tt" id="tt" aria-hidden="true">
+        <div class="tt-slide">
+          <div class="disc" id="disc">
+            <div class="disc-label"><img alt="" /></div>
+          </div>
+          <div class="disc-sheen"></div>
+          <div class="disc-hole"></div>
+        </div>
+        <div class="sleeve"><img alt="" /><div class="sleeve-fallback"></div></div>
+        <div class="arm" id="arm">
+          <svg viewBox="0 0 140 560" width="140" height="560">
+            <defs>
+              <linearGradient id="metal" x1="0" x2="1">
+                <stop offset="0" stop-color="#6b7177" />
+                <stop offset=".45" stop-color="#e9edf0" />
+                <stop offset="1" stop-color="#7c8288" />
+              </linearGradient>
+              <radialGradient id="base" cx=".4" cy=".35" r=".7">
+                <stop offset="0" stop-color="#4a4f55" />
+                <stop offset="1" stop-color="#16181b" />
+              </radialGradient>
+            </defs>
+            <rect x="52" y="0" width="36" height="46" rx="8" fill="url(#metal)" />
+            <circle cx="70" cy="70" r="40" fill="url(#base)" stroke="rgba(255,255,255,.15)" stroke-width="2" />
+            <circle cx="70" cy="70" r="14" fill="url(#metal)" />
+            <path d="M70 70 L70 430 Q70 456 52 478" stroke="url(#metal)" stroke-width="9" fill="none" stroke-linecap="round" />
+            <g transform="rotate(28 50 490)">
+              <rect x="34" y="470" width="34" height="64" rx="5" fill="#1d2024" stroke="url(#metal)" stroke-width="2" />
+              <rect x="44" y="530" width="14" height="14" rx="2" fill="#c9ced2" />
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="np-side">
+        <p class="np-eyebrow"><span class="eq"><i></i><i></i><i></i></span><span id="np-context">Sonando</span></p>
+        <h1 class="np-title" id="np-title"></h1>
+        <p class="np-artist" id="np-artist"></p>
+        <p class="np-album" id="np-album"></p>
+
+        <div class="np-middle">
+          <div class="lyrics" id="lyrics" hidden><div class="lyrics-inner" id="lyrics-inner"></div></div>
+          <div class="upnext" id="upnext"></div>
+        </div>
+
+        <div class="np-bottom">
+          <div class="seek" id="seek" data-f tabindex="-1">
+            <div class="seek-bar"><div class="seek-fill" id="seek-fill"></div><div class="seek-knob" id="seek-knob"></div></div>
+            <div class="seek-times"><span id="t-pos">0:00</span><span id="t-dur">0:00</span></div>
+          </div>
+          <div class="controls">
+            <button class="ctl small" id="c-shuffle" data-f><i data-icon="shuffle"></i></button>
+            <button class="ctl" id="c-prev" data-f><i data-icon="prev"></i></button>
+            <button class="ctl big" id="c-play" data-f><i data-icon="play"></i><span class="ring"></span></button>
+            <button class="ctl" id="c-next" data-f><i data-icon="next"></i></button>
+            <button class="ctl small" id="c-repeat" data-f><i data-icon="repeat"></i></button>
+            <span class="controls-gap"></span>
+            <button class="pill" id="c-lyrics" data-f><i data-icon="lyrics"></i><span>Letra</span></button>
+            <button class="pill" id="c-save" data-f hidden><i data-icon="save"></i><span>Guardar</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast" role="status"></div>
+    <audio id="audio" preload="auto"></audio>
+    <script src="app.js"></script>
+  </body>
+</html>

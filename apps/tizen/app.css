@@ -1,0 +1,1383 @@
+/* Haze para la tele. Pantalla de 1920x1080 a distancia de sillon: todo grande y con mucho
+   aire. Colores del tema Haze (packages/ui/src/themes.css) y, encima, el color de la tapa
+   que suena (--tint, lo calcula app.js).
+
+   La tele rasteriza por CPU (docs/tizen.md, "Rendimiento"): nada de backdrop-filter, el
+   desenfoque del fondo se dibuja una vez por tema, lo que se mueve todo el tiempo (el disco,
+   el brillo) es transform/opacity sobre su propia capa, y el foco no se anima. */
+
+@font-face {
+  font-family: "Inter";
+  font-weight: 100 900;
+  src: url("fonts/inter-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 100 900;
+  src: url("fonts/inter-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #12171b;
+  --panel: rgba(22, 27, 31, 0.72);
+  --panel-2: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #f4f2ee;
+  --text-2: rgba(255, 255, 255, 0.66);
+  --text-3: rgba(255, 255, 255, 0.42);
+  --accent: #f9e2af;
+  --accent-ink: #1a1a1a;
+  --danger: #f38ba8;
+  /* El color de la tapa que suena (claro, para texto y acentos) y su version de fondo. */
+  --tint: #f9e2af;
+  --tint-rgb: 249 226 175;
+  --radius: 18px;
+  --rail: 280px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 500 26px/1.35 "Inter", "Samsung One", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  align-items: normal;
+}
+
+:focus {
+  outline: none;
+}
+
+svg.i {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  fill: currentColor;
+}
+
+i[data-icon] {
+  display: inline-flex;
+  font-style: normal;
+}
+
+/* ------------------------------------------------------------------ fondo */
+
+#bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 45% 55% at 30% 48%, rgba(122, 108, 88, 0.42), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 80% 16%, rgba(72, 92, 112, 0.38), transparent 70%),
+    radial-gradient(ellipse 60% 45% at 65% 92%, rgba(38, 58, 64, 0.5), transparent 70%),
+    linear-gradient(160deg, #1b2126 0%, #12171b 55%, #0d1114 100%);
+}
+
+/* La tapa que suena, enorme y desenfocada. Dos capas que se cruzan al cambiar de tema. */
+.bg-art {
+  position: absolute;
+  inset: -12%;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  will-change: opacity;
+}
+.bg-art.on {
+  opacity: 0.55;
+}
+.bg-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(70px) saturate(1.4);
+}
+.bg-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 70% at 30% 50%, transparent 0%, rgba(8, 10, 12, 0.35) 70%),
+    linear-gradient(90deg, rgba(10, 12, 14, 0.35), rgba(10, 12, 14, 0.7));
+}
+
+/* ------------------------------------------------------------------ botones comunes */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  height: 72px;
+  padding: 0 34px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+  font-weight: 600;
+  font-size: 26px;
+  white-space: nowrap;
+}
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+.btn i {
+  font-size: 30px;
+}
+.btn:focus {
+  background: var(--text);
+  color: #111;
+  box-shadow: 0 0 0 5px rgba(var(--tint-rgb) / 0.55);
+  transform: scale(1.05);
+}
+.btn:disabled {
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------------ elegir server */
+
+.connect {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.connect-box {
+  width: 900px;
+  text-align: center;
+}
+.connect-logo {
+  width: 140px;
+  height: 140px;
+}
+.connect h1 {
+  margin: 12px 0 18px;
+  font-size: 72px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.lead {
+  margin: 0 0 40px;
+  color: var(--text-2);
+  font-size: 30px;
+}
+.field {
+  display: block;
+  text-align: left;
+}
+.field span {
+  display: block;
+  margin: 0 0 10px 6px;
+  color: var(--text-2);
+  font-size: 24px;
+}
+.field input,
+.search-bar input {
+  width: 100%;
+  height: 84px;
+  padding: 0 30px;
+  border: 0;
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 32px;
+}
+.field input:focus,
+.search-bar input:focus {
+  box-shadow: inset 0 0 0 3px var(--accent), 0 0 0 6px rgba(var(--tint-rgb) / 0.25);
+}
+.hint {
+  margin: 12px 6px 0;
+  color: var(--text-3);
+  font-size: 22px;
+  text-align: left;
+}
+.error {
+  min-height: 34px;
+  margin: 18px 6px;
+  color: var(--danger);
+  font-size: 24px;
+  text-align: left;
+}
+.connect-row {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+.found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+/* ------------------------------------------------------------------ armado */
+
+#app {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+#app.under {
+  display: none;
+}
+
+#rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--rail);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 56px 24px 40px;
+  background: linear-gradient(90deg, rgba(8, 10, 12, 0.55), rgba(8, 10, 12, 0));
+}
+.rail-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 40px 14px;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.rail-logo img {
+  width: 56px;
+  height: 56px;
+}
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 76px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 28px;
+  font-weight: 600;
+}
+.rail-item i {
+  font-size: 34px;
+}
+.rail-item.active {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.rail-item.active i {
+  color: var(--accent);
+}
+.rail-item:focus {
+  background: var(--text);
+  color: #111;
+}
+.rail-item:focus i {
+  color: #111;
+}
+.rail-spacer {
+  flex: 1;
+}
+.rail-now i {
+  color: var(--tint);
+}
+
+#main {
+  position: absolute;
+  left: var(--rail);
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 64px 80px 0 40px;
+}
+.playing-bar .view {
+  bottom: 140px;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.empty {
+  margin: 30px 0 0;
+  color: var(--text-3);
+  font-size: 28px;
+  max-width: 1200px;
+}
+.empty b {
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------------ inicio */
+
+.home {
+  will-change: transform;
+}
+.hello h1 {
+  font-size: 72px;
+  font-weight: 700;
+}
+.hello p {
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 28px;
+}
+.quick {
+  display: flex;
+  gap: 24px;
+  margin: 44px 0 0;
+}
+.quick-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  width: 520px;
+  height: 150px;
+  padding: 0 34px;
+  border-radius: 26px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 2px var(--line);
+  overflow: hidden;
+}
+.quick-card .qi {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 86px;
+  height: 86px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 42px;
+}
+.quick-card .qi img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.quick-card b {
+  display: block;
+  font-size: 32px;
+}
+.quick-card small {
+  display: block;
+  max-width: 330px;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 23px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.quick-card:focus {
+  background: var(--text);
+  color: #111;
+  box-shadow: 0 0 0 5px rgba(var(--tint-rgb) / 0.5);
+  transform: scale(1.04);
+}
+.quick-card:focus small {
+  color: rgba(0, 0, 0, 0.6);
+}
+.quick-card:focus .qi {
+  background: #111;
+  color: var(--accent);
+}
+
+.section-title {
+  margin: 56px 0 22px;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.row {
+  display: flex;
+  gap: 30px;
+  padding: 10px 10px 16px;
+  margin: 0 -10px;
+  overflow: hidden;
+}
+.row-track {
+  display: flex;
+  gap: 30px;
+  will-change: transform;
+}
+.card {
+  width: 240px;
+  flex: none;
+}
+.card .art {
+  width: 240px;
+  height: 240px;
+  border-radius: 16px;
+}
+.card b,
+.card small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card b {
+  margin-top: 16px;
+  font-size: 25px;
+}
+.card small {
+  color: var(--text-2);
+  font-size: 22px;
+}
+.card:focus .art,
+.tile:focus .tile-art {
+  box-shadow: 0 0 0 6px var(--text), 0 24px 50px rgba(0, 0, 0, 0.5);
+  transform: scale(1.06);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 40px 34px;
+  padding-bottom: 80px;
+}
+.tile-art {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.tile-art.one {
+  grid-template-columns: 1fr;
+}
+.tile-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tile b {
+  display: block;
+  margin-top: 16px;
+  font-size: 28px;
+}
+.tile small {
+  color: var(--text-2);
+  font-size: 22px;
+}
+
+/* Tapa (o su reemplazo con un color sacado del titulo). */
+.art {
+  position: relative;
+  overflow: hidden;
+  background: var(--ph, #2a3036);
+  flex: none;
+}
+.art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.art .ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 40%;
+}
+
+/* ------------------------------------------------------------------ listas */
+
+.list-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 44px;
+  margin-bottom: 34px;
+}
+.list-art {
+  width: 230px;
+  height: 230px;
+  border-radius: 22px;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+}
+.list-meta h1 {
+  font-size: 66px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.list-sub {
+  margin: 10px 0 24px;
+  color: var(--text-2);
+  font-size: 26px;
+}
+.list-actions {
+  display: flex;
+  gap: 18px;
+}
+
+#v-list {
+  display: flex;
+  flex-direction: column;
+}
+#v-search,
+#v-youtube {
+  display: flex;
+  flex-direction: column;
+}
+.vlist {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 -18px;
+  overflow: hidden;
+}
+.vlist-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+}
+.vrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 0 24px 0 18px;
+  border-radius: 18px;
+}
+.vrow .art {
+  width: 68px;
+  height: 68px;
+  border-radius: 10px;
+}
+.vrow .num {
+  width: 46px;
+  flex: none;
+  color: var(--text-3);
+  font-size: 22px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.vrow .txt {
+  flex: 1;
+  min-width: 0;
+}
+.vrow .txt b,
+.vrow .txt small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vrow .txt b {
+  font-size: 28px;
+  font-weight: 600;
+}
+.vrow .txt small {
+  color: var(--text-2);
+  font-size: 22px;
+}
+.vrow .album {
+  width: 420px;
+  flex: none;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 22px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.vrow .badge {
+  flex: none;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.vrow .dur {
+  width: 90px;
+  flex: none;
+  color: var(--text-2);
+  font-size: 22px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.vrow .act {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 22px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--text-3);
+  font-size: 22px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vrow .act i {
+  font-size: 26px;
+}
+.vrow.now .txt b {
+  color: var(--tint);
+}
+
+/* La fila elegida: se ve siempre (tenue) y fuerte con la lista enfocada. */
+.vrow.sel {
+  background: var(--panel-2);
+}
+.vlist:focus .vrow.sel {
+  background: var(--text);
+  color: #111;
+}
+.vlist:focus .vrow.sel small,
+.vlist:focus .vrow.sel .album,
+.vlist:focus .vrow.sel .dur,
+.vlist:focus .vrow.sel .num {
+  color: rgba(0, 0, 0, 0.6);
+}
+.vlist:focus .vrow.sel .act {
+  color: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+}
+.vlist:focus .vrow.sel.sub .act {
+  background: #111;
+  color: var(--accent);
+  box-shadow: none;
+}
+.vlist:focus .vrow.sel.sub {
+  background: rgba(255, 255, 255, 0.82);
+}
+.vlist:focus .vrow.sel.now .txt b {
+  color: #111;
+}
+
+/* El ecualizador que marca lo que suena. */
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 26px;
+  height: 24px;
+}
+.eq i {
+  flex: 1;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--tint);
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.eq i:nth-child(2) {
+  animation-delay: -0.45s;
+  animation-duration: 0.7s;
+}
+.eq i:nth-child(3) {
+  animation-delay: -0.2s;
+  animation-duration: 1.1s;
+}
+.paused .eq i {
+  animation-play-state: paused;
+}
+@keyframes eq {
+  from {
+    transform: scaleY(0.25);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.vlist:focus .vrow.sel .eq i {
+  background: #111;
+}
+
+/* ------------------------------------------------------------------ buscar */
+
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  margin-bottom: 30px;
+}
+.search-head h1 {
+  font-size: 56px;
+  font-weight: 700;
+  min-width: 300px;
+}
+.search-bar {
+  position: relative;
+  flex: 1;
+  max-width: 900px;
+}
+.search-bar > i {
+  position: absolute;
+  left: 28px;
+  top: 25px;
+  color: var(--text-3);
+  font-size: 34px;
+}
+.search-bar input {
+  padding-left: 84px;
+}
+.spinner {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border: 4px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ------------------------------------------------------------------ mini reproductor */
+
+#mini {
+  position: absolute;
+  left: calc(var(--rail) + 16px);
+  right: 56px;
+  bottom: 22px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 0 34px 0 18px;
+  border-radius: 999px;
+  background: rgba(16, 19, 22, 0.88);
+  box-shadow: inset 0 0 0 2px var(--line), 0 20px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+#mini:focus {
+  box-shadow: inset 0 0 0 3px var(--text), 0 0 0 6px rgba(var(--tint-rgb) / 0.35);
+}
+.mini-disc {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex: none;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, #151515 0 2px, #1f1f1f 2px 3px);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+  will-change: transform;
+  animation: spin 1.8s linear infinite;
+  animation-play-state: paused;
+}
+.mini-on .mini-disc {
+  animation-play-state: running;
+}
+.mini-label {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--tint);
+}
+.mini-label img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mini-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  border-radius: 50%;
+  background: #0c0c0c;
+}
+.mini-text {
+  flex: 1;
+  min-width: 0;
+}
+.mini-text span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mini-title {
+  font-size: 28px;
+  font-weight: 600;
+}
+.mini-artist {
+  color: var(--text-2);
+  font-size: 22px;
+}
+.mini-state {
+  font-size: 38px;
+  color: var(--tint);
+}
+.mini-progress {
+  position: absolute;
+  left: 130px;
+  right: 50px;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.mini-progress div {
+  height: 100%;
+  background: var(--tint);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+/* ------------------------------------------------------------------ sonando */
+
+#np {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  background: linear-gradient(90deg, rgba(10, 12, 14, 0.3), rgba(10, 12, 14, 0.62));
+  animation: np-in 0.55s var(--ease);
+}
+@keyframes np-in {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+#np.closing {
+  animation: np-out 0.3s ease forwards;
+}
+@keyframes np-out {
+  to {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+/* El resplandor del color de la tapa, que respira despacio. */
+.np-glow {
+  position: absolute;
+  left: 220px;
+  top: 90px;
+  width: 980px;
+  height: 900px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--tint-rgb) / 0.32), rgba(var(--tint-rgb) / 0.08) 55%, transparent 75%);
+  will-change: transform, opacity;
+  animation: breathe 7s ease-in-out infinite alternate;
+}
+.paused .np-glow {
+  animation-play-state: paused;
+  opacity: 0.45;
+}
+@keyframes breathe {
+  from {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+/* Tocadiscos: el sobre con la tapa y el disco asomando a la derecha.
+   Medidas: disco de 560 px; afuera su centro queda en (600, 340) dentro de .tt. */
+.tt {
+  position: absolute;
+  left: 110px;
+  top: 200px;
+  width: 960px;
+  height: 680px;
+}
+.sleeve {
+  position: absolute;
+  left: 0;
+  top: 40px;
+  width: 600px;
+  height: 600px;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 2;
+  background: #20252a;
+  box-shadow: 0 50px 90px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  transition: transform 0.5s var(--ease);
+}
+.sleeve img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sleeve::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.14), transparent 35%, transparent 70%, rgba(0, 0, 0, 0.22));
+}
+.sleeve-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tt.swap .sleeve {
+  transform: scale(0.97);
+}
+
+.tt-slide {
+  position: absolute;
+  left: 20px;
+  top: 60px;
+  width: 560px;
+  height: 560px;
+  z-index: 1;
+  transform: translateX(300px);
+  transition: transform 0.75s var(--ease);
+  will-change: transform;
+}
+.tt.swap .tt-slide {
+  transform: translateX(16px);
+  transition: transform 0.45s cubic-bezier(0.6, 0, 0.8, 0.4);
+}
+
+.disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 34%, #0b0b0b 34.4% 36.5%, transparent 37%),
+    radial-gradient(circle, transparent 0 96%, #2a2a2a 96.5% 97.5%, #0b0b0b 98%),
+    repeating-radial-gradient(circle, #121212 0 1.6px, #1a1a1a 1.6px 2.4px, #101010 2.4px 3.6px),
+    #111;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.65);
+  will-change: transform;
+}
+.disc-label {
+  position: absolute;
+  inset: 32.5%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--tint);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.6);
+}
+.disc-label img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Brillo del vinilo: queda quieto mientras el disco gira debajo, como la luz real. */
+.disc-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 20deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.11) 28deg,
+    transparent 62deg,
+    transparent 180deg,
+    rgba(255, 255, 255, 0.08) 212deg,
+    transparent 246deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 0 33%, #000 33.5%);
+  mask: radial-gradient(circle, transparent 0 33%, #000 33.5%);
+  pointer-events: none;
+}
+.disc-hole {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #d9dde0, #6a6f74 60%, #2a2d30);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+/* El brazo: gira sobre su eje (70, 70 del svg). Afuera del disco en reposo (-6°); tocando,
+   va de 8° (borde) a 27° (cerca de la etiqueta) segun avanza el tema (setArm en app.js). */
+.arm {
+  position: absolute;
+  left: 830px;
+  top: -10px;
+  width: 140px;
+  height: 560px;
+  z-index: 3;
+  transform-origin: 70px 70px;
+  transform: rotate(-6deg);
+  transition: transform 0.9s var(--ease);
+  filter: drop-shadow(0 18px 18px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+
+.np-side {
+  position: absolute;
+  left: 1110px;
+  right: 110px;
+  top: 120px;
+  bottom: 90px;
+  display: flex;
+  flex-direction: column;
+}
+.np-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 18px;
+  color: var(--tint);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.np-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 64px;
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+.np-artist {
+  margin: 14px 0 0;
+  color: var(--tint);
+  font-size: 34px;
+  font-weight: 600;
+}
+.np-album {
+  margin: 6px 0 0;
+  color: var(--text-3);
+  font-size: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-title,
+.np-artist,
+.np-album {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.np-side.changing .np-title,
+.np-side.changing .np-artist,
+.np-side.changing .np-album {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.np-middle {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 34px 0 26px;
+  overflow: hidden;
+}
+
+/* Letra: la linea que suena en el medio y grande, las demas tenues. */
+.lyrics {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(transparent, #000 22%, #000 70%, transparent);
+  mask: linear-gradient(transparent, #000 22%, #000 70%, transparent);
+}
+.lyrics-inner {
+  transition: transform 0.6s var(--ease);
+  will-change: transform;
+}
+.lyrics p {
+  margin: 0;
+  padding: 9px 0;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.22;
+  transition: color 0.4s ease;
+}
+.lyrics p.now {
+  color: var(--text);
+}
+.lyrics p.past {
+  color: rgba(255, 255, 255, 0.45);
+}
+.lyrics.plain p {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.upnext h3 {
+  margin: 0 0 16px;
+  color: var(--text-3);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.upnext-item {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 0;
+}
+.upnext-item .art {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+}
+.upnext-item b,
+.upnext-item small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.upnext-item b {
+  font-size: 26px;
+}
+.upnext-item small {
+  color: var(--text-2);
+  font-size: 21px;
+}
+.upnext-item:not(:first-of-type) {
+  opacity: 0.7;
+}
+
+.np-bottom {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.seek {
+  padding: 14px 0;
+  border-radius: 12px;
+}
+.seek-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.seek-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: var(--tint);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.seek-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+}
+.seek:focus .seek-bar {
+  height: 12px;
+}
+.seek:focus .seek-knob {
+  opacity: 1;
+}
+.seek-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  color: var(--text-2);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 22px;
+}
+.controls-gap {
+  flex: 1;
+}
+.ctl {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  font-size: 44px;
+  color: var(--text);
+}
+.ctl.small {
+  width: 76px;
+  height: 76px;
+  font-size: 34px;
+  color: var(--text-3);
+}
+.ctl.small.on {
+  color: var(--tint);
+}
+.ctl.small.on::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--tint);
+}
+.ctl.big {
+  width: 124px;
+  height: 124px;
+  background: var(--text);
+  color: #111;
+  font-size: 56px;
+}
+.ctl:focus {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 4px var(--text);
+}
+.ctl.big:focus {
+  background: var(--tint);
+  box-shadow: 0 0 0 6px rgba(var(--tint-rgb) / 0.35), 0 0 60px rgba(var(--tint-rgb) / 0.45);
+  transform: scale(1.06);
+}
+.ctl .ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--tint);
+  opacity: 0;
+}
+.buffering .ctl .ring {
+  opacity: 1;
+  animation: spin 0.9s linear infinite;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 66px;
+  padding: 0 28px;
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 24px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 2px var(--line-strong);
+}
+.pill i {
+  font-size: 28px;
+}
+.pill.on {
+  color: var(--tint);
+  box-shadow: inset 0 0 0 2px rgba(var(--tint-rgb) / 0.6);
+}
+.pill:focus {
+  background: var(--text);
+  color: #111;
+  box-shadow: none;
+}
+
+/* Sin tocar el control un rato: queda el disco y el titulo, como un cuadro. */
+#np.idle .np-bottom {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* ------------------------------------------------------------------ aviso */
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 160px;
+  z-index: 9;
+  max-width: 1100px;
+  padding: 22px 40px;
+  border-radius: 999px;
+  background: rgba(16, 19, 22, 0.94);
+  box-shadow: inset 0 0 0 2px var(--line-strong), 0 20px 50px rgba(0, 0, 0, 0.5);
+  font-size: 26px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translate(-50%, 20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+#toast.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

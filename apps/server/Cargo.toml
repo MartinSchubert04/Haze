@@ -1,19 +1,28 @@
 [package]
 name = "haze-bot"
 version = "0.1.0"
-description = "Haze como bot de Discord: queda prendido en el server y suena en el canal de voz"
+description = "Haze en el server: la biblioteca de la tele y el bot de Discord"
 edition = "2021"
 
 [dependencies]
-haze-core = { path = "../../crates/haze-core" }
+haze-core = { path = "../../crates/haze-core", features = ["library"] }
 serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "sync", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "sync", "signal", "fs", "io-util", "net"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Tiene que ser la misma version de reqwest que usa songbird para `YoutubeDl`.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"] }
 serenity = { version = "0.12.5", default-features = false, features = ["client", "gateway", "model", "cache", "rustls_backend", "voice"] }
 # 0.6 trae DAVE (el cifrado de punta a punta que Discord exige en voz).
 songbird = "0.6.1"
 # Para decodificar lo que da YouTube (webm/opus y m4a/aac).
 symphonia = { version = "0.5", features = ["aac", "isomp4", "mkv", "mp3"] }
+# La biblioteca de la tele (web.rs).
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+mime = "0.3"
+futures-util = { version = "0.3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+# Achicar las tapas: la tele decodifica por CPU.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

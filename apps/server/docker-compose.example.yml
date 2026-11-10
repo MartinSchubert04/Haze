@@ -1,0 +1,27 @@
+# Ejemplo del compose del server (el de verdad esta en docker-images/haze-bot, con el .env).
+name: haze-bot
+
+services:
+  haze-bot:
+    build:
+      context: ../../Haze
+      dockerfile: apps/server/Dockerfile
+    image: haze-bot
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    environment:
+      # Opcional: sin token queda solo la biblioteca de la tele.
+      - DISCORD_TOKEN=${DISCORD_TOKEN:-}
+      - TZ=${TZ:-America/Argentina/Buenos_Aires}
+    # La tele la pide en la red de casa (docs/tizen.md). No abrir este puerto en el router.
+    ports:
+      - "7790:7790"
+    volumes:
+      # La musica: carpetas como las de la PC (las de generos pueden ser hardlinks de All).
+      - ${HAZE_MUSIC:-/home/tincho/music}:/music
+      # Cache de la biblioteca y de las tapas achicadas.
+      - ./data:/data
+    restart: unless-stopped

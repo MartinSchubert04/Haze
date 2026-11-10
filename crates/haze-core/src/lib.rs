@@ -3,6 +3,8 @@
 //! cada app implementando [`player::Engine`] y [`player::Listener`]. Con la feature
 //! `mqtt`, tambien el puente con Home Assistant.
 
+#[cfg(feature = "library")]
+pub mod library;
 #[cfg(feature = "mqtt")]
 pub mod mqtt;
 pub mod player;

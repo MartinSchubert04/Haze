@@ -31,7 +31,8 @@ Es un monorepo con dos apps y un bot de Discord:
 |---|---|
 | `apps/desktop/` | La app de Windows. |
 | `apps/mobile/` | La app de Android. El plan y lo que falta están en [docs/mobile.md](docs/mobile.md). |
-| `apps/server/` | Bot de Discord: `/play` con búsqueda o link de YouTube en el canal de voz. Corre en Docker (el compose está en `docker-images/haze-bot`). |
+| `apps/server/` | Corre en Docker en el server: la biblioteca para la tele y el bot de Discord (`/play` en el canal de voz). El compose está en `docker-images/haze-bot`. |
+| `apps/tizen/` | La app de las teles Samsung: la música sale del server y suena en la tele. Ver [docs/tizen.md](docs/tizen.md). |
 | `crates/haze-core/` | Cola, ajustes y reproductor, sin Tauri ni mpv. Lo comparten las dos apps. |
 | `plugins/haze-player/` | Plugin de Tauri en Kotlin: Media3/ExoPlayer y MediaStore para Android. |
 | `packages/ui/` | Tipos, formato, temas, paletas y fuentes que usan las dos interfaces. |
