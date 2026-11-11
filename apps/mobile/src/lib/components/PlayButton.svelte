@@ -4,6 +4,10 @@
   import { store } from "../store.svelte";
 
   let { size = 44, solid = false }: { size?: number; solid?: boolean } = $props();
+
+  // En pausa siempre va el play: el motor puede quedar "cargando" con la cancion parada
+  // (por ejemplo al bajar de YouTube) y la ruedita confundia.
+  const loading = $derived(store.player.buffering && store.player.playing);
 </script>
 
 <button
@@ -18,7 +22,7 @@
     api.control({ type: "toggle" });
   }}
 >
-  {#if store.player.buffering}
+  {#if loading}
     <LoaderCircle size={size * 0.42} class="spin" />
   {:else if store.player.playing}
     <Pause size={size * 0.4} fill="currentColor" strokeWidth={0} />

@@ -10,6 +10,8 @@
   const r = $derived(size / 2 - stroke / 2);
   const c = $derived(2 * Math.PI * r);
   const frac = $derived(store.player.duration > 0 ? Math.min(1, store.position / store.player.duration) : 0);
+  // En pausa siempre va el play, aunque el motor siga "cargando".
+  const loading = $derived(store.player.buffering && store.player.playing);
 </script>
 
 <button
@@ -39,7 +41,7 @@
     </svg>
   {/if}
   <span class="glyph">
-    {#if store.player.buffering}
+    {#if loading}
       <LoaderCircle size={size * 0.42} class="spin" />
     {:else if store.player.playing}
       <Pause size={size * 0.4} fill="currentColor" strokeWidth={0} />
