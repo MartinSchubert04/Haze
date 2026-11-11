@@ -171,8 +171,18 @@ mod client {
         ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(connect)))
             .timeout_global(total.map(Duration::from_secs))
+            // Que el server conteste algo; el cuerpo tiene su propio tope (ver `budget`).
+            .timeout_recv_response(Some(Duration::from_secs(30)))
             .build()
             .into()
+    }
+
+    /// Tope para pasar un archivo entero. Sin tope, si se pierde la red a mitad de camino
+    /// (salir de casa con el celu) la vuelta quedaba esperando para siempre y no se
+    /// volvia a sincronizar hasta reiniciar la app. Alcanza de sobra hasta en un wifi
+    /// lento: 30 s mas 64 KB/s (un mp3 de 10 MB, ~3 minutos).
+    fn budget(size: u64) -> Option<Duration> {
+        Some(Duration::from_secs(30 + size / (64 * 1024)))
     }
 
     impl Client {
@@ -185,6 +195,17 @@ mod client {
                 return None;
             }
             Some(Client { quick, files: agent(5, None), base, user: clean_user(user) })
+        }
+
+        /// Si el server sigue contestando (para cortar la vuelta si se fue la red).
+        pub fn alive(&self) -> bool {
+            self.quick
+                .get(format!("{}/api/health", self.base))
+                .config()
+                .timeout_global(Some(Duration::from_secs(5)))
+                .build()
+                .call()
+                .is_ok()
         }
 
         /// Manda las listas y bajas de aca y devuelve lo junto con lo del server.
@@ -218,6 +239,9 @@ mod client {
                 let resp = self
                     .files
                     .get(format!("{}/api/sync/file/{}", self.base, encode(&f.path)))
+                    .config()
+                    .timeout_global(budget(f.size))
+                    .build()
                     .call()
                     .map_err(|e| e.to_string())?;
                 let mut out = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
@@ -237,6 +261,9 @@ mod client {
             self.files
                 .put(format!("{}/api/sync/file/{}?mtime={}", self.base, encode(&f.path), f.mtime))
                 .header("Content-Length", f.size.to_string())
+                .config()
+                .timeout_global(budget(f.size))
+                .build()
                 .send(ureq::SendBody::from_owned_reader(reader))
                 .map_err(|e| e.to_string())?;
             Ok(())
@@ -280,21 +307,19 @@ mod client {
         let total = p.download.len() + p.upload.len();
         let mut done = 0;
         progress(done, total);
-        for f in &p.download {
-            match client.download(f, store) {
-                Ok(()) => report.downloaded += 1,
-                Err(e) => {
-                    report.failed += 1;
-                    report.error = Some(format!("{}: {e}", f.path));
-                }
-            }
-            done += 1;
-            progress(done, total);
-        }
-        for f in &p.upload {
-            match client.upload(f, store) {
+        let mut away = false;
+        for (f, down) in p.download.iter().map(|f| (f, true)).chain(p.upload.iter().map(|f| (f, false))) {
+            let res = if down { client.download(f, store) } else { client.upload(f, store) };
+            match res {
+                Ok(()) if down => report.downloaded += 1,
                 Ok(()) => report.uploaded += 1,
                 Err(e) => {
+                    // Se fue el server (o la red): se corta aca y se sigue la proxima vez,
+                    // en vez de esperar archivo por archivo a que falle cada uno.
+                    if !client.alive() {
+                        away = true;
+                        break;
+                    }
                     report.failed += 1;
                     report.error = Some(format!("{}: {e}", f.path));
                 }
@@ -302,10 +327,13 @@ mod client {
             done += 1;
             progress(done, total);
         }
-        if report.uploaded > 0 {
+        if report.uploaded > 0 && !away {
             client.rescan();
         }
-        if report.failed > 0 {
+        if away {
+            report.status = "away".into();
+            report.error = None;
+        } else if report.failed > 0 {
             report.status = "error".into();
         }
         report.at = crate::userdata::now_ms();

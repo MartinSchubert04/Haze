@@ -164,10 +164,11 @@ fn run(app: &AppHandle) -> Option<Report> {
     if !network(app)? {
         return Some(Report { status: "network".into(), at: now_ms(), ..Default::default() });
     }
-    let _ = app.emit("sync://status", Report { status: "running".into(), ..state.sync.report() });
+    // Fuera de casa no se muestra nada: "sincronizando" recien cuando el server contesta.
     let Some(client) = Client::connect(&cfg.server, &cfg.user) else {
         return Some(Report { status: "away".into(), at: now_ms(), ..Default::default() });
     };
+    let _ = app.emit("sync://status", Report { status: "running".into(), ..state.sync.report() });
     let mut data = state.sync.data();
     // Sin permiso para leer la musica la biblioteca se ve vacia y se bajaria todo de nuevo:
     // ahi van solo las listas.

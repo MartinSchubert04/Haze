@@ -142,10 +142,11 @@ fn run(app: &AppHandle) -> Report {
     if !cfg.enabled {
         return Report { status: "off".into(), at: now_ms(), ..Default::default() };
     }
-    let _ = app.emit("sync://status", Report { status: "running".into(), ..state.sync.report() });
+    // Fuera de casa no se muestra nada: "sincronizando" recien cuando el server contesta.
     let Some(client) = Client::connect(&cfg.server, &cfg.user) else {
         return Report { status: "away".into(), at: now_ms(), ..Default::default() };
     };
+    let _ = app.emit("sync://status", Report { status: "running".into(), ..state.sync.report() });
     let mut data = state.sync.data();
     let report = if cfg.folder.trim().is_empty() {
         // Sin carpeta: solo las listas.
