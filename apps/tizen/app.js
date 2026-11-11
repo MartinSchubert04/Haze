@@ -14,6 +14,7 @@
 
   const PORT = 7790;
   const KEY_SERVER = "haze.tv.server";
+  const KEY_USER = "haze.tv.user";
   const KEY_SESSION = "haze.tv.session";
   const KEY_LYRICS = "haze.tv.lyrics";
 
@@ -128,6 +129,13 @@
   // ------------------------------------------------------------------ server
 
   let server = "";
+  let user = "default"; // de quien son las listas y bajas (como el usuario de escritorio)
+
+  /** Como lo guarda el server (`haze_core::sync::clean_user`). */
+  function cleanUser(s) {
+    const u = String(s || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32);
+    return u || "default";
+  }
 
   function api(path) {
     return server + path;
@@ -182,14 +190,36 @@
 
   // ------------------------------------------------------------------ biblioteca
 
+  let raw = []; // lo que dio el server, con las dadas de baja
+  let userData = null; // { lists, removed } de `user` (null: server viejo o no contesto)
   let all = []; // todas las entradas (el mismo tema puede estar en varias carpetas)
   let byId = new Map();
   let songs = []; // una por archivo, de la A a la Z
   let folders = []; // { name, songs }
+  let lists = []; // las listas de Haze: { name, songs }
 
   async function loadLibrary() {
-    const j = await getJson("/api/library", 30000);
-    all = j.songs.map((s) => prep(Object.assign(s, { kind: "local" })));
+    const [j, u] = await Promise.all([getJson("/api/library", 30000), fetchUser()]);
+    raw = j.songs.map((s) => prep(Object.assign(s, { kind: "local" })));
+    userData = u;
+    build();
+  }
+
+  /** Las listas y bajas del usuario. Si falla (server viejo), sin listas ni bajas. */
+  async function fetchUser() {
+    try {
+      const u = await getJson(`/api/user/${encodeURIComponent(user)}`, 15000);
+      return u && Array.isArray(u.lists) ? u : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Canciones, carpetas y listas a partir de `raw` y `userData`. */
+  function build() {
+    // Las dadas de baja no se ven en ningun lado (el archivo sigue en el server).
+    const removed = new Set(((userData && userData.removed) || []).filter((r) => r.removed).map((r) => r.file));
+    all = removed.size ? raw.filter((s) => !removed.has(s.file)) : raw.slice();
     byId = new Map(all.map((s) => [s.id, s]));
     // Una por archivo: la de la carpeta mas especifica, como en escritorio.
     const depth = (s) => (s.folder.match(/\//g) || []).length;
@@ -211,6 +241,25 @@
       label: name.split("/").pop(),
       songs: list.sort((a, b) => coll.compare(a.t, b.t)),
     })).sort((a, b) => coll.compare(a.label, b.label));
+    // Listas: claves de archivo en su orden; las que no estan en el server no aparecen.
+    const byFile = new Map(songs.map((s) => [s.file, s]));
+    lists = ((userData && userData.lists) || [])
+      .filter((l) => !l.deleted)
+      .map((l) => ({
+        name: l.name,
+        songs: (l.songs || []).map((k) => byFile.get(k)).filter(Boolean),
+      }))
+      .sort((a, b) => coll.compare(a.name, b.name));
+  }
+
+  /** Volver a pedir las listas y bajas (otro aparato las pudo cambiar). */
+  async function refreshUser() {
+    if (!server || !raw.length) return;
+    const u = await fetchUser();
+    if (!u || JSON.stringify(u) === JSON.stringify(userData)) return;
+    userData = u;
+    build();
+    redrawLibrary();
   }
 
   /** Hasta cuatro tapas distintas de una lista (para los mosaicos). */
@@ -531,7 +580,8 @@
   }
 
   function openList(ctx, opts) {
-    const same = listCtx && listCtx.name === ctx.name && listCtx.songs === ctx.songs;
+    // La misma (o la misma recargada): queda en la fila donde estaba.
+    const same = listCtx && listCtx.name === ctx.name && listCtx.kind === ctx.kind && (listCtx.songs === ctx.songs || !!(opts && opts.keepFocus));
     listCtx = ctx;
     $("#list-kind").textContent = ctx.kind;
     $("#list-title").textContent = ctx.name;
@@ -554,7 +604,10 @@
     const hour = new Date().getHours();
     const hello = h("header", "hello");
     hello.appendChild(h("h1", null, hour < 6 ? "Buenas noches" : hour < 13 ? "Buen día" : hour < 20 ? "Buenas tardes" : "Buenas noches"));
-    hello.appendChild(h("p", null, `${plural(songs.length, "canción", "canciones")} · ${plural(folders.length, "carpeta", "carpetas")}`));
+    const counts = [plural(songs.length, "canción", "canciones")];
+    if (lists.length) counts.push(plural(lists.length, "lista", "listas"));
+    counts.push(plural(folders.length, "carpeta", "carpetas"));
+    hello.appendChild(h("p", null, counts.join(" · ")));
     home.appendChild(hello);
 
     const quick = h("div", "quick");
@@ -611,26 +664,34 @@
       home.appendChild(row);
     }
 
-    home.appendChild(h("h2", "section-title", "Carpetas"));
-    const grid = h("div", "grid");
-    for (const f of folders) {
-      const t = h("button", "tile");
-      t.dataset.f = "";
-      t.appendChild(mosaic(h("div", "tile-art"), f.songs));
-      t.appendChild(h("b", null, f.label));
-      t.appendChild(h("small", null, plural(f.songs.length, "canción", "canciones")));
-      t.onclick = () => {
-        lastFocus.home = t;
-        showView("folder");
-        openList({ name: f.label, kind: "Carpeta", songs: f.songs });
-      };
-      grid.appendChild(t);
-    }
-    home.appendChild(grid);
+    // Listas (de Haze, por usuario) y carpetas: los mismos mosaicos.
+    const tiles = (title, items, kind, cls) => {
+      if (!items.length) return;
+      home.appendChild(h("h2", "section-title", title));
+      const grid = h("div", cls ? `grid ${cls}` : "grid");
+      for (const f of items) {
+        const name = f.label || f.name;
+        const t = h("button", "tile");
+        t.dataset.f = "";
+        t.appendChild(mosaic(h("div", "tile-art"), f.songs));
+        t.appendChild(h("b", null, name));
+        t.appendChild(h("small", null, plural(f.songs.length, "canción", "canciones")));
+        t.onclick = () => {
+          lastFocus.home = t;
+          showView("folder");
+          openList({ name, kind, songs: f.songs });
+        };
+        grid.appendChild(t);
+      }
+      home.appendChild(grid);
+    };
+    tiles("Listas", lists, "Lista", "lists");
+    tiles("Carpetas", folders, "Carpeta");
 
     const srv = h("button", "btn");
     srv.dataset.f = "";
-    srv.innerHTML = `${icon("server")}<span>${server.replace(/^https?:\/\//, "")} · Cambiar de server</span>`;
+    const who = user === "default" ? "" : ` · ${user}`;
+    srv.innerHTML = `${icon("server")}<span>${server.replace(/^https?:\/\//, "")}${who} · Cambiar de server</span>`;
     srv.style.margin = "10px 0 90px";
     srv.onclick = () => showConnect("", server);
     home.appendChild(srv);
@@ -747,12 +808,28 @@
   async function reloadLibrary() {
     try {
       await loadLibrary();
-      const inHome = document.activeElement && document.activeElement.closest("#v-home");
-      renderHome();
-      if (inHome) focus($("#v-home [data-f]"));
-      if (view === "songs") openList({ name: "Canciones", kind: "Biblioteca", songs }, { keepFocus: true });
+      redrawLibrary();
     } catch (e) {
       // Queda la de antes.
+    }
+  }
+  /** Despues de `build()`: el inicio, la busqueda y lo abierto, con lo nuevo. */
+  function redrawLibrary() {
+    const inHome = document.activeElement && document.activeElement.closest("#v-home");
+    renderHome();
+    if (inHome) focus($("#v-home [data-f]"));
+    if (searchVL) {
+      const a = document.activeElement;
+      runSearch();
+      if (a && a.id === "search-rows" && !searchVL.items.length) focus($("#search-input"));
+    }
+    if (view === "songs") openList({ name: "Canciones", kind: "Biblioteca", songs }, { keepFocus: true });
+    else if (view === "folder" && listCtx) {
+      const now =
+        listCtx.kind === "Lista" ? lists.find((l) => l.name === listCtx.name)
+        : listCtx.kind === "Carpeta" ? folders.find((f) => f.label === listCtx.name)
+        : null;
+      if (now) openList({ name: listCtx.name, kind: listCtx.kind, songs: now.songs }, { keepFocus: true });
     }
   }
 
@@ -1503,6 +1580,7 @@
     $("#connect").hidden = false;
     $("#connect-error").textContent = err || "";
     if (value !== undefined) $("#addr").value = value.replace(/^http:\/\//, "").replace(/:7790$/, "");
+    $("#user").value = user === "default" ? "" : user;
     focus(err ? $("#connect-go") : $("#addr"));
   }
 
@@ -1524,6 +1602,8 @@
       return;
     }
     store.set(KEY_SERVER, url);
+    user = cleanUser($("#user").value);
+    store.set(KEY_USER, user);
     start(url);
   }
 
@@ -1714,7 +1794,7 @@
   });
 
   function submitInput(input) {
-    if (input.id === "addr") connect();
+    if (input.id === "addr" || input.id === "user") connect();
     else if (input.id === "search-input") {
       runSearch();
       if (searchVL.items.length) focus($("#search-rows"));
@@ -1810,6 +1890,8 @@
     // La tele pasa a otra app: se pausa (no hay reproduccion de fondo).
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && !audio.paused) audio.pause();
+      // Al volver: las listas pudieron cambiar en otro aparato.
+      if (!document.hidden && layer !== "connect") refreshUser();
     });
     updateModes();
     setTint(null);
@@ -1836,6 +1918,8 @@
 
   wire();
   const saved = store.get(KEY_SERVER);
+  const qu = /[?&]user=([^&]+)/.exec(location.search);
+  user = cleanUser(qu ? decodeURIComponent(qu[1]) : store.get(KEY_USER));
   const q = /[?&]server=([^&]+)/.exec(location.search);
   if (q) start(normalize(decodeURIComponent(q[1])));
   else if (saved) start(saved);

@@ -1,11 +1,9 @@
 package app.haze.player.plugin
 
-import android.content.ContentValues
 import android.content.Context
 import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
-import android.provider.MediaStore
 import app.tauri.Logger
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -98,19 +96,7 @@ internal object Youtube {
   private fun publish(context: Context, file: File, sub: String?) {
     val folder = if (sub == null) "Haze" else "Haze/$sub"
     if (Build.VERSION.SDK_INT >= 29) {
-      val resolver = context.contentResolver
-      val values = ContentValues().apply {
-        put(MediaStore.Audio.Media.DISPLAY_NAME, file.name)
-        put(MediaStore.Audio.Media.MIME_TYPE, AUDIO[file.extension.lowercase()])
-        put(MediaStore.Audio.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/$folder")
-        put(MediaStore.Audio.Media.IS_PENDING, 1)
-      }
-      val uri = resolver.insert(MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
-        ?: throw IllegalStateException("MediaStore no acepto ${file.name}")
-      resolver.openOutputStream(uri).use { out -> file.inputStream().use { it.copyTo(out!!) } }
-      values.clear()
-      values.put(MediaStore.Audio.Media.IS_PENDING, 0)
-      resolver.update(uri, values, null, null)
+      Media.publish(context, file, folder, mime = AUDIO[file.extension.lowercase()])
     } else {
       // Android 9 o anterior: la carpeta de musica propia de la app, que el escaner indexa
       // sin pedir permiso de escritura.

@@ -13,6 +13,13 @@ ventana cerrada.
   Sirven también las playlists y los links de SoundCloud o Bandcamp. Las descargas siguen
   con la ventana cerrada: el ícono de la bandeja muestra el avance y, si "cerrar a la
   bandeja" está apagado, la app sale sola cuando terminan.
+- **Listas:** se arman en Haze (clic derecho → Agregar a lista) y no copian archivos: la
+  lista solo dice qué canciones son. Son por usuario y viven en el server de casa, con una
+  copia en cada aparato para usarlas sin conexión.
+- **Sincronizar con el server de casa:** al abrir, cada 2 horas o con "Sincronizar ahora",
+  la PC y el celu bajan lo que les falta, suben lo nuevo y juntan las listas. Solo en la red
+  de casa y sin borrar nunca un archivo. "Dar de baja" una canción la oculta en todos los
+  aparatos sin borrarla; se restaura en Ajustes.
 - **Carpetas favoritas:** son los destinos de descarga y los accesos de la barra lateral.
 - **Mini reproductor:** una ventanita fija, siempre arriba.
 - **Home Assistant por MQTT:** las entidades aparecen solas (estado, canción, tapa, botones,
@@ -101,3 +108,5 @@ push toca algo que le afecta. `Android` deja un APK de debug como artefacto.
 - Ajustes: `%APPDATA%\app.haze.player\settings.json`. La clave de MQTT queda ahí en
   texto plano.
 - Cache de la biblioteca y sesión: `%LOCALAPPDATA%\app.haze.player\`.
+- Listas y bajas (la copia de esta PC): `%LOCALAPPDATA%\app.haze.player\userdata.json`. Las del
+  server están en `DATA_DIR/users/<usuario>.json` (ver `apps/server/src/web.rs`).

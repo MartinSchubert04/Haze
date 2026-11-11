@@ -1,7 +1,7 @@
 //! Nucleo de Haze, compartido entre escritorio y Android: la cola, los ajustes y la
 //! logica del reproductor. No sabe nada de Tauri ni de como suena el audio: eso lo pone
 //! cada app implementando [`player::Engine`] y [`player::Listener`]. Con la feature
-//! `mqtt`, tambien el puente con Home Assistant.
+//! `mqtt`, tambien el puente con Home Assistant; con `sync`, sincronizar con el server.
 
 #[cfg(feature = "library")]
 pub mod library;
@@ -11,6 +11,8 @@ pub mod player;
 pub mod queue;
 pub mod settings;
 pub mod song;
+pub mod sync;
+pub mod userdata;
 pub mod youtube;
 
 /// Si `candidate` es una version mas nueva que `current` ("1.2.10" > "1.2.9"). Lo que no

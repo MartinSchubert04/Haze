@@ -7,10 +7,15 @@
   import MiniPlayer from "./lib/components/MiniPlayer.svelte";
   import SongSheet from "./lib/components/SongSheet.svelte";
   import FolderSheet from "./lib/components/FolderSheet.svelte";
+  import ListSheet from "./lib/components/ListSheet.svelte";
+  import ListPicker from "./lib/components/ListPicker.svelte";
+  import NamePrompt from "./lib/components/NamePrompt.svelte";
   import Access from "./lib/views/Access.svelte";
   import Songs from "./lib/views/Songs.svelte";
   import Folders from "./lib/views/Folders.svelte";
   import FolderDetail from "./lib/views/FolderDetail.svelte";
+  import Lists from "./lib/views/Lists.svelte";
+  import ListDetail from "./lib/views/ListDetail.svelte";
   import Queue from "./lib/views/Queue.svelte";
   import YouTube from "./lib/views/YouTube.svelte";
   import LinkSheet from "./lib/components/LinkSheet.svelte";
@@ -53,12 +58,16 @@
     <main>
       {#if store.tab === "songs"}<Songs />
       {:else if store.tab === "folders"}<Folders />
+      {:else if store.tab === "lists"}<Lists />
       {:else if store.tab === "youtube"}<YouTube />
       {:else}<Queue />
       {/if}
     </main>
 
     {#if store.openFolder}<FolderDetail path={store.openFolder} />{/if}
+    {#if store.openList}
+      {#key store.openList}<ListDetail id={store.openList} />{/key}
+    {/if}
     {#if store.isOpen("settings")}<Settings />{/if}
 
     <div class="dock">
@@ -71,8 +80,11 @@
          vieja leeria lo que ya no existe (sheet.song de un link) y la excepcion cortaba
          el cambio: "Bajar como MP3" cerraba las opciones y no abria nada. -->
     {#key sheet}
-      {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} />
+      {#if sheet?.kind === "song"}<SongSheet song={sheet.song} queueIndex={sheet.queueIndex} listId={sheet.listId} />
       {:else if sheet?.kind === "folderOptions"}<FolderSheet path={sheet.path} />
+      {:else if sheet?.kind === "listOptions"}<ListSheet id={sheet.id} />
+      {:else if sheet?.kind === "addToList"}<ListPicker songs={sheet.songs} />
+      {:else if sheet?.kind === "listName"}<NamePrompt id={sheet.id} songs={sheet.songs} />
       {:else if sheet?.kind === "link"}<LinkSheet url={sheet.url} preview={sheet.preview} />
       {/if}
     {/key}

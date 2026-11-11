@@ -13,9 +13,13 @@ tokio = { version = "1", features = ["sync"] }
 rumqttc = { version = "0.25", default-features = false, optional = true }
 lofty = { version = "0.25", optional = true }
 walkdir = { version = "2", optional = true }
+# Sincronizar con el server de casa: HTTP plano, sin TLS (ver arriba y sync.rs).
+ureq = { version = "3", default-features = false, features = ["json"], optional = true }
 
 [features]
 # Home Assistant por MQTT.
 mqtt = ["dep:rumqttc", "tokio/rt", "tokio/time", "tokio/macros"]
 # Recorrer carpetas y leer tags y tapas (escritorio y el server de la tele).
 library = ["dep:lofty", "dep:walkdir"]
+# Bajar y subir musica y juntar las listas con el server (escritorio y Android).
+sync = ["dep:ureq"]

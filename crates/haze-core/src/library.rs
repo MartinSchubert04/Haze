@@ -11,8 +11,7 @@ use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::tag::Accessor;
 use walkdir::WalkDir;
 
-pub const AUDIO_EXTENSIONS: &[&str] =
-    &["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "aiff", "aif", "ape", "wv", "alac"];
+pub use crate::song::AUDIO_EXTENSIONS;
 
 /// Nombres que se buscan en la carpeta cuando el archivo no trae la tapa adentro.
 const FOLDER_COVERS: &[&str] = &["cover", "folder", "front", "albumart", "album"];

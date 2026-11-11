@@ -1,17 +1,18 @@
 <script lang="ts">
-  import { Music2, Folder, TvMinimalPlay, Download, ListMusic, Settings, Star } from "@lucide/svelte";
+  import { Music2, Folder, TvMinimalPlay, Download, ListMusic, Settings, Star, Library, RefreshCw } from "@lucide/svelte";
   import { store, type View } from "../store.svelte";
   import { folderName } from "@haze/ui/format";
 
   const items: { view: View["name"]; label: string; icon: typeof Music2 }[] = [
     { view: "songs", label: "Canciones", icon: Music2 },
+    { view: "lists", label: "Listas", icon: Library },
     { view: "folders", label: "Carpetas", icon: Folder },
     { view: "youtube", label: "YouTube", icon: TvMinimalPlay },
     { view: "downloads", label: "Descargas", icon: Download },
     { view: "queue", label: "Cola", icon: ListMusic },
   ];
 
-  const active = $derived(store.view.name === "folder" ? "folders" : store.view.name);
+  const active = $derived(store.view.name === "folder" ? "folders" : store.view.name === "list" ? "lists" : store.view.name);
   const running = $derived(store.downloads.filter((d) => d.status === "downloading" || d.status === "converting" || d.status === "queued").length);
   const favorites = $derived(store.settings?.downloadFolders ?? []);
 </script>
@@ -42,6 +43,22 @@
     {/each}
   </div>
 
+  {#if store.lists.length}
+    <div class="label">Listas</div>
+    <div class="group favs">
+      {#each store.lists as l (l.id)}
+        <button
+          class="item small"
+          class:active={store.view.name === "list" && store.view.id === l.id}
+          onclick={() => store.go({ name: "list", id: l.id })}
+        >
+          <Library size={14} strokeWidth={1.8} />
+          <span class="ellipsis">{l.name}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
+
   {#if favorites.length}
     <div class="label">Carpetas favoritas</div>
     <div class="group favs">
@@ -66,6 +83,8 @@
     <span>Ajustes</span>
     {#if store.update?.status === "ready"}
       <span class="dot new" title="Hay una versión nueva"></span>
+    {:else if store.sync.status === "running"}
+      <RefreshCw size={14} class="spin sync" />
     {:else if store.settings?.ha.enabled}
       <span class="dot" class:ok={store.haStatus === "connected"} title="Home Assistant"></span>
     {/if}
@@ -164,6 +183,10 @@
   }
   .dot.new {
     background: var(--accent);
+  }
+  .item :global(.sync) {
+    margin-left: auto;
+    color: var(--text-3);
   }
   .spacer {
     flex: 1;

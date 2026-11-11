@@ -5,7 +5,7 @@
   import { MoreHorizontal, AudioLines, Download } from "@lucide/svelte";
   import type { Song } from "../api";
   import { store } from "../store.svelte";
-  import { songMenu } from "../menu.svelte";
+  import { songMenu, type MenuItem } from "../menu.svelte";
   import { time, indexLetter } from "@haze/ui/format";
   import { sameFile } from "@haze/ui/library";
   import Cover from "./Cover.svelte";
@@ -17,6 +17,7 @@
     alphabet = false,
     showFolder = true,
     onDownload,
+    menuExtra,
   }: {
     songs: Song[];
     context: string;
@@ -24,6 +25,8 @@
     alphabet?: boolean;
     showFolder?: boolean;
     onDownload?: (s: Song) => void;
+    /** Opciones del menu propias de la vista (por ejemplo, "Quitar de la lista"). */
+    menuExtra?: (s: Song) => MenuItem[];
   } = $props();
 
   const ROW = 60;
@@ -83,9 +86,9 @@
           tabindex="0"
           onclick={() => play(i)}
           onkeydown={(e) => e.key === "Enter" && play(i)}
-          oncontextmenu={(e) => songMenu(e, song, () => play(i))}
+          oncontextmenu={(e) => songMenu(e, song, () => play(i), menuExtra?.(song))}
         >
-          <button class="menu-btn" title="Más" onclick={(e) => { e.stopPropagation(); songMenu(e, song, () => play(i)); }}>
+          <button class="menu-btn" title="Más" onclick={(e) => { e.stopPropagation(); songMenu(e, song, () => play(i), menuExtra?.(song)); }}>
             <MoreHorizontal size={16} />
           </button>
           <div class="cov">

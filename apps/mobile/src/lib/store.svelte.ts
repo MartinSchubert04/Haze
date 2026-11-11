@@ -3,19 +3,38 @@
 import { listen } from "@tauri-apps/api/event";
 import { onBackButtonPress } from "@tauri-apps/api/app";
 import { folderName, sortKey } from "@haze/ui/format";
-import { uniqueFiles } from "@haze/ui/library";
-import { api, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
+import { fileKey, listSongs, removedSet, uniqueFiles, visibleLists, visibleSongs } from "@haze/ui/library";
+import {
+  api,
+  type DownloadJob,
+  type List,
+  type PlayerState,
+  type Settings,
+  type Song,
+  type SyncReport,
+  type UpdateInfo,
+  type UserData,
+  type UserOp,
+} from "./api";
 
-export type Tab = "songs" | "folders" | "youtube" | "queue";
+export type Tab = "songs" | "folders" | "lists" | "youtube" | "queue";
 
 /** Lo que se abre encima de las pestañas. "Atras" cierra la de arriba. */
 export type Layer =
   | { kind: "folder"; path: string }
+  | { kind: "list"; id: string }
   | { kind: "nowPlaying" }
   | { kind: "settings" }
-  | { kind: "song"; song: Song; queueIndex?: number }
+  /** Con `listId`, abierta desde esa lista: se puede quitar de ahi. */
+  | { kind: "song"; song: Song; queueIndex?: number; listId?: string }
   /** Opciones de una carpeta: se abren al mantenerla apretada. */
   | { kind: "folderOptions"; path: string }
+  /** Opciones de una lista (renombrar, borrar). */
+  | { kind: "listOptions"; id: string }
+  /** Elegir a que lista agregar estas canciones. */
+  | { kind: "addToList"; songs: Song[] }
+  /** Pedir el nombre: con `id` renombra esa lista; sin, crea una con `songs`. */
+  | { kind: "listName"; id?: string; songs?: Song[] }
   /** Un link (pegado o de una busqueda): se lee y despues se escucha o se baja. Con
    *  `preview` se muestran titulo y tapa mientras se lee. */
   | { kind: "link"; url: string; preview?: Song };
@@ -52,7 +71,11 @@ class Store {
   haStatus = $state("off");
   downloads = $state.raw<DownloadJob[]>([]);
   update = $state<UpdateInfo | null>(null);
-  songs = $state.raw<Song[]>([]);
+  /** Todo lo que hay en el telefono, con las dadas de baja. */
+  library = $state.raw<Song[]>([]);
+  userdata = $state.raw<UserData>({ lists: [], removed: [] });
+  syncReport = $state.raw<SyncReport>({ status: "", at: 0, downloaded: 0, uploaded: 0, failed: 0, error: null });
+  syncProgress = $state<{ done: number; total: number } | null>(null);
   settings = $state<Settings | null>(null);
   player = $state<PlayerState>(emptyState);
   scanning = $state(false);
@@ -65,6 +88,10 @@ class Store {
   private posAt = 0;
   position = $state(0);
 
+  removed = $derived(removedSet(this.userdata));
+  /** Lo que se ve: sin las dadas de baja (siguen en el telefono, pero no se muestran). */
+  songs = $derived(visibleSongs(this.library, this.removed));
+  lists = $derived(visibleLists(this.userdata));
   folders = $derived.by(() => groupFolders(this.songs));
   /** Una entrada por archivo: lo que muestra "Canciones". Las carpetas usan `songs`. */
   uniqueSongs = $derived(uniqueFiles(this.songs));
@@ -74,7 +101,9 @@ class Store {
   async init() {
     const b = await api.bootstrap();
     this.settings = b.settings;
-    this.songs = b.songs;
+    this.library = b.songs;
+    this.userdata = b.userdata;
+    this.syncReport = b.sync;
     this.player = b.state;
     this.setPosition(b.position);
     this.access = b.access || !b.ready;
@@ -93,7 +122,13 @@ class Store {
       if (e.payload.error && e.payload.error !== prevErr) this.toast(e.payload.error, "error");
     });
     listen<{ position: number; duration: number }>("player://position", (e) => this.setPosition(e.payload.position));
-    listen<Song[]>("library://changed", (e) => (this.songs = e.payload));
+    listen<Song[]>("library://changed", (e) => (this.library = e.payload));
+    listen<UserData>("userdata://changed", (e) => (this.userdata = e.payload));
+    listen<SyncReport>("sync://status", (e) => {
+      this.syncReport = e.payload;
+      if (e.payload.status !== "running") this.syncProgress = null;
+    });
+    listen<{ done: number; total: number }>("sync://progress", (e) => (this.syncProgress = e.payload));
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
     listen<UpdateInfo | null>("update://status", (e) => {
       const was = this.update?.status;
@@ -213,6 +248,15 @@ class Store {
     this.open({ kind: "folder", path });
   }
 
+  /** La lista abierta en la pestaña Listas, si hay. */
+  openList = $derived.by(() => {
+    for (let i = this.layers.length - 1; i >= 0; i--) {
+      const l = this.layers[i];
+      if (l.kind === "list") return l.id;
+    }
+    return null;
+  });
+
   /** La carpeta abierta en la pestaña Carpetas, si hay. */
   openFolder = $derived.by(() => {
     for (let i = this.layers.length - 1; i >= 0; i--) {
@@ -298,7 +342,7 @@ class Store {
   /** Quita la carpeta de la biblioteca (no borra nada del telefono). */
   async hideFolder(path: string) {
     this.layers = [];
-    this.songs = this.songs.filter((s) => s.folder !== path);
+    this.library = this.library.filter((s) => s.folder !== path);
     await this.saveSettings((x) => (x.hiddenFolders = [...new Set([...(x.hiddenFolders ?? []), path])]));
     this.toast("Carpeta quitada. Se vuelve a mostrar desde Ajustes");
   }
@@ -310,6 +354,55 @@ class Store {
   async enqueue(song: Song, next: boolean) {
     await api.enqueue(song, next);
     this.toast(next ? "Suena a continuación" : "Agregada a la cola");
+  }
+
+  // ------------------------------------------------------------------ listas y bajas
+
+  list(id: string): List | undefined {
+    return this.lists.find((l) => l.id === id);
+  }
+
+  /** Las canciones de la lista que hay en el telefono, en su orden. */
+  listSongs(list: List): Song[] {
+    return listSongs(list, this.songs);
+  }
+
+  /** Rust guarda, avisa con "userdata://changed" y, en casa, lo manda al server. */
+  async editUser(op: UserOp): Promise<string | null> {
+    try {
+      return await api.editUser(op);
+    } catch (e) {
+      this.toast(`No se pudo guardar: ${e}`, "error");
+      return null;
+    }
+  }
+
+  async createList(name: string, songs: Song[] = []) {
+    const id = await this.editUser({ type: "create", name, files: songs.map(fileKey) });
+    if (id) this.toast(songs.length ? `Agregada a ${name.trim()}` : `Lista ${name.trim()} creada`);
+    return id;
+  }
+
+  /** Borra la lista y cierra lo que estaba abierto de ella. */
+  async deleteList(list: List) {
+    this.layers = this.layers.filter((l) => !((l.kind === "list" || l.kind === "listOptions") && l.id === list.id));
+    await this.editUser({ type: "delete", id: list.id });
+    this.toast(`Lista ${list.name} borrada`);
+  }
+
+  async addToList(list: List, songs: Song[]) {
+    await this.editUser({ type: "add", id: list.id, files: songs.map(fileKey) });
+    this.toast(`Agregada a ${list.name}`);
+  }
+
+  /** Oculta las canciones en todos los aparatos. El archivo no se borra. */
+  async removeSongs(songs: Song[]) {
+    await this.editUser({ type: "setRemoved", files: songs.map((s) => [fileKey(s), s.title]), removed: true });
+    this.toast("Dada de baja. Se restaura desde Ajustes");
+  }
+
+  async restore(file: number) {
+    await this.editUser({ type: "setRemoved", files: [[file, ""]], removed: false });
   }
 }
 

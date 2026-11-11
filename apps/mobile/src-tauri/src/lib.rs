@@ -1,8 +1,10 @@
 //! Haze para Android. La cola y el reproductor son los de `haze-core`, igual que en
 //! escritorio; el motor es Media3 (plugin `haze-player`) y la biblioteca sale de
 //! MediaStore. Home Assistant usa el mismo puente MQTT que escritorio y YouTube, el
-//! mismo yt-dlp (con `youtubedl-android`).
+//! mismo yt-dlp (con `youtubedl-android`). Las listas y la sincronizacion con el server
+//! de casa estan en `sync`.
 
+mod sync;
 mod updater;
 mod youtube;
 
@@ -55,6 +57,7 @@ struct AppState {
     scanning: Mutex<bool>,
     /// El motor ya esta conectado y la sesion anterior retomada.
     ready: Mutex<bool>,
+    sync: sync::Sync,
 }
 
 /// Manda el estado y la posicion a la pantalla.
@@ -82,7 +85,7 @@ enum Control {
     Volume(f64),
     Shuffle(bool),
     Repeat(String),
-    /// La ruta de la carpeta, o "Todas las canciones".
+    /// La ruta de la carpeta, "Todas las canciones" o "list:<id>" (una lista).
     PlayFolder(String),
     /// Salta a la entrada de la cola con ese uid (desde HA).
     JumpUid(u64),
@@ -104,6 +107,8 @@ struct Bootstrap {
     ha_status: String,
     downloads: Vec<youtube::DownloadJob>,
     update: Option<updater::UpdateInfo>,
+    userdata: haze_core::userdata::UserData,
+    sync: haze_core::sync::Report,
 }
 
 #[tauri::command]
@@ -125,6 +130,8 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         ha_status: state.ha_status.lock().unwrap().clone(),
         downloads: state.downloads.lock().unwrap().jobs.clone(),
         update: state.update.lock().unwrap().clone(),
+        userdata: state.sync.data(),
+        sync: state.sync.report(),
     };
     boot
 }
@@ -183,7 +190,14 @@ async fn player_control(app: AppHandle, control: Control) {
 async fn run_control(app: &AppHandle, control: Control) {
     let state = app.state::<AppState>();
     let folder_songs = match &control {
-        Control::PlayFolder(path) => Some(folder_songs(&state.library.read().unwrap(), path)),
+        Control::PlayFolder(path) => {
+            let all = state.library.read().unwrap().songs.clone();
+            // Las listas mantienen su orden; las carpetas van por titulo.
+            match path.strip_prefix("list:") {
+                Some(id) => sync::list_songs(app, id, &all).map(|(_, songs)| songs),
+                None => Some(folder_songs(app, &all, path)),
+            }
+        }
         _ => None,
     };
     let mut p = state.player.lock().await;
@@ -204,20 +218,26 @@ async fn run_control(app: &AppHandle, control: Control) {
             save_playback(app, &p.state());
         }
         Control::PlayFolder(path) => {
-            let name = if path == ALL_SONGS { path } else { path.rsplit('/').next().unwrap_or(&path).to_string() };
+            let name = match path.strip_prefix("list:") {
+                Some(id) => sync::list_songs(app, id, &[]).map(|(n, _)| n).unwrap_or_default(),
+                None if path == ALL_SONGS => path.clone(),
+                None => path.rsplit('/').next().unwrap_or(&path).to_string(),
+            };
             p.play_context(folder_songs.unwrap_or_default(), 0, name);
         }
         Control::JumpUid(uid) => p.jump_uid(uid),
     }
 }
 
-/// Las canciones de una carpeta (o todas), por titulo, como las muestra la pantalla.
-fn folder_songs(lib: &Library, path: &str) -> Vec<Arc<Song>> {
-    let mut songs: Vec<_> = if path == ALL_SONGS {
-        unique_files(&lib.songs)
+/// Las canciones de una carpeta (o todas), por titulo y sin las dadas de baja, como las
+/// muestra la pantalla.
+fn folder_songs(app: &AppHandle, all: &[Arc<Song>], path: &str) -> Vec<Arc<Song>> {
+    let songs: Vec<_> = if path == ALL_SONGS {
+        unique_files(all)
     } else {
-        lib.songs.iter().filter(|s| s.folder == path).cloned().collect()
+        all.iter().filter(|s| s.folder == path).cloned().collect()
     };
+    let mut songs = sync::visible(app, songs);
     songs.sort_by_cached_key(|s| s.title.to_lowercase());
     songs
 }
@@ -271,7 +291,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 
 #[tauri::command]
 async fn settings_set(app: AppHandle, settings: Settings) {
-    let (ha_changed, hidden_changed) = {
+    let (ha_changed, hidden_changed, sync_changed) = {
         let state = app.state::<AppState>();
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
@@ -279,16 +299,20 @@ async fn settings_set(app: AppHandle, settings: Settings) {
         // estar vieja.
         new.playback.shuffle = cur.playback.shuffle;
         new.playback.repeat = cur.playback.repeat.clone();
-        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders);
+        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders, new.sync != cur.sync);
         *cur = new;
         cur.save(&state.settings_path);
         changed
     };
+    let sync_on = app.state::<AppState>().settings.lock().unwrap().sync.enabled;
     if hidden_changed {
         load_library(&app).await;
     }
     if ha_changed {
         start_mqtt(&app).await;
+    }
+    if sync_changed && sync_on {
+        sync::start(&app);
     }
 }
 
@@ -328,8 +352,12 @@ struct Ha(AppHandle);
 impl mqtt::Hooks for Ha {
     fn folders(&self) -> Vec<(String, String)> {
         let state = self.0.state::<AppState>();
-        let lib = state.library.read().unwrap();
-        mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
+        let mut options = {
+            let lib = state.library.read().unwrap();
+            mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
+        };
+        options.extend(sync::list_options(&self.0));
+        options
     }
 
     fn command(&self, c: mqtt::Command) {
@@ -506,6 +534,7 @@ async fn start(app: AppHandle) {
     // Despues de la biblioteca: asi el primer anuncio ya trae las carpetas.
     start_mqtt(&app).await;
     tauri::async_runtime::spawn(updater::run(app.clone()));
+    sync::schedule(&app);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -565,6 +594,7 @@ pub fn run() {
                 access: Mutex::new(false),
                 scanning: Mutex::new(false),
                 ready: Mutex::new(false),
+                sync: sync::Sync::new(&data_dir),
             });
 
             tauri::async_runtime::spawn(start(handle));
@@ -590,6 +620,8 @@ pub fn run() {
             youtube::downloads_clear,
             updater::update_check,
             updater::update_install,
+            sync::userdata_edit,
+            sync::sync_now,
         ])
         .build(tauri::generate_context!())
         .expect("no se pudo arrancar Haze")

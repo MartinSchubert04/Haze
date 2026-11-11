@@ -2,7 +2,7 @@
 // el telefono). Rust le pone a cada cancion la clave de su archivo (`file`); igual que
 // `haze_core::song::unique_files`.
 
-import type { Song } from "./types";
+import type { List, Song, UserData } from "./types";
 
 /** Que archivo es. Sin clave (streams, un cache viejo), cada ruta cuenta aparte. */
 export function fileKey(s: Song): number {
@@ -31,6 +31,36 @@ export function uniqueFiles(songs: Song[]): Song[] {
       const o = out[i];
       if (depth(s) > depth(o) || (depth(s) === depth(o) && s.path < o.path)) out[i] = s;
     }
+  }
+  return out;
+}
+
+/** Claves de las canciones dadas de baja. */
+export function removedSet(data: UserData | null | undefined): Set<number> {
+  return new Set((data?.removed ?? []).filter((r) => r.removed).map((r) => r.file));
+}
+
+/** Sin las dadas de baja. */
+export function visibleSongs(songs: Song[], removed: Set<number>): Song[] {
+  return removed.size ? songs.filter((s) => !removed.has(fileKey(s))) : songs;
+}
+
+/** Las listas vivas, por nombre. */
+export function visibleLists(data: UserData | null | undefined): List[] {
+  return (data?.lists ?? []).filter((l) => !l.deleted).sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+}
+
+/**
+ * Las canciones de una lista, en su orden, con las que hay en este aparato (`songs` ya sin
+ * bajas). Las que todavia no llegaron no aparecen.
+ */
+export function listSongs(list: List, songs: Song[]): Song[] {
+  const byKey = new Map<number, Song>();
+  for (const s of uniqueFiles(songs)) byKey.set(fileKey(s), s);
+  const out: Song[] = [];
+  for (const k of list.songs) {
+    const s = byKey.get(k);
+    if (s) out.push(s);
   }
   return out;
 }

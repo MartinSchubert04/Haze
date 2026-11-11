@@ -9,6 +9,7 @@ mod library;
 mod media_keys;
 mod mpv;
 mod player;
+mod sync;
 mod tools;
 mod updater;
 mod youtube;
@@ -43,6 +44,7 @@ pub struct AppState {
     pub scanning: Mutex<bool>,
     pub update: Mutex<updater::Pending>,
     pub discord: discord::Discord,
+    pub sync: sync::Sync,
 }
 
 /// Ordenes que llegan de afuera de la interfaz: bandeja, teclas multimedia, HA.
@@ -78,15 +80,23 @@ pub fn control(app: &AppHandle, c: Control) {
         let state = app.state::<AppState>();
         let folder_songs = match &c {
             Control::PlayFolder(path) => {
-                let lib = state.library.read().unwrap();
-                let songs: Vec<_> = if path == ALL_SONGS {
-                    unique_files(&lib.songs)
+                let all = state.library.read().unwrap().songs.clone();
+                // Las listas mantienen su orden; las carpetas van por titulo.
+                if let Some(id) = path.strip_prefix("list:") {
+                    sync::list_songs(&app, id, &all).map(|(_, songs)| songs)
                 } else {
-                    lib.songs.iter().filter(|s| &s.folder == path).cloned().collect()
-                };
-                Some(songs_sorted(songs))
+                    let songs: Vec<_> = if path == ALL_SONGS {
+                        unique_files(&all)
+                    } else {
+                        all.iter().filter(|s| &s.folder == path).cloned().collect()
+                    };
+                    Some(songs_sorted(sync::visible(&app, songs)))
+                }
             }
-            Control::PlayRandom => Some(songs_sorted(unique_files(&state.library.read().unwrap().songs))),
+            Control::PlayRandom => {
+                let all = state.library.read().unwrap().songs.clone();
+                Some(songs_sorted(sync::visible(&app, unique_files(&all))))
+            }
             _ => None,
         };
         let mut p = state.player.lock().await;
@@ -105,7 +115,11 @@ pub fn control(app: &AppHandle, c: Control) {
             Control::Shuffle(on) => p.set_shuffle(on),
             Control::Repeat(m) => p.set_repeat(m),
             Control::PlayFolder(path) => {
-                let name = if path == ALL_SONGS { path.clone() } else { folder_name(&path) };
+                let name = match path.strip_prefix("list:") {
+                    Some(id) => sync::list_songs(&app, id, &[]).map(|(n, _)| n).unwrap_or_default(),
+                    None if path == ALL_SONGS => path.clone(),
+                    None => folder_name(&path),
+                };
                 p.play_context(folder_songs.unwrap_or_default(), 0, name);
             }
             Control::PlayRandom => p.play_random(folder_songs.unwrap_or_default(), ALL_SONGS.into()),
@@ -124,8 +138,12 @@ struct Ha(AppHandle);
 impl mqtt::Hooks for Ha {
     fn folders(&self) -> Vec<(String, String)> {
         let state = self.0.state::<AppState>();
-        let lib = state.library.read().unwrap();
-        mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
+        let mut options = {
+            let lib = state.library.read().unwrap();
+            mqtt::folder_options(lib.songs.iter().map(|s| s.folder.as_str()))
+        };
+        options.extend(sync::list_options(&self.0));
+        options
     }
 
     fn command(&self, c: mqtt::Command) {
@@ -176,6 +194,8 @@ struct Bootstrap {
     downloads: Vec<youtube::DownloadJob>,
     update: Option<updater::UpdateInfo>,
     version: String,
+    userdata: haze_core::userdata::UserData,
+    sync: haze_core::sync::Report,
 }
 
 #[tauri::command]
@@ -203,6 +223,8 @@ async fn bootstrap(app: AppHandle) -> Bootstrap {
         downloads,
         update,
         version: env!("CARGO_PKG_VERSION").into(),
+        userdata: state.sync.data(),
+        sync: state.sync.report(),
     }
 }
 
@@ -272,12 +294,13 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 #[tauri::command]
 fn settings_set(app: AppHandle, settings: Settings) {
     let state = app.state::<AppState>();
-    let (sources_changed, ha_changed, bg_changed, keys_changed, bot_changed, mute_changed) = {
+    let (sources_changed, ha_changed, bg_changed, keys_changed, bot_changed, mute_changed, sync_changed) = {
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
-        // Lo que se baja tiene que aparecer en la biblioteca: las carpetas de descarga
-        // cuentan como fuente aunque el usuario no las haya agregado ahi.
-        for d in &new.download_folders {
+        // Lo que se baja o llega del server tiene que aparecer en la biblioteca: esas
+        // carpetas cuentan como fuente aunque el usuario no las haya agregado ahi.
+        let synced = Some(new.sync.folder.trim().replace('\\', "/")).filter(|f| !f.is_empty());
+        for d in new.download_folders.clone().iter().chain(synced.iter()) {
             let inside = new.sources.iter().any(|s| d.to_lowercase().starts_with(&s.to_lowercase()));
             if !inside {
                 new.sources.push(d.clone());
@@ -295,6 +318,7 @@ fn settings_set(app: AppHandle, settings: Settings) {
             new.shortcuts != cur.shortcuts,
             (new.discord.enabled, &new.discord.token) != (cur.discord.enabled, &cur.discord.token),
             new.discord.mute_local != cur.discord.mute_local,
+            new.sync != cur.sync,
         );
         *cur = new;
         cur.save(&state.settings_path);
@@ -322,6 +346,9 @@ fn settings_set(app: AppHandle, settings: Settings) {
     if bot_changed {
         let app = app.clone();
         tauri::async_runtime::spawn(async move { discord::apply(&app).await });
+    }
+    if sync_changed && s.sync.enabled {
+        sync::start(&app);
     }
 }
 
@@ -1040,6 +1067,7 @@ pub fn run() {
                 scanning: Mutex::new(false),
                 update: Mutex::new(Default::default()),
                 discord: discord::Discord::new(discord_cfg.mute_local),
+                sync: sync::Sync::new(&data_dir),
             });
             if discord_cfg.enabled {
                 let h = handle.clone();
@@ -1053,6 +1081,7 @@ pub fn run() {
             persist_playback(&handle);
             start_mqtt(&handle);
             start_scan(&handle);
+            sync::schedule(&handle);
             let resume_playing = relaunch.as_ref().is_some_and(|r| r.playing);
             tauri::async_runtime::spawn(start_engine(handle.clone(), resume_playing));
             updater::start(handle.clone());
@@ -1087,6 +1116,8 @@ pub fn run() {
             shortcuts_pause,
             update_now,
             window_ready,
+            sync::userdata_edit,
+            sync::sync_now,
         ])
         .build(tauri::generate_context!())
         .expect("no se pudo iniciar la app")

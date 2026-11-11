@@ -6,6 +6,9 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+pub const AUDIO_EXTENSIONS: &[&str] =
+    &["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "aiff", "aif", "ape", "wv", "alac"];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SongKind {

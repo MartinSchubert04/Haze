@@ -1,21 +1,27 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
-import { api, type DiscordStatus, type DownloadJob, type PlayerState, type Settings, type Song, type UpdateInfo } from "./api";
+import { ask } from "@tauri-apps/plugin-dialog";
+import { api, type DiscordStatus, type DownloadJob, type List, type PlayerState, type Settings, type Song, type SyncReport, type UpdateInfo, type UserData, type UserOp } from "./api";
 import { folderName, sortKey } from "@haze/ui/format";
-import { uniqueFiles } from "@haze/ui/library";
+import { fileKey, listSongs, removedSet, uniqueFiles, visibleLists, visibleSongs } from "@haze/ui/library";
 import { prettyShortcut } from "./shortcuts";
 
 export type View =
   | { name: "songs" }
   | { name: "folders" }
   | { name: "folder"; path: string }
+  | { name: "lists" }
+  | { name: "list"; id: string }
   | { name: "youtube"; query?: string }
   | { name: "downloads" }
   | { name: "queue" }
   | { name: "settings" };
 
 export type Folder = { path: string; name: string; songs: Song[]; coverSong: Song | null };
+
+/** Pedir un nombre (lista nueva, renombrar). */
+export type NamePrompt = { title: string; value: string; action: string; onSave: (name: string) => void };
 
 const emptyState: PlayerState = {
   song: null,
@@ -35,7 +41,12 @@ class Store {
   ready = $state(false);
   engineReady = $state(false);
   version = $state("");
-  songs = $state.raw<Song[]>([]);
+  /** Todo lo que hay en las carpetas, con las dadas de baja. */
+  library = $state.raw<Song[]>([]);
+  userdata = $state.raw<UserData>({ lists: [], removed: [] });
+  sync = $state<SyncReport>({ status: "", at: 0, downloaded: 0, uploaded: 0, failed: 0, error: null });
+  syncProgress = $state<{ done: number; total: number } | null>(null);
+  namePrompt = $state<NamePrompt | null>(null);
   settings = $state<Settings | null>(null);
   player = $state<PlayerState>(emptyState);
   scanning = $state(false);
@@ -58,6 +69,10 @@ class Store {
   private posAt = 0;
   position = $state(0);
 
+  removed = $derived(removedSet(this.userdata));
+  /** La biblioteca que se ve: sin las dadas de baja. */
+  songs = $derived(visibleSongs(this.library, this.removed));
+  lists = $derived(visibleLists(this.userdata));
   folders = $derived.by(() => groupFolders(this.songs));
   /** Una entrada por archivo: lo que muestra "Canciones". Las carpetas usan `songs`. */
   uniqueSongs = $derived(uniqueFiles(this.songs));
@@ -67,7 +82,9 @@ class Store {
   async init() {
     const b = await api.bootstrap();
     this.settings = b.settings;
-    this.songs = b.songs;
+    this.library = b.songs;
+    this.userdata = b.userdata;
+    this.sync = b.sync;
     this.player = b.state;
     this.setPosition(b.position);
     this.scanning = b.scanning;
@@ -86,11 +103,17 @@ class Store {
       if (e.payload.error && e.payload.error !== prevErr) this.toast(e.payload.error, "error");
     });
     listen<{ position: number; duration: number }>("player://position", (e) => this.setPosition(e.payload.position));
-    listen<Song[]>("library://changed", (e) => (this.songs = e.payload));
+    listen<Song[]>("library://changed", (e) => (this.library = e.payload));
     listen<Song>("library://added", (e) => {
       const s = e.payload;
-      this.songs = [...this.songs.filter((x) => x.id !== s.id), s];
+      this.library = [...this.library.filter((x) => x.id !== s.id), s];
     });
+    listen<UserData>("userdata://changed", (e) => (this.userdata = e.payload));
+    listen<SyncReport>("sync://status", (e) => {
+      this.sync = e.payload;
+      if (e.payload.status !== "running") this.syncProgress = null;
+    });
+    listen<{ done: number; total: number }>("sync://progress", (e) => (this.syncProgress = e.payload));
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
     listen<Settings>("settings://changed", (e) => (this.settings = e.payload));
     listen<string>("ha://status", (e) => (this.haStatus = e.payload));
@@ -166,6 +189,70 @@ class Store {
       default:
         return out.sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title)));
     }
+  }
+
+  // ------------------------------------------------------------------ listas y bajas
+
+  list(id: string): List | undefined {
+    return this.lists.find((l) => l.id === id);
+  }
+
+  /** Las canciones de la lista que hay en esta PC, en su orden. */
+  listSongs(list: List): Song[] {
+    return listSongs(list, this.songs);
+  }
+
+  async editUser(op: UserOp): Promise<string | null> {
+    try {
+      return await api.userdataEdit(op);
+    } catch (e) {
+      this.toast(String(e), "error");
+      return null;
+    }
+  }
+
+  newList(songs: Song[] = []) {
+    this.namePrompt = {
+      title: "Nueva lista",
+      value: "",
+      action: "Crear",
+      onSave: async (name) => {
+        const id = await this.editUser({ type: "create", name, files: songs.map(fileKey) });
+        if (id && songs.length) this.toast(`Agregada a ${name}`);
+        else if (id) this.go({ name: "list", id });
+      },
+    };
+  }
+
+  renameList(list: List) {
+    this.namePrompt = {
+      title: "Renombrar lista",
+      value: list.name,
+      action: "Guardar",
+      onSave: (name) => this.editUser({ type: "rename", id: list.id, name }),
+    };
+  }
+
+  async deleteList(list: List) {
+    const ok = await ask(`Las canciones no se borran: solo la lista, en todos los aparatos.`, { title: `¿Borrar "${list.name}"?`, kind: "warning", okLabel: "Borrar", cancelLabel: "Cancelar" });
+    if (!ok) return;
+    await this.editUser({ type: "delete", id: list.id });
+    if (this.view.name === "list" && this.view.id === list.id) this.go({ name: "lists" });
+  }
+
+  async addToList(list: List, songs: Song[]) {
+    await this.editUser({ type: "add", id: list.id, files: songs.map(fileKey) });
+    this.toast(`Agregada a ${list.name}`);
+  }
+
+  /** Dar de baja: no se borra el archivo, deja de verse en todos los aparatos. */
+  async removeSongs(songs: Song[]) {
+    await this.editUser({ type: "setRemoved", files: songs.map((s) => [fileKey(s), s.title]), removed: true });
+    this.toast(songs.length === 1 ? `Dada de baja: ${songs[0].title}. Se restaura en Ajustes.` : "Dadas de baja. Se restauran en Ajustes.");
+  }
+
+  async restore(file: number) {
+    await this.editUser({ type: "setRemoved", files: [[file, ""]], removed: false });
   }
 
   play(list: Song[], index: number, context: string) {

@@ -1,12 +1,20 @@
 <script lang="ts">
   // Opciones de una cancion: se abre al mantenerla apretada.
-  import { ListPlus, ListEnd, FolderOpen, Trash2, Download } from "@lucide/svelte";
+  import { ListPlus, ListEnd, FolderOpen, Trash2, Download, Library, ListX, EyeOff } from "@lucide/svelte";
   import { folderName } from "@haze/ui/format";
   import { api, type Song } from "../api";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
 
-  let { song, queueIndex }: { song: Song; queueIndex?: number } = $props();
+  let { song, queueIndex, listId }: { song: Song; queueIndex?: number; listId?: string } = $props();
+
+  // Listas y bajas nombran el archivo por su clave, que tienen los temas del telefono (no
+  // los de YouTube sin bajar).
+  const keeps = $derived(song.kind !== "stream" && !!song.file);
+  const list = $derived(listId ? store.list(listId) : undefined);
+
+  // Dar de baja pide un segundo toque y explica que no se borra nada.
+  let confirming = $state(false);
 
   // Las props salen de la capa abierta: despues de store.close() ya no existe y leerlas
   // tira una excepcion. Por eso cada accion toma lo que necesita antes de cerrar (asi
@@ -30,6 +38,24 @@
     store.close();
     if (index !== undefined) api.queueAction("remove", index);
   }
+
+  function addToList() {
+    const s = song;
+    store.replace({ kind: "addToList", songs: [s] });
+  }
+
+  function removeFromList() {
+    const l = list;
+    const file = song.file;
+    store.close();
+    if (l) store.editUser({ type: "remove", id: l.id, file });
+  }
+
+  function giveUp() {
+    const s = song;
+    store.close();
+    store.removeSongs([s]);
+  }
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
@@ -42,17 +68,34 @@
       <div class="sub ellipsis">{song.artist || "Artista desconocido"}</div>
     </div>
   </div>
-  <button class="opt press" onclick={() => enqueue(true)}><ListPlus size={20} /> Reproducir a continuación</button>
-  <button class="opt press" onclick={() => enqueue(false)}><ListEnd size={20} /> Agregar a la cola</button>
-  {#if song.kind === "stream"}
-    <button class="opt press" onclick={download}><Download size={20} /> Bajar como MP3</button>
-  {:else if store.openFolder !== song.folder}
-    <button class="opt press" onclick={() => store.goToFolder(song.folder)}>
-      <FolderOpen size={20} /> Ir a {folderName(song.folder) || "la carpeta"}
-    </button>
-  {/if}
-  {#if queueIndex !== undefined}
-    <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Quitar de la cola</button>
+  {#if confirming}
+    <p class="hint">
+      Deja de verse en la PC, el teléfono y la tele, y no se vuelve a bajar. El archivo no se borra: se restaura desde Ajustes.
+    </p>
+    <button class="opt press danger" onclick={giveUp}><EyeOff size={20} /> Sí, dar de baja</button>
+    <button class="opt press" onclick={() => (confirming = false)}>Cancelar</button>
+  {:else}
+    <button class="opt press" onclick={() => enqueue(true)}><ListPlus size={20} /> Reproducir a continuación</button>
+    <button class="opt press" onclick={() => enqueue(false)}><ListEnd size={20} /> Agregar a la cola</button>
+    {#if song.kind === "stream"}
+      <button class="opt press" onclick={download}><Download size={20} /> Bajar como MP3</button>
+    {:else if store.openFolder !== song.folder}
+      <button class="opt press" onclick={() => store.goToFolder(song.folder)}>
+        <FolderOpen size={20} /> Ir a {folderName(song.folder) || "la carpeta"}
+      </button>
+    {/if}
+    {#if keeps}
+      <button class="opt press" onclick={addToList}><Library size={20} /> Agregar a lista…</button>
+    {/if}
+    {#if list && keeps}
+      <button class="opt press danger" onclick={removeFromList}><ListX size={20} /> Quitar de la lista</button>
+    {/if}
+    {#if queueIndex !== undefined}
+      <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Quitar de la cola</button>
+    {/if}
+    {#if keeps}
+      <button class="opt press danger" onclick={() => (confirming = true)}><EyeOff size={20} /> Dar de baja</button>
+    {/if}
   {/if}
 </div>
 
@@ -115,6 +158,11 @@
   }
   .danger {
     color: var(--danger);
+  }
+  .hint {
+    margin: 6px 12px 4px;
+    font-size: 13px;
+    color: var(--text-2);
   }
   @keyframes up {
     from {

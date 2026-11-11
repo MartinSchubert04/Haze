@@ -12,6 +12,14 @@
 //! - `GET /api/yt/saves`           como van las descargas
 //! - `POST /api/rescan`            volver a leer la carpeta (tambien se hace cada 15 min)
 //!
+//! Para que la PC y el telefono se sincronicen (`haze_core::sync`):
+//!
+//! - `GET /api/sync/index`         todos los archivos de musica: ruta relativa, tamaño, fecha
+//! - `GET /api/sync/file/{ruta}`   bajar uno
+//! - `PUT /api/sync/file/{ruta}`   subir uno nuevo (`?mtime=`). Nunca pisa uno que ya esta
+//! - `GET /api/user/{user}`        las listas y bajas de ese usuario (`haze_core::userdata`)
+//! - `POST /api/user/{user}`       juntarlas con las de un aparato: devuelve lo junto
+//!
 //! Sin login: es solo para la red de casa (el puerto no se abre en el router).
 
 use std::collections::{HashMap, HashSet};
@@ -21,13 +29,17 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
-use axum::extract::{Path, Query, Request, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures_util::StreamExt;
 use haze_core::library::{self, normalize, Library, Song};
+use haze_core::sync::{clean_user, syncable, FileEntry};
+use haze_core::userdata::UserData;
 use haze_core::youtube;
+use tokio::io::AsyncWriteExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as Process;
@@ -83,6 +95,8 @@ pub struct Web {
     saves: Mutex<Vec<Save>>,
     save_tx: tokio::sync::mpsc::UnboundedSender<u64>,
     http: reqwest::Client,
+    /// Uno a la vez juntando listas: dos aparatos al mismo tiempo no se pisan.
+    users: tokio::sync::Mutex<()>,
 }
 
 type Shared = Arc<Web>;
@@ -109,6 +123,7 @@ pub async fn start() {
         saves: Mutex::new(Vec::new()),
         save_tx,
         http: reqwest::Client::new(),
+        users: tokio::sync::Mutex::new(()),
     });
     tokio::spawn(rescan_loop(web.clone()));
     tokio::spawn(save_worker(web.clone(), save_rx));
@@ -124,6 +139,12 @@ pub async fn start() {
         .route("/api/yt/save", post(yt_save))
         .route("/api/yt/saves", get(yt_saves))
         .route("/api/rescan", post(rescan_now))
+        .route("/api/sync/index", get(sync_index))
+        .route(
+            "/api/sync/file/{*path}",
+            get(sync_get).put(sync_put).layer(DefaultBodyLimit::max(MAX_UPLOAD as usize)),
+        )
+        .route("/api/user/{user}", get(user_get).post(user_post))
         // La app de la tele es una pagina local (otro origen).
         .layer(CorsLayer::permissive())
         .with_state(web);
@@ -306,6 +327,151 @@ async fn lyrics(State(web): State<Shared>, Path(id): Path<u64>) -> Response {
 async fn rescan_now(State(web): State<Shared>) -> StatusCode {
     tokio::spawn(async move { scan(&web).await });
     StatusCode::ACCEPTED
+}
+
+// ---------------------------------------------------------------------------------------
+// Sincronizar (la PC y el telefono)
+
+/// Un tema no pesa mas que esto: lo demas es un error o algo que no es musica.
+const MAX_UPLOAD: u64 = 1024 * 1024 * 1024;
+/// Lo que se esta subiendo, antes de quedar en su lugar.
+const UPLOAD_TMP: &str = ".haze-subiendo";
+
+async fn sync_index(State(web): State<Shared>) -> Response {
+    let root = web.music.clone();
+    let files = tokio::task::spawn_blocking(move || {
+        walkdir::WalkDir::new(&root)
+            .into_iter()
+            .filter_entry(|e| e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.'))
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .filter_map(|e| {
+                let rel = e.path().strip_prefix(&root).ok()?.to_string_lossy().replace('\\', "/");
+                if !syncable(&rel) {
+                    return None;
+                }
+                let meta = e.metadata().ok()?;
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                Some(FileEntry { path: rel, size: meta.len(), mtime })
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default();
+    ([(header::CACHE_CONTROL, "no-cache")], Json(files)).into_response()
+}
+
+/// La ruta en disco de un archivo de la musica, si la ruta pedida es valida.
+fn music_file(web: &Web, path: &str) -> Option<PathBuf> {
+    syncable(path).then(|| web.music.join(path))
+}
+
+async fn sync_get(State(web): State<Shared>, Path(path): Path<String>, req: Request) -> Response {
+    let Some(file) = music_file(&web, &path) else { return bad("ruta invalida") };
+    let mime: mime::Mime = audio_mime(&path).parse().unwrap_or(mime::APPLICATION_OCTET_STREAM);
+    match ServeFile::new_with_mime(&file, &mime).oneshot(req).await {
+        Ok(r) => r.map(Body::new).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct PutQuery {
+    #[serde(default)]
+    mtime: i64,
+}
+
+/// Sube un archivo nuevo. Si ya hay uno con esa ruta, 409: nunca se pisa nada.
+async fn sync_put(
+    State(web): State<Shared>,
+    Path(path): Path<String>,
+    Query(q): Query<PutQuery>,
+    body: Body,
+) -> Response {
+    let Some(dest) = music_file(&web, &path) else { return bad("ruta invalida") };
+    if tokio::fs::try_exists(&dest).await.unwrap_or(true) {
+        return StatusCode::CONFLICT.into_response();
+    }
+    let tmp_dir = web.music.join(UPLOAD_TMP);
+    if let Err(e) = tokio::fs::create_dir_all(&tmp_dir).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    }
+    let tmp = tmp_dir.join(format!("{:x}.part", haze_core::song::id_for(&format!("{path}|{:?}", Instant::now()))));
+    let res: Result<(), String> = async {
+        let mut out = tokio::fs::File::create(&tmp).await.map_err(|e| e.to_string())?;
+        let mut stream = body.into_data_stream();
+        let mut n: u64 = 0;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            n += chunk.len() as u64;
+            if n > MAX_UPLOAD {
+                return Err("demasiado grande".into());
+            }
+            out.write_all(&chunk).await.map_err(|e| e.to_string())?;
+        }
+        out.flush().await.map_err(|e| e.to_string())?;
+        drop(out);
+        if let Some(dir) = dest.parent() {
+            tokio::fs::create_dir_all(dir).await.map_err(|e| e.to_string())?;
+        }
+        // Pudo llegar otro mientras tanto.
+        if tokio::fs::try_exists(&dest).await.unwrap_or(true) {
+            return Err("ya existe".into());
+        }
+        tokio::fs::rename(&tmp, &dest).await.map_err(|e| e.to_string())?;
+        if q.mtime > 0 {
+            let d = dest.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                let f = std::fs::File::options().write(true).open(d)?;
+                f.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(q.mtime as u64))
+            })
+            .await;
+        }
+        Ok(())
+    }
+    .await;
+    let _ = tokio::fs::remove_file(&tmp).await;
+    match res {
+        Ok(()) => {
+            info!("sincronizar: llego {path}");
+            StatusCode::CREATED.into_response()
+        }
+        Err(e) if e == "ya existe" => StatusCode::CONFLICT.into_response(),
+        Err(e) => {
+            warn!("sincronizar: no se pudo guardar {path}: {e}");
+            (StatusCode::INTERNAL_SERVER_ERROR, e).into_response()
+        }
+    }
+}
+
+fn user_path(web: &Web, user: &str) -> PathBuf {
+    web.data.join("users").join(format!("{}.json", clean_user(user)))
+}
+
+async fn user_get(State(web): State<Shared>, Path(user): Path<String>) -> Response {
+    let path = user_path(&web, &user);
+    let data = tokio::task::spawn_blocking(move || UserData::load(&path)).await.unwrap_or_default();
+    ([(header::CACHE_CONTROL, "no-cache")], Json(data)).into_response()
+}
+
+async fn user_post(State(web): State<Shared>, Path(user): Path<String>, Json(theirs): Json<UserData>) -> Response {
+    let _one = web.users.lock().await;
+    let path = user_path(&web, &user);
+    let res = tokio::task::spawn_blocking(move || {
+        let merged = UserData::load(&path).merge(&theirs);
+        merged.save(&path).map(|_| merged)
+    })
+    .await;
+    match res {
+        Ok(Ok(merged)) => Json(merged).into_response(),
+        Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
 }
 
 // ---------------------------------------------------------------------------------------

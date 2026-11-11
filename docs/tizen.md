@@ -33,6 +33,7 @@ apps/server/src/web.rs   la biblioteca por HTTP (abajo)
 | `GET /api/yt/audio?url=` | escuchar de YouTube (el server pasa el audio, ver abajo) |
 | `POST /api/yt/save` | bajar como MP3 a `MUSIC_DIR/YouTube` |
 | `GET /api/yt/saves` | cómo van las descargas |
+| `GET /api/user/{user}` | las listas y bajas de ese usuario (la tele solo las lee) |
 | `POST /api/rescan` | releer la carpeta (sola, cada 15 min) |
 
 Sin login: es para la red de casa y el puerto no se abre en el router. El bot de Discord pasa
@@ -54,9 +55,17 @@ pueden pasar). Dos mañas de YouTube que resuelve el server:
 
 ## La app
 
-- **Inicio**: mezclar todo, seguir escuchando, agregadas hace poco y las carpetas (mosaico de
-  tapas). **Canciones**: todas, de la A a la Z. **Buscar**: en la biblioteca, mientras se
+- **Inicio**: mezclar todo, seguir escuchando, agregadas hace poco, las listas y las carpetas
+  (mosaico de tapas). **Canciones**: todas, de la A a la Z. **Buscar**: en la biblioteca, mientras se
   escribe, y "Buscar en YouTube". **YouTube**: buscar, escuchar y **Guardar** en el server.
+- **Listas y bajas**: son datos de Haze por usuario, no carpetas. La tele las pide con la
+  biblioteca (y al volver a la app) a `/api/user/<usuario>`: cada lista son claves de archivo
+  (`file` en `/api/library`) en su orden, una por archivo; las que el server no tiene no
+  aparecen. Las dadas de baja (`removed`) no se ven en ningún lado (canciones, carpetas,
+  listas, buscar, agregadas, mezclar), aunque el archivo siga. Si el server es viejo y no
+  contesta, sin listas ni bajas. La tele no las edita: se arman en los otros aparatos.
+- **Usuario**: `haze.tv.user` (sin nada, `default`), se cambia en "Elegir server" o con
+  `?user=` (como `?server=`, sin guardarlo).
 - **Listas largas** (`VList`): dibujan solo las filas que se ven; mantener apretado acelera
   (de a 1, 3 y 8) y CH+/CH- pasan de a una pantalla. A la derecha de cada fila, "A la cola" (o
   "Guardar" en YouTube).
@@ -74,7 +83,7 @@ pueden pasar). Dos mañas de YouTube que resuelve el server:
   anterior (y CH+/CH- en "Sonando"); se registran con `tizen.tvinputdevice`. Atrás: cierra
   "Sonando", sale de la carpeta, vuelve a la barra lateral, al inicio y recién ahí sale.
 - **Protector de pantalla** apagado mientras suena (`webapis.appcommon`).
-- **Elegir server**: se escribe la IP (sin `http://` ni puerto usa `:7790`) o **Buscar en esta
+- **Elegir server**: se escribe la IP (y el usuario) (sin `http://` ni puerto usa `:7790`) o **Buscar en esta
   red**, que prueba `/api/health` en las 254 direcciones de la red de la tele.
 
 ## Rendimiento

@@ -3,7 +3,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw } from "@lucide/svelte";
+  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw, EyeOff, Undo2 } from "@lucide/svelte";
   import { api, fileUrl } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "@haze/ui/format";
@@ -141,6 +141,44 @@
 
   $effect(() => stopEditing);
 
+  // Server y usuario van en borrador, como Home Assistant: cada letra no dispara nada.
+  let syncDraft = $state({ server: store.settings!.sync.server, user: store.settings!.sync.user });
+  const syncDirty = $derived(syncDraft.server.trim() !== s.sync.server || (syncDraft.user.trim() || "default") !== s.sync.user);
+
+  function setSync(patch: Partial<typeof s.sync>) {
+    store.saveSettings((x) => (x.sync = { ...x.sync, ...patch }));
+  }
+
+  async function pickSyncFolder() {
+    const dir = await open({ directory: true, title: "Carpeta que se sincroniza con el server" });
+    if (typeof dir === "string") setSync({ folder: dir.replaceAll("\\", "/") });
+  }
+
+  const ago = (ms: number) => {
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return "recién";
+    if (m < 60) return `hace ${m} min`;
+    const h = Math.round(m / 60);
+    return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
+  };
+
+  const syncLine = $derived.by(() => {
+    const r = store.sync;
+    const p = store.syncProgress;
+    if (!s.sync.enabled) return "Apagado.";
+    if (!s.sync.server.trim()) return "Falta poner el server.";
+    if (r.status === "running") return p && p.total ? `Sincronizando ${p.done} de ${p.total}…` : "Sincronizando…";
+    if (r.status === "away") return `Fuera de casa: no se encontró el server (${ago(r.at)}).`;
+    if (r.status === "error") return `Error ${ago(r.at)}: ${r.error ?? "algo falló"}`;
+    if (r.status === "ok") {
+      const parts = [r.downloaded && plural(r.downloaded, "bajada", "bajadas"), r.uploaded && plural(r.uploaded, "subida", "subidas")].filter(Boolean);
+      return `Al día · ${ago(r.at)}${parts.length ? ` · ${parts.join(", ")}` : ""}`;
+    }
+    return "Todavía no sincronizó.";
+  });
+
+  const removedList = $derived(store.userdata.removed.filter((r) => r.removed).sort((a, b) => b.updated - a.updated));
+
   const count = (dir: string) => store.songs.filter((x) => x.path.toLowerCase().startsWith(dir.toLowerCase() + "/")).length;
 </script>
 
@@ -179,6 +217,60 @@
         {/each}
         <button class="add" onclick={addSource}><FolderPlus size={16} /> Agregar carpeta</button>
       </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ sincronizar -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <h2>Sincronizar con el server</h2>
+          <p>
+            En casa, cada 2 horas, baja lo que le falta a esta PC, sube lo nuevo y junta las listas. Nunca borra archivos. Fuera de casa
+            no hace nada.
+          </p>
+        </div>
+        <button class="pill" onclick={() => api.syncNow()} disabled={!s.sync.enabled || store.sync.status === "running"}>
+          <RefreshCw size={15} class={store.sync.status === "running" ? "spin" : ""} />
+          {store.sync.status === "running" ? "Sincronizando…" : "Sincronizar ahora"}
+        </button>
+      </div>
+      <label class="toggle">
+        <div>
+          <div>Sincronizar sola</div>
+          <div class="hint">{syncLine}</div>
+        </div>
+        <input type="checkbox" checked={s.sync.enabled} onchange={(e) => setSync({ enabled: e.currentTarget.checked })} />
+      </label>
+      <div class="form" class:off={!s.sync.enabled}>
+        <label>Server<input type="text" bind:value={syncDraft.server} placeholder="192.168.0.100" /></label>
+        <label>Usuario<input type="text" bind:value={syncDraft.user} placeholder="default" autocomplete="off" /></label>
+        <label class="wide">
+          Carpeta que se sincroniza
+          <div class="pick">
+            <span class="ellipsis grow">{s.sync.folder || "Ninguna: solo las listas"}</span>
+            <button type="button" class="pill" onclick={pickSyncFolder}><FolderPlus size={15} /> Elegir</button>
+          </div>
+          <span class="hint">Lo que llega del server se guarda acá, con las mismas subcarpetas (All, YouTube…).</span>
+        </label>
+      </div>
+      <div class="save">
+        <button class="pill primary" disabled={!syncDirty} onclick={() => setSync({ server: syncDraft.server.trim(), user: syncDraft.user.trim() || "default" })}>
+          Guardar
+        </button>
+      </div>
+      {#if removedList.length}
+        <h3 class="sub">Dadas de baja</h3>
+        <p>No se ven en ningún aparato, pero el archivo sigue.</p>
+        <div class="rows">
+          {#each removedList as r (r.file)}
+            <div class="item">
+              <EyeOff size={16} />
+              <div class="grow ellipsis">{r.title || "Sin nombre"}</div>
+              <button class="pill" onclick={() => store.restore(r.file)}><Undo2 size={15} /> Restaurar</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </section>
 
     <!-- ------------------------------------------------------------ descargas -->
@@ -901,6 +993,17 @@
   }
   .form .wide {
     grid-column: 1 / -1;
+  }
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    font-size: 13.5px;
+  }
+  h3.sub {
+    margin: 22px 0 4px;
+    font-size: 14px;
   }
   .save {
     display: flex;

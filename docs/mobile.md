@@ -49,7 +49,7 @@ simple que parametrizarlos.
 
 ## Interfaz
 
-- La barra lateral pasa a pestañas abajo: Canciones, Carpetas, YouTube, Cola.
+- La barra lateral pasa a pestañas abajo: Canciones, Carpetas, Listas, YouTube, Cola.
 - La barra del reproductor queda como mini reproductor encima de las pestañas. Al tocarla
   se abre "Reproduciendo" a pantalla completa, que se cierra deslizando hacia abajo.
 - El clic derecho pasa a mantener apretado y abrir una hoja con las opciones.
@@ -118,6 +118,25 @@ sin tags ni tapa: el nombre queda "Artista - Tema" y la biblioteca separa el art
 nombre. Cuando la librería publique un ffmpeg de 16 KB, alcanza con subir la versión.
 
 **4. Actualizaciones. Hecho.** Ver las dos secciones siguientes.
+
+## Sincronizar y listas
+
+Igual que en escritorio (`haze_core::sync` y `haze_core::userdata`), pero en el teléfono
+viene apagado: se prende en Ajustes → Sincronizar, con la IP del server de casa
+(`apps/server`, puerto 7790) y el usuario. Corre solo con la app viva, sin WorkManager: al
+abrir, cada 2 horas y con "Sincronizar ahora". Si el server no contesta, está fuera de casa
+y no hace nada.
+
+- La carpeta sincronizada es siempre `Music/Haze`. Se lista con MediaStore, se sube leyendo
+  el archivo por la ruta (alcanza con `READ_MEDIA_AUDIO`) y lo bajado entra por MediaStore
+  con `SyncBridge` (JNI, como las descargas), que nunca pisa un archivo. Las letras (`.lrc`)
+  no se bajan: MediaStore no las lista.
+- Con Android 17 hace falta el permiso de red local, el mismo de HA: se pide al prender y,
+  si falta, Ajustes lo muestra.
+- Las listas son de Haze, no carpetas: se guardan en `userdata.json` y en el server, y se
+  juntan por lista (gana el cambio más nuevo). Cada cambio se manda al server enseguida si
+  está en casa. "Dar de baja" oculta la canción en todos los aparatos sin borrar el archivo;
+  se restaura desde Ajustes. Home Assistant ofrece las listas como "Lista: <nombre>".
 
 ## Actualizaciones
 

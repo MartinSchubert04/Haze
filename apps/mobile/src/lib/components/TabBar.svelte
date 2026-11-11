@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Music, Folder, ListMusic, TvMinimalPlay } from "@lucide/svelte";
+  import { Music, Folder, Library, ListMusic, TvMinimalPlay } from "@lucide/svelte";
   import { store, type Tab } from "../store.svelte";
 
   const tabs: { id: Tab; label: string; icon: typeof Music }[] = [
     { id: "songs", label: "Canciones", icon: Music },
     { id: "folders", label: "Carpetas", icon: Folder },
+    { id: "lists", label: "Listas", icon: Library },
     { id: "youtube", label: "YouTube", icon: TvMinimalPlay },
     { id: "queue", label: "Cola", icon: ListMusic },
   ];

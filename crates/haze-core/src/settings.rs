@@ -25,6 +25,7 @@ pub struct Settings {
     pub behavior: Behavior,
     pub ha: HomeAssistant,
     pub discord: Discord,
+    pub sync: Sync,
     pub shortcuts: Shortcuts,
     pub song_sort: String,
     pub folder_sort: String,
@@ -151,6 +152,32 @@ impl Default for Discord {
     }
 }
 
+/// Sincronizar con el server de casa (ver `haze_core::sync`): la musica de `folder` con la
+/// del server, y las listas y bajas de `user`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Sync {
+    pub enabled: bool,
+    /// IP o URL del server en la red de casa ("192.168.0.100"; el puerto es 7790).
+    pub server: String,
+    /// De quien son las listas.
+    pub user: String,
+    /// La carpeta que se sincroniza (escritorio). En Android es siempre `Music/Haze`.
+    pub folder: String,
+}
+
+impl Default for Sync {
+    fn default() -> Self {
+        // En la PC viene prendido; en el telefono se prende en Ajustes.
+        Self {
+            enabled: cfg!(not(target_os = "android")),
+            server: String::new(),
+            user: "default".into(),
+            folder: String::new(),
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         let music = dirs_music();
@@ -164,6 +191,7 @@ impl Default for Settings {
             behavior: Behavior::default(),
             ha: HomeAssistant::default(),
             discord: Discord::default(),
+            sync: Sync::default(),
             shortcuts: Shortcuts::default(),
             song_sort: "title_asc".into(),
             folder_sort: "name_asc".into(),

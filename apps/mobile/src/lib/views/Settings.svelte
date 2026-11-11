@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Ajustes del telefono: tema, paleta, fondo, reproduccion y Home Assistant.
-  import { ChevronLeft, ChevronDown, Check, RefreshCw, Download, Eye } from "@lucide/svelte";
+  // Ajustes del telefono: tema, paleta, fondo, reproduccion, sincronizar y Home Assistant.
+  import { ChevronLeft, ChevronDown, Check, RefreshCw, Download, Eye, EyeOff, Undo2 } from "@lucide/svelte";
   import { folderName, plural } from "@haze/ui/format";
   import { THEMES, palettesOf, paletteOf, themeOf } from "@haze/ui/themes";
   import { api } from "../api";
@@ -21,6 +21,56 @@
     ({ connected: "Conectado", error: "Sin conexión", network: "Falta permiso" } as Record<string, string>)[store.haStatus] ??
       "Conectando…",
   );
+
+  // Server y usuario se guardan con un boton, como HA: cada letra arrancaria una vuelta.
+  let syncDraft = $state({ server: store.settings!.sync.server, user: store.settings!.sync.user });
+  const syncDirty = $derived(
+    syncDraft.server.trim() !== s.sync.server || (syncDraft.user.trim() || "default") !== s.sync.user,
+  );
+  const syncing = $derived(store.syncReport.status === "running");
+
+  function setSync(patch: Partial<typeof s.sync>) {
+    return store.saveSettings((x) => (x.sync = { ...x.sync, ...patch }));
+  }
+
+  // El permiso de red local se pide antes de prender: asi la primera vuelta ya lo tiene.
+  async function toggleSync(on: boolean) {
+    if (on) await api.requestLocalNetwork().catch(() => false);
+    await setSync({ enabled: on });
+  }
+
+  async function grantNetwork() {
+    if (await api.requestLocalNetwork().catch(() => false)) api.syncNow();
+  }
+
+  const ago = (ms: number) => {
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return "recién";
+    if (m < 60) return `hace ${m} min`;
+    const h = Math.round(m / 60);
+    return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
+  };
+
+  const syncLine = $derived.by(() => {
+    const r = store.syncReport;
+    const p = store.syncProgress;
+    if (!s.sync.enabled) return "Apagado.";
+    if (!s.sync.server.trim()) return "Falta poner el server.";
+    if (r.status === "running") return p && p.total ? `Sincronizando ${p.done} de ${p.total}…` : "Sincronizando…";
+    if (r.status === "network") return "Falta el permiso de red local.";
+    if (r.status === "away") return `Fuera de casa: no se encontró el server (${ago(r.at)}).`;
+    if (r.status === "error") return `Error ${ago(r.at)}: ${r.error ?? "algo falló"}`;
+    if (r.status === "ok") {
+      const parts = [
+        r.downloaded && plural(r.downloaded, "bajada", "bajadas"),
+        r.uploaded && plural(r.uploaded, "subida", "subidas"),
+      ].filter(Boolean);
+      return `Al día · ${ago(r.at)}${parts.length ? ` · ${parts.join(", ")}` : ""}`;
+    }
+    return "Todavía no sincronizó.";
+  });
+
+  const removedList = $derived(store.userdata.removed.filter((r) => r.removed).sort((a, b) => b.updated - a.updated));
 
   // Home Assistant se muestra plegado: casi nunca se toca.
   let haOpen = $state(false);
@@ -135,6 +185,52 @@
         }}
       />
     </label>
+
+    <h2>Sincronizar</h2>
+    <p class="hint">
+      En casa, al abrir Haze y cada 2 horas mientras esté abierta, baja a Music/Haze lo que le falta al teléfono, sube lo
+      nuevo al server y junta las listas. Nunca borra archivos. Fuera de casa no hace nada.
+    </p>
+    <label class="row">
+      <span>Sincronizar con el server de casa</span>
+      <input type="checkbox" checked={s.sync.enabled} onchange={(e) => toggleSync(e.currentTarget.checked)} />
+    </label>
+    <div class="form" class:off={!s.sync.enabled}>
+      <label>Server<input type="text" inputmode="url" bind:value={syncDraft.server} placeholder="192.168.0.100" autocapitalize="off" /></label>
+      <label>
+        Usuario<input type="text" bind:value={syncDraft.user} placeholder="default" autocomplete="off" autocapitalize="off" />
+        <span class="hint">El mismo en la PC y el teléfono para compartir las listas.</span>
+      </label>
+      <button
+        class="pill primary save"
+        disabled={!syncDirty}
+        onclick={() => setSync({ server: syncDraft.server.trim(), user: syncDraft.user.trim() || "default" })}
+      >
+        Guardar
+      </button>
+    </div>
+    <div class="row">
+      <span class="hint sync-line" class:err={store.syncReport.status === "error" && s.sync.enabled}>{syncLine}</span>
+      {#if s.sync.enabled && store.syncReport.status === "network" && !syncing}
+        <button class="pill" onclick={grantNetwork}>Dar permiso</button>
+      {:else}
+        <button class="pill" disabled={!s.sync.enabled || syncing} onclick={() => api.syncNow()}>
+          <RefreshCw size={15} class={syncing ? "spin" : ""} /> Sincronizar ahora
+        </button>
+      {/if}
+    </div>
+    {#if removedList.length}
+      <p class="hint">Dadas de baja: no se ven en ningún aparato, pero el archivo sigue.</p>
+      {#each removedList as r (r.file)}
+        <div class="row hidden-folder">
+          <div class="folder-text removed">
+            <EyeOff size={16} />
+            <span class="ellipsis">{r.title || "Sin nombre"}</span>
+          </div>
+          <button class="pill" onclick={() => store.restore(r.file)}><Undo2 size={15} /> Restaurar</button>
+        </div>
+      {/each}
+    {/if}
 
     <button class="fold" aria-expanded={haOpen} onclick={() => (haOpen = !haOpen)}>
       <h2>Home Assistant</h2>
@@ -282,6 +378,19 @@
   }
   .folder-text .hint {
     margin: 2px 0 0;
+  }
+  .removed {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-2);
+  }
+  .sync-line {
+    margin: 0;
+    min-width: 0;
+  }
+  .sync-line.err {
+    color: var(--danger);
   }
   .swatches {
     display: grid;

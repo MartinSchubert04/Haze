@@ -1,8 +1,8 @@
 // Tipos y llamadas al backend de Rust.
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
+import type { DownloadJob, LinkInfo, List, PlayerState, QueueEntry, QueueView, Settings, Song, SyncReport, UserData, UserOp } from "@haze/ui/types";
 
-export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song };
+export type { DownloadJob, LinkInfo, List, PlayerState, QueueEntry, QueueView, Settings, Song, SyncReport, UserData, UserOp };
 
 export type UpdateInfo = { version: string; status: "downloading" | "ready" };
 
@@ -29,6 +29,8 @@ export type Bootstrap = {
   downloads: DownloadJob[];
   update: UpdateInfo | null;
   version: string;
+  userdata: UserData;
+  sync: SyncReport;
 };
 
 export type Control =
@@ -67,6 +69,9 @@ export const api = {
   pauseShortcuts: (paused: boolean) => invoke("shortcuts_pause", { paused }),
   checkUpdate:() => invoke<string | null>("check_update"),
   updateNow: () => invoke("update_now"),
+  /** Aplica un cambio a las listas o bajas. Devuelve el id de la lista tocada. */
+  userdataEdit: (op: UserOp) => invoke<string | null>("userdata_edit", { op }),
+  syncNow: () => invoke("sync_now"),
 };
 
 /** URL de la tapa: la miniatura remota o la embebida (servida por Rust). */

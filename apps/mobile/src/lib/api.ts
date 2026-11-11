@@ -1,8 +1,21 @@
 // Llamadas al backend de Rust (apps/mobile/src-tauri). Los tipos son los de escritorio.
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song } from "@haze/ui/types";
+import type {
+  DownloadJob,
+  LinkInfo,
+  List,
+  PlayerState,
+  QueueEntry,
+  QueueView,
+  Removed,
+  Settings,
+  Song,
+  SyncReport,
+  UserData,
+  UserOp,
+} from "@haze/ui/types";
 
-export type { DownloadJob, LinkInfo, PlayerState, QueueEntry, QueueView, Settings, Song };
+export type { DownloadJob, LinkInfo, List, PlayerState, QueueEntry, QueueView, Removed, Settings, Song, SyncReport, UserData, UserOp };
 
 export type UpdateInfo = { version: string; status: "downloading" | "ready"; progress: number };
 
@@ -21,6 +34,9 @@ export type Bootstrap = {
   haStatus: string;
   downloads: DownloadJob[];
   update: UpdateInfo | null;
+  /** Listas y canciones dadas de baja. */
+  userdata: UserData;
+  sync: SyncReport;
 };
 
 export type Control =
@@ -61,6 +77,9 @@ export const api = {
   updateCheck: () => invoke<string | null>("update_check"),
   /** `false` si antes hay que dar el permiso de instalar apps (se abre ese ajuste). */
   updateInstall: () => invoke<boolean>("update_install"),
+  /** Cambia las listas o las bajas. Devuelve el id de la lista tocada (la nueva, al crear). */
+  editUser: (op: UserOp) => invoke<string | null>("userdata_edit", { op }),
+  syncNow: () => invoke("sync_now"),
 };
 
 /** URL de la tapa: la miniatura remota o la del archivo (la sirve Rust desde MediaStore). */

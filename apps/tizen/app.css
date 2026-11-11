@@ -217,6 +217,9 @@ i[data-icon] {
 .search-bar input:focus {
   box-shadow: inset 0 0 0 3px var(--accent), 0 0 0 6px rgba(var(--tint-rgb) / 0.25);
 }
+.field-user {
+  margin-top: 28px;
+}
 .hint {
   margin: 12px 6px 0;
   color: var(--text-3);
@@ -484,6 +487,9 @@ h2 {
   grid-template-columns: repeat(5, 1fr);
   gap: 40px 34px;
   padding-bottom: 80px;
+}
+.grid.lists {
+  padding-bottom: 0;
 }
 .tile-art {
   position: relative;

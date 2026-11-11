@@ -126,6 +126,22 @@ impl<R: Runtime> HazePlayer<R> {
         }
     }
 
+    /// Pasa un archivo bajado del server (`tmp`) a Music/Haze/<path> por MediaStore, sin
+    /// pisar nada. Va por JNI como las descargas. Bloquea: llamar fuera del runtime.
+    pub fn sync_save(&self, tmp: &str, path: &str, mtime: i64) -> Result<(), String> {
+        #[derive(Deserialize)]
+        struct Out {
+            ok: Option<bool>,
+            error: Option<String>,
+        }
+        let out = bridge::sync_save(tmp, path, mtime).map_err(|e| e.to_string())?;
+        let out: Out = serde_json::from_str(&out).map_err(|e| e.to_string())?;
+        match (out.ok, out.error) {
+            (Some(true), _) => Ok(()),
+            (_, e) => Err(e.unwrap_or_else(|| "no se pudo guardar".into())),
+        }
+    }
+
     /// Como va la cola de descargas: arranca, actualiza o cierra el servicio en primer
     /// plano que las sostiene con la app en el fondo. No espera.
     pub fn downloads_status(&self, status: DownloadsStatus) {
@@ -235,7 +251,7 @@ impl Engine for AndroidEngine {
     }
 }
 
-/// Las clases de Kotlin que se llaman por JNI: `EngineBridge` y `DownloadBridge`.
+/// Las clases de Kotlin que se llaman por JNI: `EngineBridge`, `DownloadBridge` y `SyncBridge`.
 mod bridge {
     use std::sync::Mutex;
 
@@ -244,9 +260,11 @@ mod bridge {
 
     const ENGINE: &str = "app.haze.player.plugin.EngineBridge";
     const DOWNLOADS: &str = "app.haze.player.plugin.DownloadBridge";
+    const SYNC: &str = "app.haze.player.plugin.SyncBridge";
 
     static ENGINE_CLASS: Mutex<Option<GlobalRef>> = Mutex::new(None);
     static DOWNLOAD_CLASS: Mutex<Option<GlobalRef>> = Mutex::new(None);
+    static SYNC_CLASS: Mutex<Option<GlobalRef>> = Mutex::new(None);
 
     /// Corre `f` con el JNIEnv del hilo (que queda enganchado a la VM) dentro de un marco
     /// propio: los hilos de Rust no vuelven a Java, y sin el marco las referencias locales
@@ -311,6 +329,27 @@ mod bridge {
                     "download",
                     "(JLjava/lang/String;)Ljava/lang/String;",
                     &[JValue::Long(id), JValue::Object(&args)],
+                )?
+                .l()?;
+            let out = JString::from(out);
+            let text: String = env.get_string(&out)?.into();
+            Ok(text)
+        })
+    }
+
+    /// `SyncBridge.save(tmp, path, mtime)`: bloquea hasta que termina.
+    pub fn sync_save(tmp: &str, path: &str, mtime: i64) -> jni::errors::Result<String> {
+        with_env(|env| {
+            let class = class(env, &SYNC_CLASS, SYNC)?;
+            let class: &JClass = class.as_obj().into();
+            let tmp = env.new_string(tmp)?;
+            let path = env.new_string(path)?;
+            let out = env
+                .call_static_method(
+                    class,
+                    "save",
+                    "(Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;",
+                    &[JValue::Object(&tmp), JValue::Object(&path), JValue::Long(mtime)],
                 )?
                 .l()?;
             let out = JString::from(out);

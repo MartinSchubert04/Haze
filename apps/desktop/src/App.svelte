@@ -10,9 +10,12 @@
   import PlayerBar from "./lib/components/PlayerBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import LinkDialog from "./lib/components/LinkDialog.svelte";
+  import NamePrompt from "./lib/components/NamePrompt.svelte";
   import Songs from "./lib/views/Songs.svelte";
   import Folders from "./lib/views/Folders.svelte";
   import FolderDetail from "./lib/views/FolderDetail.svelte";
+  import Lists from "./lib/views/Lists.svelte";
+  import ListDetail from "./lib/views/ListDetail.svelte";
   import YouTube from "./lib/views/YouTube.svelte";
   import Downloads from "./lib/views/Downloads.svelte";
   import Queue from "./lib/views/Queue.svelte";
@@ -41,7 +44,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (typing(e) || store.pendingLink) return;
+    if (typing(e) || store.pendingLink || store.namePrompt) return;
     if (e.code === "Space") {
       e.preventDefault();
       api.control({ type: "toggle" });
@@ -99,6 +102,8 @@
             {#if store.view.name === "songs"}<Songs />
             {:else if store.view.name === "folders"}<Folders />
             {:else if store.view.name === "folder"}<FolderDetail path={store.view.path} />
+            {:else if store.view.name === "lists"}<Lists />
+            {:else if store.view.name === "list"}<ListDetail id={store.view.id} />
             {:else if store.view.name === "youtube"}<YouTube query={store.view.query} />
             {:else if store.view.name === "downloads"}<Downloads />
             {:else if store.view.name === "queue"}<Queue />
@@ -131,6 +136,7 @@
 
   <ContextMenu />
   <LinkDialog />
+  <NamePrompt />
 {/if}
 
 <style>
