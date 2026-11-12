@@ -515,7 +515,17 @@ pub fn show_main(app: &AppHandle) {
         if place {
             place_outer(&w, Some((s.x, s.y)), None);
         }
-        place_outer(&w, None, Some((s.width, s.height)));
+        // Nunca mas grande que el monitor donde aparece. Con monitores de distinta escala
+        // el tamaño guardado llego a crecer hasta 25020x6540: para pintar el fondo de una
+        // ventana asi Windows niega el bitmap (CreateDIBSection) y tauri se cae.
+        let area = if place { monitor_at(app, s.x, s.y) } else { None }
+            .or_else(|| w.current_monitor().ok().flatten())
+            .map(|m| m.work_area().size);
+        let (width, height) = match area {
+            Some(a) => (s.width.min(a.width), s.height.min(a.height)),
+            None => (s.width.min(1920), s.height.min(1080)),
+        };
+        place_outer(&w, None, Some((width, height)));
         if !place {
             let _ = w.center();
         }
@@ -718,8 +728,13 @@ fn bottom_right(w: &tauri::WebviewWindow) -> Option<(i32, i32)> {
 /// Si el punto (esquina de la mini, mas un margen para que se pueda agarrar) cae en
 /// algun monitor conectado.
 fn on_screen(app: &AppHandle, x: i32, y: i32) -> bool {
+    monitor_at(app, x, y).is_some()
+}
+
+/// El monitor donde cae esa esquina (con el mismo margen que `on_screen`).
+fn monitor_at(app: &AppHandle, x: i32, y: i32) -> Option<tauri::Monitor> {
     let (px, py) = (x + 40, y + 20);
-    app.available_monitors().unwrap_or_default().iter().any(|m| {
+    app.available_monitors().unwrap_or_default().into_iter().find(|m| {
         let (p, sz) = (m.position(), m.size());
         px >= p.x && py >= p.y && px < p.x + sz.width as i32 && py < p.y + sz.height as i32
     })
