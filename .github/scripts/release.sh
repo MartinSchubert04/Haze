@@ -18,10 +18,12 @@ cat > notas.md <<NOTAS
 Si ya tenés Haze, no hace falta: se actualiza sola.
 NOTAS
 
-# --latest: las apps instaladas buscan latest.json y latest-android.json en el ultimo
-# Release. Si el otro workflow ya lo creo, solo se suben los archivos.
+# Las apps instaladas buscan latest.json y latest-android.json en el ultimo Release
+# (releases/latest). Se crea sin marcarlo como ultimo: si no, mientras el otro workflow
+# sigue compilando, la PC (o el celu) encuentra un ultimo Release sin su JSON y falla con
+# "Could not fetch a valid release JSON". Se marca al final, cuando estan los dos.
 if ! gh release view "$TAG" >/dev/null 2>&1; then
-  gh release create "$TAG" --title "Haze $V" --notes-file notas.md --latest || gh release view "$TAG" >/dev/null
+  gh release create "$TAG" --title "Haze $V" --notes-file notas.md --latest=false || gh release view "$TAG" >/dev/null
 fi
 # Primero los instaladores y despues latest*.json: si suben juntos, el JSON (chico)
 # termina antes y las apps encuentran la version nueva con un APK que todavia no existe
@@ -36,3 +38,9 @@ for f in "$@"; do
 done
 if [ ${#BINARIOS[@]} -gt 0 ]; then gh release upload "$TAG" "${BINARIOS[@]}" --clobber; fi
 if [ ${#MANIFIESTOS[@]} -gt 0 ]; then gh release upload "$TAG" "${MANIFIESTOS[@]}" --clobber; fi
+
+# El que sube el ultimo JSON lo marca como ultimo (si terminan juntos, lo marcan los dos).
+SUBIDOS=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+if grep -qx latest.json <<<"$SUBIDOS" && grep -qx latest-android.json <<<"$SUBIDOS"; then
+  gh release edit "$TAG" --latest
+fi
