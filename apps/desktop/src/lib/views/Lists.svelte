@@ -1,15 +1,31 @@
 <script lang="ts">
   // Las listas de Haze: viven en el server (por usuario) y se editan aca aunque no haya
   // conexion. Las canciones no se copian: la lista solo dice cuales son.
-  import { Plus, Pencil, Trash2, Library } from "@lucide/svelte";
+  import { Plus, Pencil, Trash2, Library, ArrowUpDown, Check } from "@lucide/svelte";
   import { store } from "../store.svelte";
   import { menu } from "../menu.svelte";
   import { normalizeSearch, plural } from "@haze/ui/format";
+  import { sortLists } from "@haze/ui/library";
   import type { List, Song } from "../api";
   import Cover from "../components/Cover.svelte";
 
   const q = $derived(normalizeSearch(store.search.trim()));
-  const lists = $derived(q ? store.lists.filter((l) => normalizeSearch(l.name).includes(q)) : store.lists);
+  const sort = $derived(store.settings?.listSort ?? "name_asc");
+  const lists = $derived.by(() => {
+    const l = q ? store.lists.filter((l) => normalizeSearch(l.name).includes(q)) : store.lists;
+    return sortLists(l, sort, (l) => store.listSongs(l).length);
+  });
+
+  function sortMenu(e: MouseEvent) {
+    const opts: [string, string][] = [
+      ["name_asc", "Nombre (A-Z)"],
+      ["name_desc", "Nombre (Z-A)"],
+      ["count_desc", "Más canciones"],
+      ["count_asc", "Menos canciones"],
+      ["updated_desc", "Cambiadas hace poco"],
+    ];
+    menu.show(e, opts.map(([k, label]) => ({ label, icon: k === sort ? Check : undefined, action: () => store.saveSettings((s) => (s.listSort = k)) })));
+  }
 
   // Hasta 4 tapas distintas para el mosaico.
   function covers(songs: Song[]) {
@@ -41,7 +57,10 @@
         <h1 class="page-title">Listas</h1>
         <div class="page-sub">{plural(lists.length, "lista", "listas")}</div>
       </div>
-      <button class="pill" onclick={() => store.newList()}><Plus size={16} /> Nueva lista</button>
+      <div class="tools">
+        <button class="icon-btn" title="Ordenar" onclick={sortMenu}><ArrowUpDown size={17} /></button>
+        <button class="pill" onclick={() => store.newList()}><Plus size={16} /> Nueva lista</button>
+      </div>
     </div>
 
     {#if store.lists.length === 0}
@@ -84,7 +103,10 @@
     align-items: flex-end;
     justify-content: space-between;
   }
-  .top .pill {
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 16px;
   }
   .empty :global(svg) {

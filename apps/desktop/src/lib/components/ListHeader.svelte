@@ -1,3 +1,16 @@
+<script module lang="ts">
+  // Los ordenes de Canciones; las listas los reusan sumando el suyo.
+  export const SONG_SORTS: [string, string][] = [
+    ["title_asc", "Título (A-Z)"],
+    ["title_desc", "Título (Z-A)"],
+    ["artist_asc", "Artista"],
+    ["date_desc", "Más recientes"],
+    ["date_asc", "Más viejas"],
+    ["duration_desc", "Más largas"],
+    ["duration_asc", "Más cortas"],
+  ];
+</script>
+
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { Shuffle, Play, ArrowUpDown, Check } from "@lucide/svelte";
@@ -11,27 +24,32 @@
     songs,
     context,
     sortable = true,
+    sorts,
+    sort,
+    onsort,
     extra,
-  }: { title: string; sub?: string; songs: Song[]; context: string; sortable?: boolean; extra?: Snippet } = $props();
-
-  const SORTS: [string, string][] = [
-    ["title_asc", "Título (A-Z)"],
-    ["title_desc", "Título (Z-A)"],
-    ["artist_asc", "Artista"],
-    ["date_desc", "Más recientes"],
-    ["date_asc", "Más viejas"],
-    ["duration_desc", "Más largas"],
-    ["duration_asc", "Más cortas"],
-  ];
+  }: {
+    title: string;
+    sub?: string;
+    songs: Song[];
+    context: string;
+    sortable?: boolean;
+    /** Ordenes propios de la vista (por defecto, los de Canciones, que se guardan en `songSort`). */
+    sorts?: [string, string][];
+    sort?: string;
+    onsort?: (k: string) => void;
+    extra?: Snippet;
+  } = $props();
 
   function sortMenu(e: MouseEvent) {
-    const cur = store.settings?.songSort;
+    const cur = sort ?? store.settings?.songSort;
+    const pick = onsort ?? ((k: string) => store.saveSettings((s) => (s.songSort = k)));
     menu.show(
       e,
-      SORTS.map(([k, label]) => ({
+      (sorts ?? SONG_SORTS).map(([k, label]) => ({
         label,
         icon: k === cur ? Check : undefined,
-        action: () => store.saveSettings((s) => (s.songSort = k)),
+        action: () => pick(k),
       })),
     );
   }

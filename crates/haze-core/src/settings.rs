@@ -29,6 +29,10 @@ pub struct Settings {
     pub shortcuts: Shortcuts,
     pub song_sort: String,
     pub folder_sort: String,
+    /// Orden de la pantalla Listas.
+    pub list_sort: String,
+    /// Orden de las canciones adentro de una lista: "custom" es el de la lista.
+    pub list_song_sort: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -195,6 +199,8 @@ impl Default for Settings {
             shortcuts: Shortcuts::default(),
             song_sort: "title_asc".into(),
             folder_sort: "name_asc".into(),
+            list_sort: "name_asc".into(),
+            list_song_sort: "custom".into(),
         }
     }
 }

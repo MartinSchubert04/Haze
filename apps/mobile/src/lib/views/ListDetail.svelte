@@ -1,16 +1,28 @@
 <script lang="ts">
-  import { ChevronLeft, EllipsisVertical, Play, Shuffle } from "@lucide/svelte";
+  import { ChevronLeft, EllipsisVertical, Play, Shuffle, ListOrdered, Clock, ArrowDownAZ, UserRound } from "@lucide/svelte";
   import { plural } from "@haze/ui/format";
   import { api } from "../api";
   import { store } from "../store.svelte";
   import SongList from "../components/SongList.svelte";
+  import Select from "../components/Select.svelte";
+
+  const SORTS = [
+    { id: "custom", label: "De la lista", icon: ListOrdered },
+    { id: "date_desc", label: "Recientes", icon: Clock },
+    { id: "title_asc", label: "Título", icon: ArrowDownAZ },
+    { id: "artist_asc", label: "Artista", icon: UserRound },
+  ];
 
   let { id }: { id: string } = $props();
 
   const list = $derived(store.list(id));
   const name = $derived(list?.name ?? "Lista");
-  // En el orden de la lista, no en el de la biblioteca.
-  const songs = $derived(list ? store.listSongs(list) : []);
+  // "custom": en el orden de la lista. Si no, uno propio de las listas (aparte del de Canciones).
+  const sort = $derived(store.settings?.listSongSort ?? "custom");
+  const songs = $derived.by(() => {
+    const l = list ? store.listSongs(list) : [];
+    return sort === "custom" ? l : store.sortSongs(l, sort);
+  });
 
   async function play(shuffle: boolean) {
     if (store.player.shuffle !== shuffle) await api.control({ type: "shuffle", value: shuffle });
@@ -35,6 +47,11 @@
         <button class="pill primary" disabled={!songs.length} onclick={() => play(false)}><Play size={16} fill="currentColor" /> Reproducir</button>
         <button class="pill" disabled={!songs.length} onclick={() => play(true)}><Shuffle size={16} /> Aleatorio</button>
       </div>
+      {#if songs.length > 1}
+        <div class="sort">
+          <Select label="Ordenar" value={sort} options={SORTS} onchange={(k) => store.saveSettings((x) => (x.listSongSort = k))} />
+        </div>
+      {/if}
     </div>
     {#if !songs.length}
       <div class="empty">
@@ -77,5 +94,8 @@
   .actions {
     display: flex;
     gap: 10px;
+  }
+  .sort {
+    margin-top: 18px;
   }
 </style>

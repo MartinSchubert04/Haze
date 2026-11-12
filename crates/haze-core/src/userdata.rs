@@ -58,6 +58,10 @@ pub enum Op {
     Delete { id: String },
     Add { id: String, files: Vec<u64> },
     Remove { id: String, file: u64 },
+    /// Cambiar de lugar una cancion: pasa al lugar de `to` (otra cancion de la lista),
+    /// quedando antes de ella si sube o despues si baja. Por clave y no por posicion:
+    /// las que este aparato no tiene no se ven, pero siguen en la lista.
+    Move { id: String, file: u64, to: u64 },
     /// Dar de baja (o restaurar) canciones: `(clave, titulo)`.
     SetRemoved { files: Vec<(u64, String)>, removed: bool },
 }
@@ -164,6 +168,18 @@ impl UserData {
                 l.updated = now;
                 Some(id)
             }
+            Op::Move { id, file, to } => {
+                let l = self.list_mut(&id)?;
+                let from = l.songs.iter().position(|f| *f == file)?;
+                let to = l.songs.iter().position(|f| *f == to)?;
+                if from == to {
+                    return None;
+                }
+                let f = l.songs.remove(from);
+                l.songs.insert(to, f);
+                l.updated = now;
+                Some(id)
+            }
             Op::SetRemoved { files, removed } => {
                 for (file, title) in files {
                     match self.removed.iter_mut().find(|r| r.file == file) {
@@ -247,6 +263,20 @@ mod tests {
         assert_eq!(d.lists[0].songs, [2, 3]);
         assert_eq!(d.lists[0].updated, 12);
         assert!(d.apply(Op::Create { id: String::new(), name: "  ".into(), files: vec![] }, 13).is_none());
+    }
+
+    #[test]
+    fn move_up_and_down() {
+        let mut d = data_with(vec![(Op::Create { id: "a".into(), name: "Rock".into(), files: vec![1, 2, 3, 4] }, 10)]);
+        d.apply(Op::Move { id: "a".into(), file: 4, to: 2 }, 11);
+        assert_eq!(d.lists[0].songs, [1, 4, 2, 3]);
+        d.apply(Op::Move { id: "a".into(), file: 1, to: 2 }, 12);
+        assert_eq!(d.lists[0].songs, [4, 2, 1, 3]);
+        assert_eq!(d.lists[0].updated, 12);
+        // A una cancion que no esta, o a su mismo lugar: nada cambia.
+        assert!(d.apply(Op::Move { id: "a".into(), file: 9, to: 2 }, 13).is_none());
+        assert!(d.apply(Op::Move { id: "a".into(), file: 2, to: 2 }, 13).is_none());
+        assert_eq!(d.lists[0].updated, 12);
     }
 
     #[test]

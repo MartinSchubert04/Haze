@@ -18,6 +18,7 @@
     showFolder = true,
     onDownload,
     menuExtra,
+    onMove,
   }: {
     songs: Song[];
     context: string;
@@ -27,6 +28,8 @@
     onDownload?: (s: Song) => void;
     /** Opciones del menu propias de la vista (por ejemplo, "Quitar de la lista"). */
     menuExtra?: (s: Song) => MenuItem[];
+    /** Se puede arrastrar una fila a otro lugar (una lista en su orden). */
+    onMove?: (from: number, to: number) => void;
   } = $props();
 
   const ROW = 60;
@@ -56,6 +59,15 @@
     setTimeout(() => (activeLetter = null), 700);
   }
 
+  // Arrastrar: la fila soltada sobre otra toma su lugar (queda arriba si sube, abajo si baja).
+  let dragFrom = $state<number | null>(null);
+  let dragOver = $state<number | null>(null);
+
+  function drop(to: number) {
+    if (dragFrom !== null && dragFrom !== to) onMove?.(dragFrom, to);
+    dragFrom = dragOver = null;
+  }
+
   function play(i: number) {
     store.play(songs, i, context);
   }
@@ -81,12 +93,33 @@
         <div
           class="row"
           class:current
+          class:dragging={dragFrom === i}
+          class:over-up={dragOver === i && dragFrom !== null && dragFrom > i}
+          class:over-down={dragOver === i && dragFrom !== null && dragFrom < i}
           style:top="{i * ROW}px"
           role="button"
           tabindex="0"
           onclick={() => play(i)}
           onkeydown={(e) => e.key === "Enter" && play(i)}
           oncontextmenu={(e) => songMenu(e, song, () => play(i), menuExtra?.(song))}
+          draggable={onMove ? "true" : undefined}
+          ondragstart={(e) => {
+            if (!onMove) return;
+            dragFrom = i;
+            e.dataTransfer?.setData("text/plain", String(i));
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+          }}
+          ondragover={(e) => {
+            if (dragFrom === null) return;
+            e.preventDefault();
+            dragOver = i;
+          }}
+          ondragend={() => (dragFrom = dragOver = null)}
+          ondrop={(e) => {
+            if (dragFrom === null) return;
+            e.preventDefault();
+            drop(i);
+          }}
         >
           <button class="menu-btn" title="Más" onclick={(e) => { e.stopPropagation(); songMenu(e, song, () => play(i), menuExtra?.(song)); }}>
             <MoreHorizontal size={16} />
@@ -162,6 +195,15 @@
   }
   .row.current .t {
     color: var(--accent);
+  }
+  .row.dragging {
+    opacity: 0.4;
+  }
+  .row.over-up {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  .row.over-down {
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
   .menu-btn {
     width: 28px;

@@ -51,6 +51,27 @@ export function visibleLists(data: UserData | null | undefined): List[] {
 }
 
 /**
+ * Ordena las listas para mostrarlas. `count`: cuantas canciones tiene cada una en este
+ * aparato (lo que se ve en pantalla).
+ */
+export function sortLists(lists: List[], sort: string, count: (l: List) => number): List[] {
+  const byName = (a: List, b: List) => a.name.localeCompare(b.name, "es", { sensitivity: "base" });
+  const out = [...lists];
+  switch (sort) {
+    case "name_desc":
+      return out.sort((a, b) => byName(b, a));
+    case "count_desc":
+      return out.sort((a, b) => count(b) - count(a) || byName(a, b));
+    case "count_asc":
+      return out.sort((a, b) => count(a) - count(b) || byName(a, b));
+    case "updated_desc":
+      return out.sort((a, b) => b.updated - a.updated || byName(a, b));
+    default:
+      return out.sort(byName);
+  }
+}
+
+/**
  * Las canciones de una lista, en su orden, con las que hay en este aparato (`songs` ya sin
  * bajas). Las que todavia no llegaron no aparecen.
  */

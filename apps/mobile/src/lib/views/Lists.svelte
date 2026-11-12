@@ -1,15 +1,24 @@
 <script lang="ts">
-  import { ListMusic, Plus } from "@lucide/svelte";
+  import { ListMusic, Plus, ArrowDownAZ, Hash, History } from "@lucide/svelte";
   import { plural } from "@haze/ui/format";
+  import { sortLists } from "@haze/ui/library";
   import type { List } from "../api";
   import { store } from "../store.svelte";
   import { longpress } from "../longpress";
   import Cover from "../components/Cover.svelte";
+  import Select from "../components/Select.svelte";
+
+  const SORTS = [
+    { id: "name_asc", label: "Nombre", icon: ArrowDownAZ },
+    { id: "count_desc", label: "Más canciones", icon: Hash },
+    { id: "updated_desc", label: "Cambiadas", icon: History },
+  ];
+  const sort = $derived(store.settings?.listSort ?? "name_asc");
 
   // Las canciones de cada lista que estan en el telefono; las que faltan llegan al
   // sincronizar en casa.
   const rows = $derived(
-    store.lists.map((list: List) => {
+    sortLists(store.lists, sort, (l) => store.listSongs(l).length).map((list: List) => {
       const songs = store.listSongs(list);
       const missing = list.songs.filter((k) => !store.removed.has(k)).length - songs.length;
       return { list, songs, missing, coverSong: songs.find((s) => s.hasCover) ?? null };
@@ -25,6 +34,9 @@
     </div>
     <div class="actions">
       <button class="pill primary" onclick={() => store.open({ kind: "listName" })}><Plus size={16} /> Nueva lista</button>
+      {#if store.lists.length > 1}
+        <Select label="Ordenar" value={sort} options={SORTS} onchange={(k) => store.saveSettings((x) => (x.listSort = k))} />
+      {/if}
     </div>
 
     {#if !store.lists.length}
@@ -66,8 +78,10 @@
   }
   .actions {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    margin: 14px 0 10px;
+    margin: 18px 0 10px;
   }
   .list {
     margin: 0 -16px;

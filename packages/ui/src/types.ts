@@ -72,6 +72,8 @@ export type Settings = {
   shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string; random: string };
   songSort: string;
   folderSort: string;
+  listSort: string;
+  listSongSort: string;
 };
 
 /** Una lista de Haze (`haze_core::userdata`). Las canciones son claves de archivo. */
@@ -87,6 +89,7 @@ export type UserOp =
   | { type: "delete"; id: string }
   | { type: "add"; id: string; files: number[] }
   | { type: "remove"; id: string; file: number }
+  | { type: "move"; id: string; file: number; to: number }
   | { type: "setRemoved"; files: [number, string][]; removed: boolean };
 
 /** Como fue la ultima sincronizacion. `status` vacio: todavia ninguna; "network": falta el permiso de red local (Android). */
