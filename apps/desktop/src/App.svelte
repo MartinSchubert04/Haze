@@ -11,6 +11,7 @@
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import LinkDialog from "./lib/components/LinkDialog.svelte";
   import NamePrompt from "./lib/components/NamePrompt.svelte";
+  import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
   import Songs from "./lib/views/Songs.svelte";
   import Folders from "./lib/views/Folders.svelte";
   import FolderDetail from "./lib/views/FolderDetail.svelte";
@@ -44,7 +45,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (typing(e) || store.pendingLink || store.namePrompt) return;
+    if (typing(e) || store.pendingLink || store.namePrompt || store.confirmDialog) return;
     if (e.code === "Space") {
       e.preventDefault();
       api.control({ type: "toggle" });
@@ -137,6 +138,7 @@
   <ContextMenu />
   <LinkDialog />
   <NamePrompt />
+  <ConfirmDialog />
 {/if}
 
 <style>

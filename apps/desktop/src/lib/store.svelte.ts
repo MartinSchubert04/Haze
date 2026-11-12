@@ -1,7 +1,6 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { api, type DiscordStatus, type DownloadJob, type List, type PlayerState, type Settings, type Song, type SyncReport, type UpdateInfo, type UserData, type UserOp } from "./api";
 import { folderName, sortKey } from "@haze/ui/format";
 import { fileKey, listSongs, removedSet, uniqueFiles, visibleLists, visibleSongs } from "@haze/ui/library";
@@ -19,6 +18,9 @@ export type View =
   | { name: "settings" };
 
 export type Folder = { path: string; name: string; songs: Song[]; coverSong: Song | null };
+
+/** Confirmar algo que borra: el cartel de Haze (ver `ConfirmDialog`), no el de Windows. */
+export type Confirm = { title: string; text: string; action: string; resolve: (ok: boolean) => void };
 
 /** Pedir un nombre (lista nueva, renombrar). */
 export type NamePrompt = { title: string; value: string; action: string; onSave: (name: string) => void };
@@ -47,6 +49,7 @@ class Store {
   sync = $state<SyncReport>({ status: "", at: 0, downloaded: 0, uploaded: 0, failed: 0, error: null });
   syncProgress = $state<{ done: number; total: number } | null>(null);
   namePrompt = $state<NamePrompt | null>(null);
+  confirmDialog = $state<Confirm | null>(null);
   settings = $state<Settings | null>(null);
   player = $state<PlayerState>(emptyState);
   scanning = $state(false);
@@ -211,6 +214,12 @@ class Store {
     }
   }
 
+  /** Pregunta antes de borrar. Si ya habia otra pregunta abierta, esa queda en "no". */
+  confirm(title: string, text: string, action: string): Promise<boolean> {
+    this.confirmDialog?.resolve(false);
+    return new Promise((resolve) => (this.confirmDialog = { title, text, action, resolve }));
+  }
+
   newList(songs: Song[] = []) {
     this.namePrompt = {
       title: "Nueva lista",
@@ -234,7 +243,7 @@ class Store {
   }
 
   async deleteList(list: List) {
-    const ok = await ask(`Las canciones no se borran: solo la lista, en todos los aparatos.`, { title: `¿Borrar "${list.name}"?`, kind: "warning", okLabel: "Borrar", cancelLabel: "Cancelar" });
+    const ok = await this.confirm(`¿Borrar "${list.name}"?`, "Las canciones no se borran: solo la lista, en todos los aparatos.", "Borrar");
     if (!ok) return;
     await this.editUser({ type: "delete", id: list.id });
     if (this.view.name === "list" && this.view.id === list.id) this.go({ name: "lists" });
