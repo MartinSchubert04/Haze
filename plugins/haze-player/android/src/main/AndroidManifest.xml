@@ -21,6 +21,8 @@
 
     <!-- Home Assistant: Android 17 pide permiso para hablar con la red local. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Sincronizar: con solo datos moviles no se busca el server de casa. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application>
         <service

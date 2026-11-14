@@ -4,8 +4,10 @@
 //! encuentre.
 //!
 //! En el telefono viene apagado y solo corre con la app viva (sin WorkManager): al abrir,
-//! cada 2 horas y con "Sincronizar ahora". La carpeta sincronizada es siempre `Music/Haze`,
-//! la misma donde caen las descargas de YouTube.
+//! cada 2 horas y con "Sincronizar ahora", siempre de fondo. Casi siempre se usa fuera de
+//! casa: con datos moviles ni se busca el server, y en un wifi se le pregunta una vez y
+//! por poco tiempo. La carpeta sincronizada es siempre `Music/Haze`, la misma donde caen
+//! las descargas de YouTube.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -108,17 +110,17 @@ pub fn sync_now(app: AppHandle) {
     start(&app);
 }
 
-/// Si se puede salir a la red local (Android 17). `None`: el plugin no contesta, que pasa
-/// cuando la app se saco de recientes y solo queda el servicio de musica.
-fn network(app: &AppHandle) -> Option<bool> {
-    app.haze_player().local_network(false).ok()
+/// (permiso de red local de Android 17, en wifi/cable/VPN). `None`: el plugin no contesta,
+/// que pasa cuando la app se saco de recientes y solo queda el servicio de musica.
+fn network(app: &AppHandle) -> Option<(bool, bool)> {
+    app.haze_player().network().ok()
 }
 
 /// Solo las listas: rapido, para despues de cada cambio.
 fn exchange_only(app: &AppHandle) {
     let state = app.state::<AppState>();
     let cfg = state.settings.lock().unwrap().sync.clone();
-    if !cfg.enabled || state.sync.running.load(Ordering::SeqCst) || network(app) != Some(true) {
+    if !cfg.enabled || state.sync.running.load(Ordering::SeqCst) || network(app) != Some((true, true)) {
         return;
     }
     let Some(client) = Client::connect(&cfg.server, &cfg.user) else { return };
@@ -160,9 +162,14 @@ fn run(app: &AppHandle) -> Option<Report> {
     if !cfg.enabled {
         return Some(Report { status: "off".into(), at: now_ms(), ..Default::default() });
     }
+    let (granted, lan) = network(app)?;
     // Sin el permiso, Android corta la conexion y solo se veria "fuera de casa".
-    if !network(app)? {
+    if !granted {
         return Some(Report { status: "network".into(), at: now_ms(), ..Default::default() });
+    }
+    // Con solo datos moviles es seguro que no se esta en casa: ni se busca el server.
+    if !lan {
+        return Some(Report { status: "away".into(), at: now_ms(), ..Default::default() });
     }
     // Fuera de casa no se muestra nada: "sincronizando" recien cuando el server contesta.
     let Some(client) = Client::connect(&cfg.server, &cfg.user) else {

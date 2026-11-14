@@ -90,6 +90,18 @@ impl<R: Runtime> HazePlayer<R> {
         Ok(self.call::<Access>(command, ())?.granted)
     }
 
+    /// (permiso de red local, en wifi/cable/VPN). Con solo datos moviles el server de casa
+    /// no esta: ni se lo busca.
+    pub fn network(&self) -> Result<(bool, bool), PluginInvokeError> {
+        #[derive(Deserialize)]
+        struct Network {
+            granted: bool,
+            lan: bool,
+        }
+        let n = self.call::<Network>("checkNetwork", ())?;
+        Ok((n.granted, n.lan))
+    }
+
     pub fn library(&self) -> Result<Vec<Track>, PluginInvokeError> {
         #[derive(Deserialize)]
         struct Library {

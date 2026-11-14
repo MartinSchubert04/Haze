@@ -2,6 +2,8 @@ package app.haze.player.plugin
 
 import android.Manifest
 import android.app.Activity
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
@@ -185,7 +187,24 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
   private fun resolveNetwork(invoke: Invoke) {
     val result = JSObject()
     result.put("granted", networkGranted())
+    result.put("lan", onLan())
     invoke.resolve(result)
+  }
+
+  /**
+   * Si la red de ahora puede ser la de casa: wifi, cable o una VPN. Con solo datos moviles
+   * (o sin red) el server no esta y no se lo busca. Si no se puede saber, se prueba.
+   */
+  private fun onLan(): Boolean {
+    try {
+      val cm: ConnectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return true
+      val caps: NetworkCapabilities = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+      return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+    } catch (e: Throwable) {
+      return true
+    }
   }
 
   /** Corre yt-dlp y devuelve lo que imprimio (el JSON de una busqueda o un link). */

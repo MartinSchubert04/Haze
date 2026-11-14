@@ -2,7 +2,8 @@
 //! telefono bajan lo que les falta, suben lo que le falta al server y juntan las listas.
 //! Nunca se borra un archivo: dar de baja solo oculta (ver [`crate::userdata`]).
 //!
-//! Solo anda en la red de casa: si el server no contesta enseguida, no se intenta nada.
+//! Solo anda en la red de casa: si el server no contesta enseguida ([`PROBE`]), no se
+//! intenta nada. Todo esto corre de fondo: abrir Haze nunca lo espera.
 //! Es HTTP plano (sin TLS): asi compila para Android y el puerto no sale de la casa.
 
 use std::collections::HashSet;
@@ -18,6 +19,10 @@ use crate::song::file_key;
 pub const PORT: u16 = 7790;
 /// Cada cuanto se sincroniza solo.
 pub const EVERY: Duration = Duration::from_secs(2 * 60 * 60);
+/// Cuanto se espera al server antes de dar por hecho que no se esta en casa. Antes eran
+/// hasta 30 s: con algo en esa IP que aceptaba la conexion y no contestaba, la vuelta
+/// quedaba buscando el server medio minuto cada vez que se abria Haze.
+pub const PROBE: Duration = Duration::from_secs(3);
 
 /// Un archivo, con la ruta relativa a la carpeta de musica y barras `/`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -186,11 +191,22 @@ mod client {
     }
 
     impl Client {
-        /// El server, si contesta: si no, este aparato no esta en casa.
+        /// El server, si contesta: si no, este aparato no esta en casa. Casi siempre se usa
+        /// Haze fuera de casa, asi que se pregunta una sola vez y por poco tiempo: en la
+        /// red de casa contesta en milisegundos.
         pub fn connect(server: &str, user: &str) -> Option<Client> {
             let base = base_url(server)?;
             let quick = agent(3, Some(30));
-            let v: serde_json::Value = quick.get(format!("{base}/api/health")).call().ok()?.body_mut().read_json().ok()?;
+            let v: serde_json::Value = quick
+                .get(format!("{base}/api/health"))
+                .config()
+                .timeout_global(Some(PROBE))
+                .build()
+                .call()
+                .ok()?
+                .body_mut()
+                .read_json()
+                .ok()?;
             if v["app"] != "haze" {
                 return None;
             }
