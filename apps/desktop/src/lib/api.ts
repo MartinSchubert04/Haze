@@ -4,7 +4,10 @@ import type { DownloadJob, LinkInfo, List, PlayerState, QueueEntry, QueueView, S
 
 export type { DownloadJob, LinkInfo, List, PlayerState, QueueEntry, QueueView, Settings, Song, SyncReport, UserData, UserOp };
 
-export type UpdateInfo = { version: string; status: "downloading" | "ready" };
+/** Una salida de audio de Windows (`mpv::AudioDevice`). */
+export type AudioDevice = { id: string; name: string };
+
+export type UpdateInfo ={ version: string; status: "downloading" | "ready" };
 
 /** El bot de Discord. */
 export type DiscordStatus = {
@@ -56,6 +59,8 @@ export const api = {
   queueAction: (action: "jump" | "remove" | "move" | "clear", index = 0, to?: number) =>
     invoke("queue_action", { action, index, to }),
   saveSettings: (settings: Settings) => invoke("settings_set", { settings }),
+  /** Las salidas de audio conectadas (vacio hasta que arranca mpv). */
+  audioDevices: () => invoke<AudioDevice[]>("audio_devices"),
   ytSearch: (query: string) => invoke<Song[]>("yt_search", { query }),
   ytInspect: (url: string) => invoke<LinkInfo>("yt_inspect", { url }),
   ytPrepare: () => invoke("yt_prepare"),

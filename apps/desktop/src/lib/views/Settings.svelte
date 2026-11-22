@@ -3,8 +3,8 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw, EyeOff, Undo2 } from "@lucide/svelte";
-  import { api, fileUrl } from "../api";
+  import { FolderPlus, Trash2, RefreshCw, Star, ImagePlus, Check, Download, ChevronDown, RotateCcw, EyeOff, Undo2, Speaker } from "@lucide/svelte";
+  import { api, fileUrl, type AudioDevice } from "../api";
   import { store } from "../store.svelte";
   import { folderName, plural } from "@haze/ui/format";
   import { THEMES, palettesOf, paletteOf, themeOf } from "@haze/ui/themes";
@@ -84,6 +84,23 @@
     } catch (e) {
       store.toast(String(e), "error");
     }
+  }
+
+  // Salidas de audio conectadas. Se vuelven a pedir cada tanto mientras Ajustes esta
+  // abierto: asi aparece la tele cuando se prende, o la lista cuando termina de arrancar mpv.
+  let outputs = $state<AudioDevice[]>([]);
+  $effect(() => {
+    const load = () => api.audioDevices().then((d) => (outputs = d), () => {});
+    load();
+    const t = setInterval(load, 3000);
+    return () => clearInterval(t);
+  });
+
+  function pickOutput(d: AudioDevice | null) {
+    store.saveSettings((x) => {
+      x.audioDevice = d?.id ?? "";
+      x.audioDeviceName = d?.name ?? "";
+    });
   }
 
   let checking = $state(false);
@@ -408,6 +425,40 @@
         </div>
         <input type="checkbox" checked={s.appearance.tintFromArtwork} onchange={(e) => store.saveSettings((x) => (x.appearance.tintFromArtwork = e.currentTarget.checked))} />
       </label>
+    </section>
+
+    <!-- ------------------------------------------------------------ salida de audio -->
+    <section>
+      <h2>Salida de audio</h2>
+      <p>Por dónde suena Haze, sin tocar el resto de la PC: la música por la tele y el juego por los auriculares.</p>
+      <div class="rows">
+        <button class="item out" class:on={!s.audioDevice} onclick={() => pickOutput(null)}>
+          <Speaker size={16} />
+          <div class="grow">
+            <div class="ellipsis">La de Windows</div>
+            <div class="hint ellipsis">La que esté elegida en Windows; si la cambiás ahí, Haze la sigue.</div>
+          </div>
+          {#if !s.audioDevice}<Check size={16} />{/if}
+        </button>
+        {#each outputs as d (d.id)}
+          {@const on = s.audioDevice === d.id}
+          <button class="item out" class:on onclick={() => pickOutput(d)}>
+            <Speaker size={16} />
+            <div class="grow ellipsis">{d.name}</div>
+            {#if on}<Check size={16} />{/if}
+          </button>
+        {/each}
+        {#if s.audioDevice && !outputs.some((d) => d.id === s.audioDevice)}
+          <div class="item out on">
+            <Speaker size={16} />
+            <div class="grow">
+              <div class="ellipsis">{s.audioDeviceName || "La que elegiste"}</div>
+              <div class="hint ellipsis">No está conectada: mientras tanto suena por la de Windows, y vuelve sola cuando aparezca.</div>
+            </div>
+            <Check size={16} />
+          </div>
+        {/if}
+      </div>
     </section>
 
     <!-- ------------------------------------------------------------ comportamiento -->
@@ -752,6 +803,24 @@
     padding: 8px 8px 8px 14px;
     border-radius: var(--radius);
     background: rgb(var(--ov) / 0.04);
+  }
+  .item.out {
+    width: 100%;
+    min-height: 42px;
+    padding-right: 14px;
+    text-align: left;
+    color: var(--text-2);
+  }
+  button.item.out:hover {
+    color: var(--text);
+    background: rgb(var(--ov) / 0.08);
+  }
+  .item.out.on {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .item.out.on .hint {
+    color: var(--text-3);
   }
   .grow {
     flex: 1;

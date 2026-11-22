@@ -74,6 +74,10 @@ export type Settings = {
   folderSort: string;
   listSort: string;
   listSongSort: string;
+  /** Salida de audio (escritorio): id de mpv, vacio = la de Windows. */
+  audioDevice: string;
+  /** Su nombre, para mostrarla aunque no este conectada. */
+  audioDeviceName: string;
 };
 
 /** Una lista de Haze (`haze_core::userdata`). Las canciones son claves de archivo. */
