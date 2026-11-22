@@ -5,10 +5,12 @@
 //! avisa mpv a [`EngineEvent`].
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use haze_core::player::{Engine, EngineEvent, SharedPlayer};
 use haze_core::song::Song;
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -25,7 +27,12 @@ const OBSERVED: &[&str] =
     &["pause", "time-pos", "duration", "volume", "idle-active", "media-title", "paused-for-cache", "current-ao"];
 
 impl Mpv {
-    pub async fn spawn(mpv: &Path, volume: f64, events: mpsc::UnboundedSender<EngineEvent>) -> Result<Self, String> {
+    pub async fn spawn(
+        mpv: &Path,
+        volume: f64,
+        output: Output,
+        events: mpsc::UnboundedSender<EngineEvent>,
+    ) -> Result<Self, String> {
         let pipe = format!(r"\\.\pipe\haze-mpv-{}", std::process::id());
         let mut cmd = tools::command(mpv);
         cmd.args([
@@ -82,10 +89,15 @@ impl Mpv {
             }
         });
 
+        output.attach(tx.clone());
         tauri::async_runtime::spawn(async move {
             let mut lines = BufReader::new(read).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+                if let Some(list) = device_list(&v) {
+                    output.set_devices(list);
+                    continue;
+                }
                 let Some(ev) = translate(&v) else { continue };
                 if events.send(ev).is_err() {
                     return;
@@ -98,6 +110,8 @@ impl Mpv {
         for (i, name) in OBSERVED.iter().enumerate() {
             me.command(json!(["observe_property", i + 1, name]));
         }
+        // mpv la manda apenas se observa y de nuevo cada vez que se enchufa o desenchufa algo.
+        me.command(json!(["observe_property", 0, "audio-device-list"]));
         Ok(me)
     }
 
@@ -140,6 +154,108 @@ impl Engine for Mpv {
     fn stop(&self) {
         self.command(json!(["stop"]));
     }
+}
+
+/// Una salida de audio de Windows, como la nombra mpv.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct AudioDevice {
+    /// "wasapi/{...}": lo que se guarda en Ajustes.
+    pub id: String,
+    /// "Altavoces (HyperX Cloud II Wireless)".
+    pub name: String,
+}
+
+/// La salida de audio elegida en Ajustes. Vive en el estado de la app aunque mpv todavia no
+/// haya arrancado (o se reinicie): cuando mpv avisa que dispositivos hay, se le pone el
+/// elegido si esta conectado y, si no, el de Windows. Asi, si se apaga la tele, la musica
+/// sigue por los parlantes en vez de quedar muda, y vuelve a la tele cuando se prende.
+#[derive(Clone, Default)]
+pub struct Output(Arc<Mutex<OutputState>>);
+
+#[derive(Default)]
+struct OutputState {
+    tx: Option<mpsc::UnboundedSender<String>>,
+    /// `None` hasta que mpv manda la lista por primera vez.
+    devices: Option<Vec<AudioDevice>>,
+    /// El id elegido; vacio es el de Windows.
+    wanted: String,
+    /// Lo que tiene puesto mpv ahora.
+    applied: String,
+}
+
+impl Output {
+    pub fn new(wanted: &str) -> Self {
+        let out = Self::default();
+        out.0.lock().unwrap().wanted = wanted.to_string();
+        out
+    }
+
+    /// Las salidas conectadas. Vacio si mpv todavia no arranco.
+    pub fn devices(&self) -> Vec<AudioDevice> {
+        self.0.lock().unwrap().devices.clone().unwrap_or_default()
+    }
+
+    /// Cambia de salida. Si mpv ya esta sonando, se pasa sin cortar el tema.
+    pub fn select(&self, id: &str) {
+        let mut st = self.0.lock().unwrap();
+        st.wanted = id.to_string();
+        st.apply();
+    }
+
+    fn attach(&self, tx: mpsc::UnboundedSender<String>) {
+        let mut st = self.0.lock().unwrap();
+        st.tx = Some(tx);
+        // mpv arranca en "auto"; la lista llega enseguida y ahi se aplica lo elegido.
+        st.applied = "auto".into();
+        st.devices = None;
+    }
+
+    fn set_devices(&self, devices: Vec<AudioDevice>) {
+        let mut st = self.0.lock().unwrap();
+        st.devices = Some(devices);
+        st.apply();
+    }
+}
+
+impl OutputState {
+    /// El dispositivo que le corresponde a mpv: el elegido si esta conectado.
+    fn target(&self) -> Option<&str> {
+        let devices = self.devices.as_ref()?;
+        Some(match devices.iter().find(|d| d.id == self.wanted) {
+            Some(d) => &d.id,
+            None => "auto",
+        })
+    }
+
+    fn apply(&mut self) {
+        let Some(target) = self.target().map(str::to_string) else { return };
+        let Some(tx) = &self.tx else { return };
+        if target != self.applied {
+            let _ = tx.send(json!({ "command": ["set_property", "audio-device", target] }).to_string());
+            self.applied = target;
+        }
+    }
+}
+
+/// La lista de salidas, si el mensaje es el aviso de `audio-device-list`. Quedan solo las de
+/// WASAPI: "auto" es la opcion "la de Windows" de Ajustes y openal es otra forma de llegar a
+/// las mismas.
+fn device_list(v: &Value) -> Option<Vec<AudioDevice>> {
+    if v["event"] != "property-change" || v["name"] != "audio-device-list" {
+        return None;
+    }
+    let list = v["data"].as_array().map(Vec::as_slice).unwrap_or_default();
+    Some(
+        list.iter()
+            .filter_map(|d| {
+                let id = d["name"].as_str()?;
+                id.starts_with("wasapi/").then(|| AudioDevice {
+                    id: id.to_string(),
+                    name: d["description"].as_str().unwrap_or(id).to_string(),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// Pasa un mensaje del IPC de mpv a un evento del reproductor. Lo que no le importa al
@@ -243,6 +359,50 @@ mod tests {
         assert_eq!(prop("current-ao", json!("null")), Some(EngineEvent::AudioOutput(false)));
         assert_eq!(prop("current-ao", Value::Null), Some(EngineEvent::AudioOutput(false)));
         assert_eq!(prop("volume", json!(50)), None);
+    }
+
+    #[test]
+    fn reads_device_list() {
+        let msg = json!({ "event": "property-change", "name": "audio-device-list", "data": [
+            { "name": "auto", "description": "Autoselect device" },
+            { "name": "wasapi/{a}", "description": "Auris" },
+            { "name": "wasapi/{b}", "description": "SAMSUNG" },
+            { "name": "openal", "description": "Default (openal)" },
+        ]});
+        let list = device_list(&msg).unwrap();
+        assert_eq!(list.iter().map(|d| d.name.as_str()).collect::<Vec<_>>(), ["Auris", "SAMSUNG"]);
+        assert_eq!(list[1].id, "wasapi/{b}");
+        assert_eq!(device_list(&json!({ "event": "property-change", "name": "volume", "data": 3 })), None);
+    }
+
+    #[test]
+    fn picks_the_chosen_device_only_when_connected() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let out = Output::new("wasapi/{tv}");
+        out.attach(tx);
+        let dev = |id: &str| AudioDevice { id: id.into(), name: id.into() };
+        let sent = |rx: &mut mpsc::UnboundedReceiver<String>| {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .map(|m| serde_json::from_str::<Value>(&m).unwrap()["command"][2].as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+        };
+
+        // Antes de saber que hay conectado no se toca nada.
+        out.select("wasapi/{tv}");
+        assert!(sent(&mut rx).is_empty());
+        // La tele esta apagada: se queda en la de Windows.
+        out.set_devices(vec![dev("wasapi/{auris}")]);
+        assert!(sent(&mut rx).is_empty());
+        // Se prende la tele: pasa a la tele, una sola vez.
+        out.set_devices(vec![dev("wasapi/{auris}"), dev("wasapi/{tv}")]);
+        out.set_devices(vec![dev("wasapi/{auris}"), dev("wasapi/{tv}")]);
+        assert_eq!(sent(&mut rx), ["wasapi/{tv}"]);
+        // Se apaga: vuelve a la de Windows.
+        out.set_devices(vec![dev("wasapi/{auris}")]);
+        assert_eq!(sent(&mut rx), ["auto"]);
+        out.select("wasapi/{auris}");
+        out.select("");
+        assert_eq!(sent(&mut rx), ["wasapi/{auris}", "auto"]);
     }
 
     #[test]

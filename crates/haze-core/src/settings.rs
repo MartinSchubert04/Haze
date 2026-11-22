@@ -33,6 +33,11 @@ pub struct Settings {
     pub list_sort: String,
     /// Orden de las canciones adentro de una lista: "custom" es el de la lista.
     pub list_song_sort: String,
+    /// Salida de audio (escritorio): el id que le da mpv ("wasapi/{...}"). Vacio: la que
+    /// tenga Windows por defecto.
+    pub audio_device: String,
+    /// El nombre de esa salida, para mostrarla en Ajustes aunque no este conectada.
+    pub audio_device_name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,6 +206,8 @@ impl Default for Settings {
             folder_sort: "name_asc".into(),
             list_sort: "name_asc".into(),
             list_song_sort: "custom".into(),
+            audio_device: String::new(),
+            audio_device_name: String::new(),
         }
     }
 }

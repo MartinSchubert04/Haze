@@ -38,6 +38,8 @@ pub struct AppState {
     pub cache_path: PathBuf,
     pub player: SharedPlayer,
     pub player_rx: watch::Receiver<PlayerState>,
+    /// Por donde suena mpv (Ajustes, "Salida de audio").
+    pub audio: mpv::Output,
     pub downloads: Mutex<youtube::Downloads>,
     pub mqtt: Mutex<mqtt::Bridge>,
     pub ha_status: Mutex<String>,
@@ -326,6 +328,8 @@ fn settings_set(app: AppHandle, settings: Settings) {
     };
     let s = state.settings.lock().unwrap().clone();
     let _ = app.emit("settings://changed", &s);
+    // Si es la misma salida que ya tiene, no hace nada.
+    state.audio.select(&s.audio_device);
     if sources_changed {
         start_scan(&app);
     }
@@ -350,6 +354,12 @@ fn settings_set(app: AppHandle, settings: Settings) {
     if sync_changed && s.sync.enabled {
         sync::start(&app);
     }
+}
+
+/// Las salidas de audio conectadas, para elegir en Ajustes.
+#[tauri::command]
+fn audio_devices(app: AppHandle) -> Vec<mpv::AudioDevice> {
+    app.state::<AppState>().audio.devices()
 }
 
 #[tauri::command]
@@ -975,7 +985,7 @@ async fn start_engine(app: AppHandle, resume_playing: bool) {
     };
     let volume = state.settings.lock().unwrap().playback.volume;
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    match mpv::Mpv::spawn(&mpv_path, volume, tx).await {
+    match mpv::Mpv::spawn(&mpv_path, volume, state.audio.clone(), tx).await {
         Ok(m) => {
             let resume = state.settings.lock().unwrap().playback.resume;
             let mut p = state.player.lock().await;
@@ -1069,7 +1079,9 @@ pub fn run() {
                 None => settings.behavior.start_hidden || std::env::args().any(|a| a == "--hidden"),
             };
 
+            let audio = mpv::Output::new(&settings.audio_device);
             app.manage(AppState {
+                audio,
                 settings: Mutex::new(settings),
                 settings_path,
                 library: RwLock::new(library),
@@ -1118,6 +1130,7 @@ pub fn run() {
             queue_get,
             queue_action,
             settings_set,
+            audio_devices,
             yt_search,
             yt_inspect,
             yt_prepare,
