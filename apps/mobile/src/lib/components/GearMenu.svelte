@@ -43,7 +43,7 @@
 
 <div class="gear" class:open bind:this={root}>
   <button class="icon-btn" aria-label="Menu" aria-haspopup="menu" aria-expanded={open} onclick={() => (open = !open)}>
-    <span class="cog"><SettingsIcon size={22} /></span>
+    <span class="cog"><SettingsIcon size={26} /></span>
   </button>
 
   {#if open}
@@ -74,6 +74,11 @@
 <style>
   .gear {
     position: relative;
+    /* El icono queda alineado con el borde de la lista, como "atras" a la izquierda. */
+    margin-right: -10px;
+  }
+  /* Arriba de todo solo con el menu abierto: si no, quedaria encima de Ajustes. */
+  .gear.open {
     z-index: 20;
   }
   .cog {
