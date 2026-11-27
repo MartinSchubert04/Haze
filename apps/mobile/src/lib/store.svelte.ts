@@ -82,7 +82,7 @@ class Store {
   scanning = $state(false);
   tab = $state<Tab>("songs");
   layers = $state<Layer[]>([]);
-  toasts = $state<{ id: number; text: string; kind: "info" | "error" }[]>([]);
+  toasts = $state<{ id: number; text: string; kind: "info" | "error"; busy: boolean }[]>([]);
 
   // Posicion interpolada: Rust la manda cada ~500 ms y aca se completa entre medio.
   private posBase = 0;
@@ -274,10 +274,32 @@ class Store {
 
   // ------------------------------------------------------------------ acciones
 
-  toast(text: string, kind: "info" | "error" = "info") {
+  private toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  /** Muestra un aviso. Con `busy` queda (con una ruedita) hasta que se cambie con `setToast`. */
+  toast(text: string, kind: "info" | "error" = "info", busy = false) {
     const id = ++this.toastId;
-    this.toasts = [...this.toasts, { id, text, kind }];
-    setTimeout(() => (this.toasts = this.toasts.filter((t) => t.id !== id)), kind === "error" ? 6000 : 2500);
+    this.toasts = [...this.toasts, { id, text, kind, busy }];
+    if (!busy) this.expire(id, kind);
+    return id;
+  }
+
+  /** Cambia un aviso por otro en el mismo lugar (de "Syncing…" a como salio). */
+  setToast(id: number, text: string, kind: "info" | "error" = "info") {
+    if (!this.toasts.some((t) => t.id === id)) return void this.toast(text, kind);
+    this.toasts = this.toasts.map((t) => (t.id === id ? { id, text, kind, busy: false } : t));
+    this.expire(id, kind);
+  }
+
+  dropToast(id: number) {
+    clearTimeout(this.toastTimers.get(id));
+    this.toastTimers.delete(id);
+    this.toasts = this.toasts.filter((t) => t.id !== id);
+  }
+
+  private expire(id: number, kind: "info" | "error") {
+    clearTimeout(this.toastTimers.get(id));
+    this.toastTimers.set(id, setTimeout(() => this.dropToast(id), kind === "error" ? 6000 : 2500));
   }
 
   async saveSettings(mut: (s: Settings) => void) {
@@ -314,8 +336,11 @@ class Store {
   /** Secciones de Ajustes desplegadas: quedan como estaban al volver a entrar. */
   settingsOpen = $state<Record<string, boolean>>({});
 
-  /** Se pidio a mano: al terminar la vuelta se avisa como salio. */
-  private syncAsked = 0;
+  /**
+   * Se pidio a mano: el aviso "Syncing…" que queda en pantalla hasta que la vuelta
+   * termine y ahi pasa a decir como salio (un solo toast, no dos seguidos).
+   */
+  private syncToast: { id: number; at: number } | null = null;
 
   /** "Sync" del menu: sincroniza ya y avisa con un toast como salio. */
   async syncNow() {
@@ -325,35 +350,49 @@ class Store {
       this.open({ kind: "settings", section: "sync" });
       return;
     }
-    if (this.syncReport.status === "running") {
-      this.toast("Already syncing…");
+    // Ya hay una vuelta andando (la automatica o una pedida antes): no se pide otra.
+    if (this.syncToast || this.syncReport.status === "running") {
+      if (!this.syncToast) this.toast("Already syncing…");
       return;
     }
     if (this.syncReport.status === "network" && !(await api.requestLocalNetwork().catch(() => false))) {
       this.toast("Haze needs the local network permission to sync", "error");
       return;
     }
-    // Si Rust no contesta (no pudo ni empezar), el aviso no queda pendiente para siempre.
-    const asked = Date.now();
-    this.syncAsked = asked;
-    setTimeout(() => this.syncAsked === asked && (this.syncAsked = 0), 5 * 60_000);
-    this.toast("Syncing…");
-    await api.syncNow();
+    const t = { id: this.toast("Syncing…", "info", true), at: Date.now() };
+    this.syncToast = t;
+    // Si Rust no contesta (no pudo ni empezar), el aviso no queda para siempre.
+    setTimeout(() => {
+      if (this.syncToast !== t) return;
+      this.syncToast = null;
+      this.dropToast(t.id);
+    }, 5 * 60_000);
+    try {
+      await api.syncNow();
+    } catch (e) {
+      this.syncToast = null;
+      this.setToast(t.id, `Sync failed: ${e}`, "error");
+    }
   }
 
-  /** Lo que se avisa al terminar una vuelta pedida desde el menu. */
+  /** Al terminar una vuelta pedida desde el menu, el "Syncing…" pasa a decir como salio. */
   private syncDone(r: SyncReport) {
-    if (!this.syncAsked || r.status === "running") return;
-    this.syncAsked = 0;
+    const t = this.syncToast;
+    if (!t || r.status === "running") return;
+    this.syncToast = null;
+    let text: string;
+    let kind: "info" | "error" = "info";
     if (r.status === "ok") {
-      const parts = [
-        r.downloaded && `${r.downloaded} downloaded`,
-        r.uploaded && `${r.uploaded} uploaded`,
-      ].filter(Boolean);
-      this.toast(parts.length ? `Synced: ${parts.join(", ")}` : "Everything's up to date");
-    } else if (r.status === "away") this.toast("Couldn't find the server. Are you home?");
-    else if (r.status === "network") this.toast("Haze needs the local network permission to sync", "error");
-    else if (r.status === "error") this.toast(`Sync failed: ${r.error ?? "something went wrong"}`, "error");
+      const parts = [r.downloaded && `${r.downloaded} downloaded`, r.uploaded && `${r.uploaded} uploaded`].filter(Boolean);
+      text = parts.length ? `Synced: ${parts.join(", ")}` : "Everything's up to date";
+    } else if (r.status === "away") text = "Couldn't find the server. Are you home?";
+    else if (r.status === "network") (text = "Haze needs the local network permission to sync"), (kind = "error");
+    else if (r.status === "error") (text = `Sync failed: ${r.error ?? "something went wrong"}`), (kind = "error");
+    else return this.dropToast(t.id);
+    // Si contesta enseguida, "Syncing…" se deja ver un momento antes de cambiar: si no
+    // parece que salieron dos avisos de golpe.
+    const wait = Math.max(0, 900 - (Date.now() - t.at));
+    setTimeout(() => this.setToast(t.id, text, kind), wait);
   }
 
   checkingUpdate = $state(false);

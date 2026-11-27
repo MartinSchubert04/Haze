@@ -3,11 +3,11 @@
   import { store, type Tab } from "../store.svelte";
 
   const tabs: { id: Tab; label: string; icon: typeof Music }[] = [
-    { id: "songs", label: "Canciones", icon: Music },
-    { id: "folders", label: "Carpetas", icon: Folder },
-    { id: "lists", label: "Listas", icon: Library },
+    { id: "songs", label: "Songs", icon: Music },
+    { id: "folders", label: "Folders", icon: Folder },
+    { id: "lists", label: "Lists", icon: Library },
     { id: "youtube", label: "YouTube", icon: TvMinimalPlay },
-    { id: "queue", label: "Cola", icon: ListMusic },
+    { id: "queue", label: "Queue", icon: ListMusic },
   ];
 </script>
 

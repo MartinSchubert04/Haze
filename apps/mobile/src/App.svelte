@@ -93,7 +93,10 @@
 
 <div class="toasts">
   {#each store.toasts as t (t.id)}
-    <div class="toast" class:error={t.kind === "error"}>{t.text}</div>
+    <div class="toast" class:error={t.kind === "error"}>
+      {#if t.busy}<LoaderCircle size={15} class="spin" />{/if}
+      {#key t.text}<span class="toast-text">{t.text}</span>{/key}
+    </div>
   {/each}
 </div>
 
@@ -143,7 +146,19 @@
     border: var(--border) solid var(--line-strong);
     box-shadow: var(--pop-shadow);
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     animation: toast 0.2s ease-out;
+  }
+  /* Cuando un aviso cambia de texto (de "Syncing…" a como salio), el nuevo entra suave. */
+  .toast-text {
+    animation: swap 0.2s ease-out;
+  }
+  @keyframes swap {
+    from {
+      opacity: 0;
+    }
   }
   .toast.error {
     border-color: color-mix(in srgb, var(--danger) 50%, transparent);
