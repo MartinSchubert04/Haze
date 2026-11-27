@@ -20,18 +20,18 @@ object SyncBridge {
   fun save(tmp: String, path: String, mtime: Long): String {
     val out = JSONObject()
     try {
-      val context = Playback.app ?: throw IllegalStateException("El reproductor todavia no arranco")
+      val context = Playback.app ?: throw IllegalStateException("The player hasn't started yet")
       // Antes de Android 10 no hay RELATIVE_PATH y escribir en Music pide otro permiso.
-      if (Build.VERSION.SDK_INT < 29) throw IllegalStateException("Sincronizar necesita Android 10 o mas nuevo")
+      if (Build.VERSION.SDK_INT < 29) throw IllegalStateException("Syncing needs Android 10 or newer")
       val sub = path.substringBeforeLast('/', "")
       val name = path.substringAfterLast('/')
       val folder = if (sub.isEmpty()) "Haze" else "Haze/$sub"
-      if (Media.exists(context, folder, name)) throw IllegalStateException("ya existe")
+      if (Media.exists(context, folder, name)) throw IllegalStateException("already exists")
       val uri = Media.publish(context, File(tmp), folder, name)
       if (Media.name(context, uri) != name) {
         // Ocupado entre medio o con otro nombre: seria una copia, no el tema del server.
         context.contentResolver.delete(uri, null, null)
-        throw IllegalStateException("ya existe")
+        throw IllegalStateException("already exists")
       }
       if (mtime > 0) {
         @Suppress("DEPRECATION")

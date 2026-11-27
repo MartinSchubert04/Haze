@@ -24,7 +24,7 @@ object DownloadBridge {
     val thread = Thread.currentThread()
     if (thread.contextClassLoader == null) thread.contextClassLoader = DownloadBridge::class.java.classLoader
     try {
-      val context = Playback.app ?: throw IllegalStateException("El reproductor todavia no arranco")
+      val context = Playback.app ?: throw IllegalStateException("The player hasn't started yet")
       val list = JSONArray(args).let { a -> List(a.length()) { a.getString(it) } }
       out.put("saved", Youtube.download(context, id, list) { line -> Playback.download(id, line) })
     } catch (e: Throwable) {

@@ -1,16 +1,12 @@
 <script lang="ts">
-  import { Search, X, Settings as SettingsIcon, Shuffle, LoaderCircle, Clock, ArrowDownAZ, UserRound } from "@lucide/svelte";
-  import { normalizeSearch, plural } from "@haze/ui/format";
+  import { Search, X, Shuffle, LoaderCircle } from "@lucide/svelte";
+  import { normalizeSearch, songCount } from "../format";
   import { api } from "../api";
   import { store, ALL_SONGS } from "../store.svelte";
   import SongList from "../components/SongList.svelte";
   import Select from "../components/Select.svelte";
-
-  const SORTS = [
-    { id: "date_desc", label: "Recientes", icon: Clock },
-    { id: "title_asc", label: "Título", icon: ArrowDownAZ },
-    { id: "artist_asc", label: "Artista", icon: UserRound },
-  ];
+  import GearMenu from "../components/GearMenu.svelte";
+  import { SONG_SORTS } from "../sorts";
 
   let query = $state("");
 
@@ -41,36 +37,34 @@
 {#snippet header()}
   <div class="page">
     <div class="top">
-      <h1 class="page-title">Canciones</h1>
-      <button class="icon-btn" aria-label="Ajustes" onclick={() => store.open({ kind: "settings" })}>
-        <SettingsIcon size={22} />
-      </button>
+      <h1 class="page-title">Songs</h1>
+      <GearMenu />
     </div>
     <div class="page-sub">
-      {#if store.scanning}<LoaderCircle size={13} class="spin" /> Buscando música…
-      {:else}{plural(store.uniqueSongs.length, "canción", "canciones")}{/if}
+      {#if store.scanning}<LoaderCircle size={13} class="spin" /> Looking for music…
+      {:else}{songCount(store.uniqueSongs.length)}{/if}
     </div>
 
     <label class="search">
       <Search size={18} />
-      <input type="search" placeholder="Buscar" bind:value={query} />
-      {#if query}<button class="tap" aria-label="Borrar" onclick={() => (query = "")}><X size={18} /></button>{/if}
+      <input type="search" placeholder="Search" bind:value={query} />
+      {#if query}<button class="tap" aria-label="Clear" onclick={() => (query = "")}><X size={18} /></button>{/if}
     </label>
 
     <div class="actions">
-      <button class="pill primary" disabled={!sorted.length} onclick={shuffleAll}><Shuffle size={16} /> Aleatorio</button>
+      <button class="pill primary" disabled={!sorted.length} onclick={shuffleAll}><Shuffle size={16} /> Shuffle</button>
       <Select
-        label="Ordenar"
+        label="Sort"
         value={store.settings?.songSort ?? "date_desc"}
-        options={SORTS}
+        options={SONG_SORTS}
         onchange={(id) => store.saveSettings((x) => (x.songSort = id))}
       />
     </div>
   </div>
   {#if !store.scanning && !store.songs.length}
     <div class="empty">
-      <h3>No hay música</h3>
-      <p>Copiá canciones al teléfono (por ejemplo, a la carpeta Music) y volvé a abrir Haze.</p>
+      <h3>No music yet</h3>
+      <p>Copy some songs to your phone (to the Music folder, for example) and open Haze again.</p>
     </div>
   {/if}
 {/snippet}

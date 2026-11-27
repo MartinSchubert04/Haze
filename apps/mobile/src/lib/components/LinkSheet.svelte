@@ -3,7 +3,7 @@
   // se lee el link (y yt-dlp queda listo), recien ahi se puede escuchar o bajar. Al bajar
   // la hoja sigue abierta con el avance, y al final dice si quedo o por que fallo.
   import { Play, Download, LoaderCircle, Check, CircleAlert, ListVideo, RotateCcw } from "@lucide/svelte";
-  import { plural } from "@haze/ui/format";
+  import { songCount } from "../format";
   import { api, type LinkInfo, type Song } from "../api";
   import { store } from "../store.svelte";
 
@@ -52,10 +52,10 @@
   function label(status: string, progress: number, item: string | null) {
     const base =
       status === "queued"
-        ? "En espera…"
+        ? "Waiting…"
         : status === "converting"
-          ? "Pasando a MP3…"
-          : `Bajando ${Math.round(progress * 100)}%`;
+          ? "Converting to MP3…"
+          : `Downloading ${Math.round(progress * 100)}%`;
     return item ? `${base} · ${item}` : base;
   }
 </script>
@@ -74,53 +74,53 @@
       {#if title}<div class="title">{title}</div>{/if}
       {#if info}
         <div class="sub">
-          {#if info.isPlaylist}<ListVideo size={13} /> Playlist · {plural(info.count, "canción", "canciones")}
+          {#if info.isPlaylist}<ListVideo size={13} /> Playlist · {songCount(info.count)}
           {:else}{info.songs[0]?.artist || "Video"}{/if}
         </div>
       {:else if error}
-        <div class="sub">No se pudo abrir el link</div>
+        <div class="sub">Couldn't open the link</div>
       {:else}
-        <div class="sub loading"><LoaderCircle size={13} class="spin" /> Leyendo el link…</div>
+        <div class="sub loading"><LoaderCircle size={13} class="spin" /> Reading the link…</div>
       {/if}
     </div>
   </div>
 
   {#if error}
     <div class="msg error">{error}</div>
-    <button class="opt press" onclick={inspect}><RotateCcw size={20} /> Probar de nuevo</button>
+    <button class="opt press" onclick={inspect}><RotateCcw size={20} /> Try again</button>
   {:else if job}
     <!-- Ya se pidio la descarga: el avance de esa descarga, en vivo. -->
     <div class="status">
       {#if job.status === "done"}
-        <div class="line ok"><Check size={18} /> Listo: está en Music/Haze</div>
-        {#if job.error}<div class="hint">Algunos videos fallaron: {job.error}</div>{/if}
+        <div class="line ok"><Check size={18} /> Done: it's in Music/Haze</div>
+        {#if job.error}<div class="hint">Some videos failed: {job.error}</div>{/if}
       {:else if job.status === "error"}
-        <div class="line bad"><CircleAlert size={18} /> No se pudo bajar</div>
+        <div class="line bad"><CircleAlert size={18} /> Couldn't download</div>
         <div class="msg error">{job.error}</div>
       {:else}
         <div class="line">{label(job.status, job.progress, job.item)}</div>
         <div class="bar" class:busy={job.status !== "downloading" || job.progress === 0}>
           <div style:width="{Math.round(job.progress * 100)}%"></div>
         </div>
-        <div class="hint">Podés cerrar esto: sigue bajando aunque salgas de la app.</div>
+        <div class="hint">You can close this: it keeps downloading even if you leave the app.</div>
       {/if}
     </div>
     {#if job.status === "error"}
-      <button class="opt press" onclick={download}><RotateCcw size={20} /> Reintentar</button>
+      <button class="opt press" onclick={download}><RotateCcw size={20} /> Retry</button>
     {:else}
-      <button class="opt press" onclick={() => store.close()}><Check size={20} /> Cerrar</button>
+      <button class="opt press" onclick={() => store.close()}><Check size={20} /> Close</button>
     {/if}
   {:else}
     {#if info?.isPlaylist}
       <label class="check">
         <input type="checkbox" bind:checked={wholePlaylist} />
-        Bajar toda la playlist (en una subcarpeta con su nombre)
+        Download the whole playlist (into a subfolder named after it)
       </label>
     {/if}
-    <button class="opt press" disabled={!info} onclick={listen}><Play size={20} /> Escuchar sin bajar</button>
+    <button class="opt press" disabled={!info} onclick={listen}><Play size={20} /> Listen without downloading</button>
     <button class="opt press primary" disabled={!info || starting} onclick={download}>
       {#if starting}<LoaderCircle size={20} class="spin" />{:else}<Download size={20} />{/if}
-      {info?.isPlaylist && wholePlaylist ? "Bajar la playlist como MP3" : "Bajar como MP3"}
+      {info?.isPlaylist && wholePlaylist ? "Download playlist as MP3" : "Download as MP3"}
     </button>
   {/if}
 </div>

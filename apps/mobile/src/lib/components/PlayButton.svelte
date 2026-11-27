@@ -15,7 +15,7 @@
   class:solid
   style:width="{size}px"
   style:height="{size}px"
-  aria-label={store.player.playing ? "Pausar" : "Reproducir"}
+  aria-label={store.player.playing ? "Pause" : "Play"}
   disabled={!store.player.song}
   onclick={(e) => {
     e.stopPropagation();

@@ -48,9 +48,9 @@ internal object Media {
       put(MediaStore.Audio.Media.IS_PENDING, 1)
     }
     val uri = resolver.insert(MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
-      ?: throw IllegalStateException("MediaStore no acepto $name")
+      ?: throw IllegalStateException("MediaStore rejected $name")
     try {
-      val out = resolver.openOutputStream(uri) ?: throw IllegalStateException("No se pudo escribir $name")
+      val out = resolver.openOutputStream(uri) ?: throw IllegalStateException("Couldn't write $name")
       out.use { o -> file.inputStream().use { it.copyTo(o) } }
       values.clear()
       values.put(MediaStore.Audio.Media.IS_PENDING, 0)

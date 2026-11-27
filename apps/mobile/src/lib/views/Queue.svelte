@@ -18,16 +18,16 @@
 
 <div class="scroller">
   <div class="page">
-    <h1 class="page-title">Cola</h1>
-    <div class="page-sub">{q?.context || "Nada sonando"}</div>
+    <h1 class="page-title">Queue</h1>
+    <div class="page-sub">{q?.context || "Nothing playing"}</div>
     {#if pendingEphemeral}
-      <button class="pill" onclick={() => api.queueAction("clear")}>Vaciar lo encolado</button>
+      <button class="pill" onclick={() => api.queueAction("clear")}>Clear queued songs</button>
     {/if}
   </div>
 
   {#if q && q.entries.length}
     {#each q.entries as e, i (e.uid)}
-      {#if i === cur + 1}<div class="label">A continuación</div>{/if}
+      {#if i === cur + 1}<div class="label">Up next</div>{/if}
       <button
         class="row press"
         class:current={i === cur}
@@ -39,15 +39,15 @@
         <div class="text">
           <div class="title ellipsis">{e.song.title}</div>
           <div class="sub ellipsis">
-            {#if e.ephemeral}<span class="tag">Encolada</span>{/if}
-            {e.song.artist || "Artista desconocido"}
+            {#if e.ephemeral}<span class="tag">Queued</span>{/if}
+            {e.song.artist || "Unknown artist"}
           </div>
         </div>
         <div class="dur">{time(e.song.durationMs / 1000)}</div>
       </button>
     {/each}
   {:else}
-    <div class="empty"><h3>La cola está vacía</h3><p>Tocá una canción para empezar.</p></div>
+    <div class="empty"><h3>The queue is empty</h3><p>Tap a song to start.</p></div>
   {/if}
   <div class="spacer-bottom"></div>
 </div>

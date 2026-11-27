@@ -1,18 +1,14 @@
 <script lang="ts">
-  import { ListMusic, Plus, ArrowDownAZ, Hash, History } from "@lucide/svelte";
-  import { plural } from "@haze/ui/format";
+  import { ListMusic, Plus } from "@lucide/svelte";
+  import { plural, songCount } from "../format";
   import { sortLists } from "@haze/ui/library";
   import type { List } from "../api";
   import { store } from "../store.svelte";
   import { longpress } from "../longpress";
   import Cover from "../components/Cover.svelte";
   import Select from "../components/Select.svelte";
+  import { LIST_SORTS } from "../sorts";
 
-  const SORTS = [
-    { id: "name_asc", label: "Nombre", icon: ArrowDownAZ },
-    { id: "count_desc", label: "Más canciones", icon: Hash },
-    { id: "updated_desc", label: "Cambiadas", icon: History },
-  ];
   const sort = $derived(store.settings?.listSort ?? "name_asc");
 
   // Las canciones de cada lista que estan en el telefono; las que faltan llegan al
@@ -28,21 +24,21 @@
 
 <div class="scroller">
   <div class="page">
-    <h1 class="page-title">Listas</h1>
+    <h1 class="page-title">Lists</h1>
     <div class="page-sub">
-      {plural(store.lists.length, "lista", "listas")}{#if store.lists.length} · mantené apretada una para renombrarla o borrarla{/if}
+      {plural(store.lists.length, "list", "lists")}{#if store.lists.length} · long-press one to rename or delete it{/if}
     </div>
     <div class="actions">
-      <button class="pill primary" onclick={() => store.open({ kind: "listName" })}><Plus size={16} /> Nueva lista</button>
+      <button class="pill primary" onclick={() => store.open({ kind: "listName" })}><Plus size={16} /> New list</button>
       {#if store.lists.length > 1}
-        <Select label="Ordenar" value={sort} options={SORTS} onchange={(k) => store.saveSettings((x) => (x.listSort = k))} />
+        <Select label="Sort" value={sort} options={LIST_SORTS} onchange={(k) => store.saveSettings((x) => (x.listSort = k))} />
       {/if}
     </div>
 
     {#if !store.lists.length}
       <div class="empty">
-        <h3>Todavía no hay listas</h3>
-        <p>Creá una acá o mantené apretada una canción y elegí "Agregar a lista…". Las listas se comparten con la PC al sincronizar en casa.</p>
+        <h3>No lists yet</h3>
+        <p>Create one here, or long-press a song and pick "Add to list…". Lists are shared with your PC when you sync at home.</p>
       </div>
     {/if}
 
@@ -61,7 +57,7 @@
           <div class="text">
             <div class="name ellipsis">{r.list.name}</div>
             <div class="sub ellipsis">
-              {plural(r.songs.length, "canción", "canciones")}{#if r.missing > 0} · {r.missing} sin bajar{/if}
+              {songCount(r.songs.length)}{#if r.missing > 0} · {r.missing} not downloaded{/if}
             </div>
           </div>
         </button>

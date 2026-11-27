@@ -43,7 +43,7 @@
     onpointerup={up}
     onpointercancel={() => (dragging = false)}
     role="slider"
-    aria-label="Posición"
+    aria-label="Position"
     aria-valuemin={0}
     aria-valuemax={Math.round(duration)}
     aria-valuenow={Math.round(pos)}

@@ -98,7 +98,7 @@ internal object Playback {
       val url = try {
         Youtube.streamUrl(context, args.uri)
       } catch (e: Throwable) {
-        main.post { if (seq == loadSeq) emit("failed", e.message ?: "No se pudo abrir el link") }
+        main.post { if (seq == loadSeq) emit("failed", e.message ?: "Couldn't open the link") }
         return@execute
       }
       main.post { if (seq == loadSeq) play(context, args, url) }

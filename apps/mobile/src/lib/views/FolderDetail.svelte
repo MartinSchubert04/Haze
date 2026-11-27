@@ -1,13 +1,13 @@
 <script lang="ts">
   import { ChevronLeft, EllipsisVertical, Play, Shuffle } from "@lucide/svelte";
-  import { folderName, plural } from "@haze/ui/format";
+  import { folderName, songCount } from "../format";
   import { api } from "../api";
   import { store } from "../store.svelte";
   import SongList from "../components/SongList.svelte";
 
   let { path }: { path: string } = $props();
 
-  const name = $derived(folderName(path) || "Almacenamiento");
+  const name = $derived(folderName(path) || "Storage");
   const songs = $derived(store.sortSongs(store.folders.find((f) => f.path === path)?.songs ?? []));
 
   async function play(shuffle: boolean) {
@@ -20,16 +20,16 @@
   {#snippet header()}
     <div class="page">
       <div class="top">
-        <button class="icon-btn back" aria-label="Volver" onclick={() => store.close()}><ChevronLeft size={26} /></button>
-        <button class="icon-btn more" aria-label="Opciones" onclick={() => store.open({ kind: "folderOptions", path })}>
+        <button class="icon-btn back" aria-label="Back" onclick={() => store.close()}><ChevronLeft size={26} /></button>
+        <button class="icon-btn more" aria-label="Options" onclick={() => store.open({ kind: "folderOptions", path })}>
           <EllipsisVertical size={22} />
         </button>
       </div>
       <h1 class="page-title">{name}</h1>
-      <div class="page-sub">{plural(songs.length, "canción", "canciones")} · {path || "/"}</div>
+      <div class="page-sub">{songCount(songs.length)} · {path || "/"}</div>
       <div class="actions">
-        <button class="pill primary" disabled={!songs.length} onclick={() => play(false)}><Play size={16} fill="currentColor" /> Reproducir</button>
-        <button class="pill" disabled={!songs.length} onclick={() => play(true)}><Shuffle size={16} /> Aleatorio</button>
+        <button class="pill primary" disabled={!songs.length} onclick={() => play(false)}><Play size={16} fill="currentColor" /> Play</button>
+        <button class="pill" disabled={!songs.length} onclick={() => play(true)}><Shuffle size={16} /> Shuffle</button>
       </div>
     </div>
   {/snippet}

@@ -147,9 +147,10 @@ class DownloadService : Service() {
     private fun channel(context: Context) {
       if (Build.VERSION.SDK_INT < 26) return
       val manager = context.getSystemService(NotificationManager::class.java)
-      if (manager.getNotificationChannel(CHANNEL) != null) return
-      val ch = NotificationChannel(CHANNEL, "Descargas", NotificationManager.IMPORTANCE_LOW)
-      ch.description = "Lo que se baja de YouTube"
+      // Se crea siempre: si ya existe, Android solo le cambia nombre y descripcion (asi el
+      // canal viejo "Descargas" pasa a "Downloads") y respeta lo que el usuario configuro.
+      val ch = NotificationChannel(CHANNEL, "Downloads", NotificationManager.IMPORTANCE_LOW)
+      ch.description = "Downloads from YouTube"
       ch.setShowBadge(false)
       manager.createNotificationChannel(ch)
     }
@@ -162,8 +163,8 @@ class DownloadService : Service() {
     private fun progressNotification(context: Context): Notification {
       channel(context)
       val head = when {
-        title.isEmpty() -> "Preparando la descarga"
-        converting -> "Convirtiendo: $title"
+        title.isEmpty() -> "Preparing download"
+        converting -> "Converting: $title"
         else -> title
       }
       return NotificationCompat.Builder(context, CHANNEL)
@@ -183,15 +184,15 @@ class DownloadService : Service() {
     private fun doneNotification(context: Context, done: Int, failed: Int, last: String): Notification {
       channel(context)
       val head = when {
-        done == 1 && failed == 0 -> "Bajada: $last"
-        failed == 0 -> "Se bajaron $done descargas"
-        done == 0 -> if (failed == 1) "No se pudo bajar $last" else "No se pudieron bajar $failed descargas"
-        else -> "Se bajaron $done, fallaron $failed"
+        done == 1 && failed == 0 -> "Downloaded: $last"
+        failed == 0 -> "Downloaded $done items"
+        done == 0 -> if (failed == 1) "Couldn't download $last" else "Couldn't download $failed items"
+        else -> "Downloaded $done, $failed failed"
       }
       return NotificationCompat.Builder(context, CHANNEL)
         .setSmallIcon(if (done > 0) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
         .setContentTitle(head)
-        .apply { if (done > 0) setContentText("Están en Music/Haze") }
+        .apply { if (done > 0) setContentText("Saved to Music/Haze") }
         .setAutoCancel(true)
         .setContentIntent(openApp(context))
         .build()

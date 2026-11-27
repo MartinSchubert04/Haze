@@ -134,7 +134,7 @@ impl<R: Runtime> HazePlayer<R> {
         let out: Out = serde_json::from_str(&out).map_err(|e| e.to_string())?;
         match (out.saved, out.error) {
             (Some(n), _) => Ok(n),
-            (None, e) => Err(e.unwrap_or_else(|| "yt-dlp fallo".into())),
+            (None, e) => Err(e.unwrap_or_else(|| "yt-dlp failed".into())),
         }
     }
 
@@ -150,7 +150,7 @@ impl<R: Runtime> HazePlayer<R> {
         let out: Out = serde_json::from_str(&out).map_err(|e| e.to_string())?;
         match (out.ok, out.error) {
             (Some(true), _) => Ok(()),
-            (_, e) => Err(e.unwrap_or_else(|| "no se pudo guardar".into())),
+            (_, e) => Err(e.unwrap_or_else(|| "couldn't save".into())),
         }
     }
 

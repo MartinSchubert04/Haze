@@ -2,7 +2,7 @@
   // Buscar en YouTube para escuchar sin bajar, o pegar un link para bajarlo. Arriba van
   // las descargas en curso.
   import { Search, Link2, X, LoaderCircle, TvMinimalPlay, Check, CircleAlert, Download } from "@lucide/svelte";
-  import { isUrl } from "@haze/ui/format";
+  import { isUrl } from "../format";
   import { api, type Song } from "../api";
   import { store } from "../store.svelte";
   import SongList from "../components/SongList.svelte";
@@ -60,7 +60,7 @@
   }
 
   function label(status: string, item: string | null) {
-    const base = { queued: "En espera", downloading: "Bajando", converting: "Convirtiendo", error: "Falló" }[status] ?? "";
+    const base = { queued: "Waiting", downloading: "Downloading", converting: "Converting", error: "Failed" }[status] ?? "";
     return item ? `${base} · ${item}` : base;
   }
 </script>
@@ -72,13 +72,13 @@
 {#snippet header()}
   <div class="page">
     <h1 class="page-title">YouTube</h1>
-    <div class="page-sub">Buscá para escuchar sin bajar, o pegá un link para bajarlo como MP3.</div>
+    <div class="page-sub">Search to listen without downloading, or paste a link to download it as MP3.</div>
 
     <form class="search" onsubmit={run}>
       {#if link}<Link2 size={18} />{:else}<Search size={18} />{/if}
-      <input type="search" enterkeyhint={link ? "go" : "search"} placeholder="Buscar o pegar un link" bind:value={text} />
+      <input type="search" enterkeyhint={link ? "go" : "search"} placeholder="Search or paste a link" bind:value={text} />
       {#if loading}<LoaderCircle size={18} class="spin" />
-      {:else if text}<button type="button" class="tap" aria-label="Borrar" onclick={() => (text = "")}><X size={18} /></button>{/if}
+      {:else if text}<button type="button" class="tap" aria-label="Clear" onclick={() => (text = "")}><X size={18} /></button>{/if}
     </form>
 
     {#if active.length || done}
@@ -98,21 +98,21 @@
           </div>
         {/each}
         <div class="downloads-foot">
-          {#if done}<span>{done === 1 ? "1 bajada" : `${done} bajadas`} en Music/Haze</span>{/if}
-          <button class="chip press" onclick={() => api.clearDownloads()}>Limpiar</button>
+          {#if done}<span>{done === 1 ? "1 download" : `${done} downloads`} in Music/Haze</span>{/if}
+          <button class="chip press" onclick={() => api.clearDownloads()}>Clear</button>
         </div>
       </div>
     {/if}
 
     {#if error}<div class="error">{error}</div>{/if}
     {#if searched && !loading && !error}
-      <div class="page-sub results">{results.length} resultados para "{searched}"</div>
+      <div class="page-sub results">{results.length} results for "{searched}"</div>
     {/if}
   </div>
   {#if !searched && !loading && !active.length}
     <div class="hint">
       <TvMinimalPlay size={40} strokeWidth={1.4} />
-      <p>Mantené apretado un resultado para bajarlo. La primera búsqueda tarda un poco más: Haze prepara yt-dlp.</p>
+      <p>Long-press a result to download it. The first search takes a bit longer: Haze is setting up yt-dlp.</p>
     </div>
   {/if}
 {/snippet}

@@ -66,6 +66,8 @@ export function sortLists(lists: List[], sort: string, count: (l: List) => numbe
       return out.sort((a, b) => count(a) - count(b) || byName(a, b));
     case "updated_desc":
       return out.sort((a, b) => b.updated - a.updated || byName(a, b));
+    case "updated_asc":
+      return out.sort((a, b) => a.updated - b.updated || byName(a, b));
     default:
       return out.sort(byName);
   }

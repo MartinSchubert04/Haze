@@ -1,7 +1,7 @@
 <script lang="ts">
   // Opciones de una lista: se abre al mantenerla apretada o desde su pantalla.
   import { ListMusic, FolderOpen, Pencil, Trash2 } from "@lucide/svelte";
-  import { plural } from "@haze/ui/format";
+  import { songCount } from "../format";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
 
@@ -33,7 +33,7 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
-<div class="sheet" role="dialog" aria-label="Opciones de {list?.name ?? 'la lista'}">
+<div class="sheet" role="dialog" aria-label="{list?.name ?? 'List'} options">
   <div class="grip"></div>
   <div class="head">
     {#if coverSong}
@@ -42,20 +42,20 @@
       <div class="icon"><ListMusic size={24} /></div>
     {/if}
     <div class="text">
-      <div class="title ellipsis">{list?.name ?? "Lista"}</div>
-      <div class="sub ellipsis">{plural(songs.length, "canción", "canciones")}</div>
+      <div class="title ellipsis">{list?.name ?? "List"}</div>
+      <div class="sub ellipsis">{songCount(songs.length)}</div>
     </div>
   </div>
   {#if confirming}
-    <p class="hint">Se borra la lista en todos los aparatos. Las canciones quedan.</p>
-    <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Sí, borrar {list?.name ?? "la lista"}</button>
-    <button class="opt press" onclick={() => (confirming = false)}>Cancelar</button>
+    <p class="hint">The list is deleted on every device. The songs stay.</p>
+    <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Yes, delete {list?.name ?? "the list"}</button>
+    <button class="opt press" onclick={() => (confirming = false)}>Cancel</button>
   {:else}
     {#if store.openList !== id}
-      <button class="opt press" onclick={open}><FolderOpen size={20} /> Abrir</button>
+      <button class="opt press" onclick={open}><FolderOpen size={20} /> Open</button>
     {/if}
-    <button class="opt press" onclick={rename}><Pencil size={20} /> Renombrar</button>
-    <button class="opt press danger" onclick={() => (confirming = true)}><Trash2 size={20} /> Borrar lista</button>
+    <button class="opt press" onclick={rename}><Pencil size={20} /> Rename</button>
+    <button class="opt press danger" onclick={() => (confirming = true)}><Trash2 size={20} /> Delete list</button>
   {/if}
 </div>
 

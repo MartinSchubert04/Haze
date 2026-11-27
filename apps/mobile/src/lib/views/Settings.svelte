@@ -1,10 +1,26 @@
 <script lang="ts">
-  // Ajustes del telefono: tema, paleta, fondo, reproduccion, sincronizar y Home Assistant.
-  import { ChevronLeft, ChevronDown, Check, RefreshCw, Download, Eye, EyeOff, Undo2 } from "@lucide/svelte";
-  import { folderName, plural } from "@haze/ui/format";
+  // Ajustes del telefono, en secciones que se pliegan: apariencia, reproduccion,
+  // sincronizar, Home Assistant, biblioteca y actualizaciones.
+  import { onMount } from "svelte";
+  import {
+    ChevronLeft,
+    Check,
+    RefreshCw,
+    Download,
+    Eye,
+    EyeOff,
+    Undo2,
+    Palette,
+    Play,
+    House,
+    Library,
+    CircleArrowUp,
+  } from "@lucide/svelte";
   import { THEMES, palettesOf, paletteOf, themeOf } from "@haze/ui/themes";
+  import { folderName, plural, songCount } from "../format";
   import { api } from "../api";
   import { store } from "../store.svelte";
+  import Section from "../components/Section.svelte";
 
   const BACKGROUNDS = ["#0f1720", "#000000", "#121212", "#1a1423", "#102019", "#1b1412", "#1d2328"];
 
@@ -12,14 +28,22 @@
   const a = $derived(s.appearance);
   const theme = $derived(themeOf(a.theme));
   const palette = $derived(paletteOf(theme, a.palette));
+  const themeName = $derived(THEMES.find((t) => t.id === theme)?.name ?? "");
+  const paletteName = $derived(palettesOf(theme).find((p) => p.id === palette)?.name ?? "");
+
+  // Abierta desde el menu del engranaje con una seccion: esa arranca desplegada.
+  onMount(() => {
+    const layer = [...store.layers].reverse().find((l) => l.kind === "settings");
+    if (layer?.kind === "settings" && layer.section) store.settingsOpen[layer.section] = true;
+  });
 
   // Home Assistant se edita en un borrador y se guarda con un boton: si no, cada letra
   // reconectaria al broker.
   let ha = $state({ ...store.settings!.ha });
   const haDirty = $derived(JSON.stringify(ha) !== JSON.stringify(s.ha));
   const haLabel = $derived(
-    ({ connected: "Conectado", error: "Sin conexión", network: "Falta permiso" } as Record<string, string>)[store.haStatus] ??
-      "Conectando…",
+    ({ connected: "Connected", error: "Can't connect", network: "Needs permission" } as Record<string, string>)[store.haStatus] ??
+      "Connecting…",
   );
 
   // Server y usuario se guardan con un boton, como HA: cada letra arrancaria una vuelta.
@@ -45,58 +69,43 @@
 
   const ago = (ms: number) => {
     const m = Math.round((Date.now() - ms) / 60000);
-    if (m < 1) return "recién";
-    if (m < 60) return `hace ${m} min`;
+    if (m < 1) return "just now";
+    if (m < 60) return `${m} min ago`;
     const h = Math.round(m / 60);
-    return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
+    return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
   };
 
   const syncLine = $derived.by(() => {
     const r = store.syncReport;
     const p = store.syncProgress;
-    if (!s.sync.enabled) return "Apagado.";
-    if (!s.sync.server.trim()) return "Falta poner el server.";
-    if (r.status === "running") return p && p.total ? `Sincronizando ${p.done} de ${p.total}…` : "Sincronizando…";
-    if (r.status === "network") return "Falta el permiso de red local.";
-    if (r.status === "away") return `Fuera de casa: no se encontró el server (${ago(r.at)}).`;
-    if (r.status === "error") return `Error ${ago(r.at)}: ${r.error ?? "algo falló"}`;
+    if (!s.sync.enabled) return "Off.";
+    if (!s.sync.server.trim()) return "Set the server first.";
+    if (r.status === "running") return p && p.total ? `Syncing ${p.done} of ${p.total}…` : "Syncing…";
+    if (r.status === "network") return "Needs the local network permission.";
+    if (r.status === "away") return `Away from home: couldn't find the server (${ago(r.at)}).`;
+    if (r.status === "error") return `Error ${ago(r.at)}: ${r.error ?? "something went wrong"}`;
     if (r.status === "ok") {
-      const parts = [
-        r.downloaded && plural(r.downloaded, "bajada", "bajadas"),
-        r.uploaded && plural(r.uploaded, "subida", "subidas"),
-      ].filter(Boolean);
-      return `Al día · ${ago(r.at)}${parts.length ? ` · ${parts.join(", ")}` : ""}`;
+      const parts = [r.downloaded && `${r.downloaded} downloaded`, r.uploaded && `${r.uploaded} uploaded`].filter(Boolean);
+      return `Up to date · ${ago(r.at)}${parts.length ? ` · ${parts.join(", ")}` : ""}`;
     }
-    return "Todavía no sincronizó.";
+    return "Hasn't synced yet.";
   });
 
+  const syncSummary = $derived(
+    !s.sync.enabled
+      ? "Off"
+      : syncing
+        ? "Syncing…"
+        : store.syncReport.status === "ok"
+          ? `Up to date · ${ago(store.syncReport.at)}`
+          : store.syncReport.status === "away"
+            ? "Away from home"
+            : store.syncReport.status === "error"
+              ? "Error"
+              : "On",
+  );
+
   const removedList = $derived(store.userdata.removed.filter((r) => r.removed).sort((a, b) => b.updated - a.updated));
-
-  // Home Assistant se muestra plegado: casi nunca se toca.
-  let haOpen = $state(false);
-
-  let checking = $state(false);
-  let upToDate = $state(false);
-
-  async function checkUpdate() {
-    checking = true;
-    upToDate = false;
-    try {
-      upToDate = !(await api.updateCheck()) && !store.update;
-    } catch (e) {
-      store.toast(String(e), "error");
-    } finally {
-      checking = false;
-    }
-  }
-
-  async function install() {
-    try {
-      if (!(await api.updateInstall())) store.toast('Permití "Instalar apps desconocidas" para Haze y tocá de nuevo');
-    } catch (e) {
-      store.toast(String(e), "error");
-    }
-  }
 
   async function saveHa() {
     await store.saveSettings((x) => (x.ha = { ...ha, port: Number(ha.port) || 1883 }));
@@ -107,207 +116,215 @@
 
 <section class="layer">
   <div class="page">
-    <button class="icon-btn back" aria-label="Volver" onclick={() => store.close()}><ChevronLeft size={26} /></button>
-    <h1 class="page-title">Ajustes</h1>
+    <button class="icon-btn back" aria-label="Back" onclick={() => store.close()}><ChevronLeft size={26} /></button>
+    <h1 class="page-title">Settings</h1>
 
-    <h2>Tema</h2>
-    <div class="themes">
-      {#each THEMES as t (t.id)}
-        {@const sw = palettesOf(t.id)[0]?.swatch ?? []}
-        <button
-          class="theme press"
-          class:on={theme === t.id}
-          onclick={() => store.saveSettings((x) => ((x.appearance.theme = t.id), (x.appearance.palette = "")))}
-        >
-          <span class="tprev" style:background={sw[0]}>
-            <span class="tpanel" style:background={sw[1]}></span>
-            <span class="tdot" style:background={sw[2]}></span>
-          </span>
-          <span class="ellipsis">{t.name}</span>
-        </button>
-      {/each}
-    </div>
-
-    <h2>Paleta</h2>
-    <div class="palettes">
-      {#each palettesOf(theme) as p (p.id)}
-        <button
-          class="palette press"
-          class:on={palette === p.id}
-          onclick={() => store.saveSettings((x) => ((x.appearance.theme = theme), (x.appearance.palette = p.id)))}
-        >
-          <span class="psw">{#each p.swatch as c}<span style:background={c}></span>{/each}</span>
-          {p.name}
-        </button>
-      {/each}
-    </div>
-
-    <h2>Fondo</h2>
-    <div class="choices">
-      <button class="choice press" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "theme"))}>
-        <span class="preview theme"></span> Del tema
-      </button>
-      <button class="choice press" class:on={a.background === "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "color"))}>
-        <span class="preview" style:background={a.backgroundColor}></span> Color
-      </button>
-    </div>
-    {#if a.background === "color"}
-      <div class="swatches">
-        {#each BACKGROUNDS as c (c)}
-          <button class="swatch dark" style:background={c} aria-label={c} onclick={() => store.saveSettings((x) => (x.appearance.backgroundColor = c))}>
-            {#if a.backgroundColor === c}<Check size={16} strokeWidth={3} />{/if}
+    <Section id="appearance" title="Appearance" icon={Palette} summary="{themeName} · {paletteName}">
+      <h3>Theme</h3>
+      <div class="themes">
+        {#each THEMES as t (t.id)}
+          {@const sw = palettesOf(t.id)[0]?.swatch ?? []}
+          <button
+            class="theme press"
+            class:on={theme === t.id}
+            onclick={() => store.saveSettings((x) => ((x.appearance.theme = t.id), (x.appearance.palette = "")))}
+          >
+            <span class="tprev" style:background={sw[0]}>
+              <span class="tpanel" style:background={sw[1]}></span>
+              <span class="tdot" style:background={sw[2]}></span>
+            </span>
+            <span class="ellipsis">{t.name}</span>
           </button>
         {/each}
       </div>
-    {/if}
 
-    <label class="row">
-      <span>Teñir "Reproduciendo" con la tapa</span>
-      <input
-        type="checkbox"
-        checked={a.tintFromArtwork}
-        onchange={(e) => {
-          const v = e.currentTarget.checked;
-          store.saveSettings((x) => (x.appearance.tintFromArtwork = v));
-        }}
-      />
-    </label>
-
-    <h2>Reproducción</h2>
-    <label class="row">
-      <span>Retomar la última canción al abrir</span>
-      <input
-        type="checkbox"
-        checked={s.playback.resume}
-        onchange={(e) => {
-          const v = e.currentTarget.checked;
-          store.saveSettings((x) => (x.playback.resume = v));
-        }}
-      />
-    </label>
-
-    <h2>Sincronizar</h2>
-    <p class="hint">
-      En casa, al abrir Haze y cada 2 horas mientras esté abierta, baja a Music/Haze lo que le falta al teléfono, sube lo
-      nuevo al server y junta las listas. Nunca borra archivos. Fuera de casa no hace nada.
-    </p>
-    <label class="row">
-      <span>Sincronizar con el server de casa</span>
-      <input type="checkbox" checked={s.sync.enabled} onchange={(e) => toggleSync(e.currentTarget.checked)} />
-    </label>
-    <div class="form" class:off={!s.sync.enabled}>
-      <label>Server<input type="text" inputmode="url" bind:value={syncDraft.server} placeholder="192.168.0.100" autocapitalize="off" /></label>
-      <label>
-        Usuario<input type="text" bind:value={syncDraft.user} placeholder="default" autocomplete="off" autocapitalize="off" />
-        <span class="hint">El mismo en la PC y el teléfono para compartir las listas.</span>
-      </label>
-      <button
-        class="pill primary save"
-        disabled={!syncDirty}
-        onclick={() => setSync({ server: syncDraft.server.trim(), user: syncDraft.user.trim() || "default" })}
-      >
-        Guardar
-      </button>
-    </div>
-    <div class="row">
-      <span class="hint sync-line" class:err={store.syncReport.status === "error" && s.sync.enabled}>{syncLine}</span>
-      {#if s.sync.enabled && store.syncReport.status === "network" && !syncing}
-        <button class="pill" onclick={grantNetwork}>Dar permiso</button>
-      {:else}
-        <button class="pill" disabled={!s.sync.enabled || syncing} onclick={() => api.syncNow()}>
-          <RefreshCw size={15} class={syncing ? "spin" : ""} /> Sincronizar ahora
-        </button>
-      {/if}
-    </div>
-    {#if removedList.length}
-      <p class="hint">Dadas de baja: no se ven en ningún aparato, pero el archivo sigue.</p>
-      {#each removedList as r (r.file)}
-        <div class="row hidden-folder">
-          <div class="folder-text removed">
-            <EyeOff size={16} />
-            <span class="ellipsis">{r.title || "Sin nombre"}</span>
-          </div>
-          <button class="pill" onclick={() => store.restore(r.file)}><Undo2 size={15} /> Restaurar</button>
-        </div>
-      {/each}
-    {/if}
-
-    <button class="fold" aria-expanded={haOpen} onclick={() => (haOpen = !haOpen)}>
-      <h2>Home Assistant</h2>
-      {#if s.ha.enabled}
-        <span class="status" class:ok={store.haStatus === "connected"}>{haLabel}</span>
-      {/if}
-      <span class="chev" class:open={haOpen}><ChevronDown size={18} /></span>
-    </button>
-    {#if haOpen}
-    <p class="hint">Por MQTT. Las entidades aparecen solas en HA, en el dispositivo "{s.ha.deviceName}".</p>
-    <label class="row">
-      <span>Conectar con Home Assistant</span>
-      {#if s.ha.enabled}
-        <span class="status" class:ok={store.haStatus === "connected"}>{haLabel}</span>
-      {/if}
-      <input type="checkbox" bind:checked={ha.enabled} />
-    </label>
-    <div class="form" class:off={!ha.enabled}>
-      <label>Servidor MQTT<input type="text" inputmode="url" bind:value={ha.host} placeholder="192.168.1.10" /></label>
-      <label>Puerto<input type="number" inputmode="numeric" bind:value={ha.port} /></label>
-      <label>Usuario<input type="text" bind:value={ha.username} autocomplete="off" autocapitalize="off" /></label>
-      <label>Contraseña<input type="password" bind:value={ha.password} autocomplete="off" /></label>
-      <label>
-        Nombre del dispositivo<input type="text" bind:value={ha.deviceName} />
-        <span class="hint">Si usás Haze en más de un aparato, poné un nombre distinto en cada uno.</span>
-      </label>
-      {#if s.ha.enabled && store.haStatus === "network"}
-        <span class="hint">Android pide permiso para que Haze llegue a la red local (lo muestra como "dispositivos cercanos").</span>
-        <button class="pill save" onclick={() => api.requestLocalNetwork()}>Dar permiso</button>
-      {/if}
-      <button class="pill primary save" disabled={!haDirty} onclick={saveHa}>Guardar</button>
-    </div>
-    {/if}
-
-    <h2>Biblioteca</h2>
-    <div class="row">
-      <span>{plural(store.uniqueSongs.length, "canción", "canciones")} en el teléfono</span>
-      <button class="pill" disabled={store.scanning} onclick={() => api.rescan()}>
-        <RefreshCw size={15} class={store.scanning ? "spin" : ""} /> Volver a buscar
-      </button>
-    </div>
-    {#if s.hiddenFolders?.length}
-      <p class="hint">Carpetas quitadas de la biblioteca</p>
-      {#each s.hiddenFolders as path (path)}
-        <div class="row hidden-folder">
-          <div class="folder-text">
-            <div class="ellipsis">{folderName(path) || "Almacenamiento"}</div>
-            <div class="hint ellipsis">{path || "/"}</div>
-          </div>
-          <button class="pill" onclick={() => store.showFolder(path)}><Eye size={15} /> Mostrar</button>
-        </div>
-      {/each}
-    {/if}
-
-    <h2>Actualizaciones</h2>
-    <div class="row">
-      <span>Versión {store.version}</span>
-      {#if store.update?.status === "ready"}
-        <button class="pill primary" onclick={install}>Actualizar ahora</button>
-      {:else}
-        <button class="pill" onclick={checkUpdate} disabled={checking || !!store.update}>
-          <RefreshCw size={15} class={checking || store.update ? "spin" : ""} /> Buscar
-        </button>
-      {/if}
-    </div>
-    {#if store.update}
-      <div class="update">
-        <Download size={18} />
-        <span>
-          {store.update.status === "ready"
-            ? `Haze ${store.update.version} está lista. Se instala sola al salir de la app sin música sonando.`
-            : `Bajando Haze ${store.update.version}… ${Math.round(store.update.progress * 100)}%`}
-        </span>
+      <h3>Palette</h3>
+      <div class="palettes">
+        {#each palettesOf(theme) as p (p.id)}
+          <button
+            class="palette press"
+            class:on={palette === p.id}
+            onclick={() => store.saveSettings((x) => ((x.appearance.theme = theme), (x.appearance.palette = p.id)))}
+          >
+            <span class="psw">{#each p.swatch as c}<span style:background={c}></span>{/each}</span>
+            {p.name}
+          </button>
+        {/each}
       </div>
-    {:else if upToDate}
-      <div class="update"><Check size={18} /> Estás en la última versión</div>
-    {/if}
+
+      <h3>Background</h3>
+      <div class="choices">
+        <button class="choice press" class:on={a.background !== "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "theme"))}>
+          <span class="preview theme"></span> From theme
+        </button>
+        <button class="choice press" class:on={a.background === "color"} onclick={() => store.saveSettings((x) => (x.appearance.background = "color"))}>
+          <span class="preview" style:background={a.backgroundColor}></span> Color
+        </button>
+      </div>
+      {#if a.background === "color"}
+        <div class="swatches">
+          {#each BACKGROUNDS as c (c)}
+            <button class="swatch dark" style:background={c} aria-label={c} onclick={() => store.saveSettings((x) => (x.appearance.backgroundColor = c))}>
+              {#if a.backgroundColor === c}<Check size={16} strokeWidth={3} />{/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      <label class="row">
+        <span>Tint "Now playing" with the cover</span>
+        <input
+          type="checkbox"
+          checked={a.tintFromArtwork}
+          onchange={(e) => {
+            const v = e.currentTarget.checked;
+            store.saveSettings((x) => (x.appearance.tintFromArtwork = v));
+          }}
+        />
+      </label>
+    </Section>
+
+    <Section id="playback" title="Playback" icon={Play} summary={s.playback.resume ? "Resume on" : ""}>
+      <label class="row">
+        <span>Resume the last song when opening</span>
+        <input
+          type="checkbox"
+          checked={s.playback.resume}
+          onchange={(e) => {
+            const v = e.currentTarget.checked;
+            store.saveSettings((x) => (x.playback.resume = v));
+          }}
+        />
+      </label>
+    </Section>
+
+    <Section id="sync" title="Sync" icon={RefreshCw} summary={syncSummary} ok={s.sync.enabled && store.syncReport.status === "ok"}>
+      <p class="hint">
+        At home, when you open Haze and every 2 hours while it's open, it downloads to Music/Haze whatever the phone is
+        missing, uploads anything new to the server and merges your lists. It never deletes files. Away from home it does
+        nothing.
+      </p>
+      <label class="row">
+        <span>Sync with the home server</span>
+        <input type="checkbox" checked={s.sync.enabled} onchange={(e) => toggleSync(e.currentTarget.checked)} />
+      </label>
+      <div class="form" class:off={!s.sync.enabled}>
+        <label>Server<input type="text" inputmode="url" bind:value={syncDraft.server} placeholder="192.168.0.100" autocapitalize="off" /></label>
+        <label>
+          User<input type="text" bind:value={syncDraft.user} placeholder="default" autocomplete="off" autocapitalize="off" />
+          <span class="hint">Use the same one on the PC and the phone to share lists.</span>
+        </label>
+        <button
+          class="pill primary save"
+          disabled={!syncDirty}
+          onclick={() => setSync({ server: syncDraft.server.trim(), user: syncDraft.user.trim() || "default" })}
+        >
+          Save
+        </button>
+      </div>
+      <div class="row">
+        <span class="hint sync-line" class:err={store.syncReport.status === "error" && s.sync.enabled}>{syncLine}</span>
+        {#if s.sync.enabled && store.syncReport.status === "network" && !syncing}
+          <button class="pill" onclick={grantNetwork}>Allow</button>
+        {:else}
+          <button class="pill" disabled={!s.sync.enabled || syncing} onclick={() => api.syncNow()}>
+            <RefreshCw size={15} class={syncing ? "spin" : ""} /> Sync now
+          </button>
+        {/if}
+      </div>
+    </Section>
+
+    <Section
+      id="ha"
+      title="Home Assistant"
+      icon={House}
+      summary={s.ha.enabled ? haLabel : "Off"}
+      ok={s.ha.enabled && store.haStatus === "connected"}
+    >
+      <p class="hint">Over MQTT. The entities show up in HA on their own, under the "{s.ha.deviceName}" device.</p>
+      <label class="row">
+        <span>Connect to Home Assistant</span>
+        <input type="checkbox" bind:checked={ha.enabled} />
+      </label>
+      <div class="form" class:off={!ha.enabled}>
+        <label>MQTT server<input type="text" inputmode="url" bind:value={ha.host} placeholder="192.168.1.10" /></label>
+        <label>Port<input type="number" inputmode="numeric" bind:value={ha.port} /></label>
+        <label>User<input type="text" bind:value={ha.username} autocomplete="off" autocapitalize="off" /></label>
+        <label>Password<input type="password" bind:value={ha.password} autocomplete="off" /></label>
+        <label>
+          Device name<input type="text" bind:value={ha.deviceName} />
+          <span class="hint">If you use Haze on more than one device, give each one a different name.</span>
+        </label>
+        {#if s.ha.enabled && store.haStatus === "network"}
+          <span class="hint">Android asks for permission to let Haze reach the local network (it calls it "nearby devices").</span>
+          <button class="pill save" onclick={() => api.requestLocalNetwork()}>Allow</button>
+        {/if}
+        <button class="pill primary save" disabled={!haDirty} onclick={saveHa}>Save</button>
+      </div>
+    </Section>
+
+    <Section id="library" title="Library" icon={Library} summary={songCount(store.uniqueSongs.length)}>
+      <div class="row">
+        <span>{songCount(store.uniqueSongs.length)} on the phone</span>
+        <button class="pill" disabled={store.scanning} onclick={() => api.rescan()}>
+          <RefreshCw size={15} class={store.scanning ? "spin" : ""} /> Rescan
+        </button>
+      </div>
+      {#if s.hiddenFolders?.length}
+        <h3>Hidden folders</h3>
+        {#each s.hiddenFolders as path (path)}
+          <div class="row hidden-folder">
+            <div class="folder-text">
+              <div class="ellipsis">{folderName(path) || "Storage"}</div>
+              <div class="hint ellipsis">{path || "/"}</div>
+            </div>
+            <button class="pill" onclick={() => store.showFolder(path)}><Eye size={15} /> Show</button>
+          </div>
+        {/each}
+      {/if}
+      {#if removedList.length}
+        <h3>Removed songs</h3>
+        <p class="hint">Hidden on every device, but the file is still there.</p>
+        {#each removedList as r (r.file)}
+          <div class="row hidden-folder">
+            <div class="folder-text removed">
+              <EyeOff size={16} />
+              <span class="ellipsis">{r.title || "Untitled"}</span>
+            </div>
+            <button class="pill" onclick={() => store.restore(r.file)}><Undo2 size={15} /> Restore</button>
+          </div>
+        {/each}
+      {/if}
+    </Section>
+
+    <Section
+      id="updates"
+      title="Updates"
+      icon={CircleArrowUp}
+      summary={store.update?.status === "ready" ? `${store.update.version} ready` : `Version ${store.version}`}
+      ok={store.update?.status === "ready"}
+    >
+      <div class="row">
+        <span>Version {store.version}</span>
+        {#if store.update?.status === "ready"}
+          <button class="pill primary" onclick={() => store.installUpdate()}>Update now</button>
+        {:else}
+          <button class="pill" onclick={() => store.checkUpdate()} disabled={store.checkingUpdate || !!store.update}>
+            <RefreshCw size={15} class={store.checkingUpdate || store.update ? "spin" : ""} /> Check
+          </button>
+        {/if}
+      </div>
+      {#if store.update}
+        <div class="update">
+          <Download size={18} />
+          <span>
+            {store.update.status === "ready"
+              ? `Haze ${store.update.version} is ready. It installs itself when you leave the app with nothing playing.`
+              : `Downloading Haze ${store.update.version}… ${Math.round(store.update.progress * 100)}%`}
+          </span>
+        </div>
+      {/if}
+    </Section>
   </div>
   <div class="spacer-bottom"></div>
 </section>
@@ -330,45 +347,19 @@
   .back {
     margin-left: -10px;
   }
-  h2 {
-    font-size: 13px;
+  .page-title {
+    margin-bottom: 14px;
+  }
+  h3 {
+    font-size: 12.5px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-3);
-    margin: 28px 0 12px;
+    margin: 18px 0 10px;
   }
-  .fold {
-    width: 100%;
-    transition: opacity var(--release);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 28px 0 12px;
-    text-align: left;
-    color: var(--text-3);
-  }
-  .fold:global(.pressed) {
-    opacity: 0.6;
-    transition: opacity 0.05s;
-  }
-  .fold h2 {
-    flex: 1;
-    margin: 0;
-  }
-  .fold .status {
-    font-size: 13px;
-    color: var(--text-3);
-  }
-  .fold .status.ok {
-    color: var(--ok);
-  }
-  .chev {
-    display: grid;
-    transition: transform 0.2s;
-  }
-  .chev.open {
-    transform: rotate(180deg);
+  h3:first-child {
+    margin-top: 8px;
   }
   .hidden-folder {
     min-height: 56px;
@@ -520,20 +511,13 @@
   input[type="checkbox"] {
     width: 22px;
     height: 22px;
+    flex: none;
     accent-color: var(--accent);
   }
   .hint {
     font-size: 13px;
     color: var(--text-3);
     margin: 0 0 4px;
-  }
-  .row .status {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--text-3);
-  }
-  .row .status.ok {
-    color: var(--ok);
   }
   .form {
     display: flex;

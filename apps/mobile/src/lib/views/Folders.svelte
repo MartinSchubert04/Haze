@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Folder } from "@lucide/svelte";
-  import { plural } from "@haze/ui/format";
+  import { plural, songCount } from "../format";
   import { api } from "../api";
   import { store } from "../store.svelte";
   import { pullToRefresh } from "../pull";
@@ -10,8 +10,8 @@
 
 <div class="scroller" use:pullToRefresh={() => api.rescan()}>
   <div class="page">
-    <h1 class="page-title">Carpetas</h1>
-    <div class="page-sub">{plural(store.folders.length, "carpeta", "carpetas")} · mantené apretada una para quitarla</div>
+    <h1 class="page-title">Folders</h1>
+    <div class="page-sub">{plural(store.folders.length, "folder", "folders")} · long-press one to hide it</div>
 
     <div class="list">
       {#each store.folders as f (f.path)}
@@ -27,7 +27,7 @@
           {/if}
           <div class="text">
             <div class="name ellipsis">{f.name}</div>
-            <div class="sub ellipsis">{plural(f.songs.length, "canción", "canciones")} · {f.path || "/"}</div>
+            <div class="sub ellipsis">{songCount(f.songs.length)} · {f.path || "/"}</div>
           </div>
         </button>
       {/each}

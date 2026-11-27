@@ -54,28 +54,28 @@
     onpointercancel={up}
   >
     <div class="bar">
-      <button class="icon-btn" aria-label="Cerrar" onclick={() => store.close()}><ChevronDown size={26} /></button>
+      <button class="icon-btn" aria-label="Close" onclick={() => store.close()}><ChevronDown size={26} /></button>
       <div class="ctx ellipsis">{p.context}</div>
-      <button class="icon-btn" aria-label="Cola" onclick={openQueue}><ListMusic size={22} /></button>
+      <button class="icon-btn" aria-label="Queue" onclick={openQueue}><ListMusic size={22} /></button>
     </div>
     <div class="art"><Cover song={p.song} size="100%" radius={18} /></div>
   </div>
 
   <div class="info">
     <h1 class="title">{p.song?.title ?? ""}</h1>
-    <div class="artist ellipsis">{p.song?.artist || "Artista desconocido"}</div>
+    <div class="artist ellipsis">{p.song?.artist || "Unknown artist"}</div>
   </div>
 
   <div class="seek"><Seek /></div>
 
   <div class="controls">
-    <button class="icon-btn" class:on={p.shuffle} aria-label={p.shuffle ? "Aleatorio" : "Orden normal"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
+    <button class="icon-btn" class:on={p.shuffle} aria-label={p.shuffle ? "Shuffle" : "In order"} onclick={() => api.control({ type: "shuffle", value: !p.shuffle })}>
       {#if p.shuffle}<Shuffle size={22} />{:else}<MoveRight size={22} />{/if}
     </button>
-    <button class="icon-btn big" aria-label="Anterior" onclick={() => api.control({ type: "previous" })}><SkipBack size={30} fill="currentColor" /></button>
+    <button class="icon-btn big" aria-label="Previous" onclick={() => api.control({ type: "previous" })}><SkipBack size={30} fill="currentColor" /></button>
     <PlayButton size={76} solid />
-    <button class="icon-btn big" aria-label="Siguiente" onclick={() => api.control({ type: "next" })}><SkipForward size={30} fill="currentColor" /></button>
-    <button class="icon-btn" class:on={p.repeat !== "off"} aria-label="Repetir" onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
+    <button class="icon-btn big" aria-label="Next" onclick={() => api.control({ type: "next" })}><SkipForward size={30} fill="currentColor" /></button>
+    <button class="icon-btn" class:on={p.repeat !== "off"} aria-label="Repeat" onclick={() => api.control({ type: "repeat", value: nextRepeat })}>
       {#if p.repeat === "one"}<Repeat1 size={22} />{:else}<Repeat size={22} />{/if}
     </button>
   </div>

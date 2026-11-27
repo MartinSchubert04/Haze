@@ -1,7 +1,7 @@
 <script lang="ts">
   // Opciones de una cancion: se abre al mantenerla apretada.
   import { ListPlus, ListEnd, FolderOpen, Trash2, Download, Library, ListX, EyeOff } from "@lucide/svelte";
-  import { folderName } from "@haze/ui/format";
+  import { folderName } from "../format";
   import { api, type Song } from "../api";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
@@ -59,42 +59,42 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
-<div class="sheet" role="dialog" aria-label="Opciones de {song.title}">
+<div class="sheet" role="dialog" aria-label="{song.title} options">
   <div class="grip"></div>
   <div class="head">
     <Cover {song} size={52} radius={8} />
     <div class="text">
       <div class="title ellipsis">{song.title}</div>
-      <div class="sub ellipsis">{song.artist || "Artista desconocido"}</div>
+      <div class="sub ellipsis">{song.artist || "Unknown artist"}</div>
     </div>
   </div>
   {#if confirming}
     <p class="hint">
-      Deja de verse en la PC, el teléfono y la tele, y no se vuelve a bajar. El archivo no se borra: se restaura desde Ajustes.
+      It's hidden on the PC, the phone and the TV, and won't be downloaded again. The file isn't deleted: you can restore it in Settings.
     </p>
-    <button class="opt press danger" onclick={giveUp}><EyeOff size={20} /> Sí, dar de baja</button>
-    <button class="opt press" onclick={() => (confirming = false)}>Cancelar</button>
+    <button class="opt press danger" onclick={giveUp}><EyeOff size={20} /> Yes, remove it</button>
+    <button class="opt press" onclick={() => (confirming = false)}>Cancel</button>
   {:else}
-    <button class="opt press" onclick={() => enqueue(true)}><ListPlus size={20} /> Reproducir a continuación</button>
-    <button class="opt press" onclick={() => enqueue(false)}><ListEnd size={20} /> Agregar a la cola</button>
+    <button class="opt press" onclick={() => enqueue(true)}><ListPlus size={20} /> Play next</button>
+    <button class="opt press" onclick={() => enqueue(false)}><ListEnd size={20} /> Add to queue</button>
     {#if song.kind === "stream"}
-      <button class="opt press" onclick={download}><Download size={20} /> Bajar como MP3</button>
+      <button class="opt press" onclick={download}><Download size={20} /> Download as MP3</button>
     {:else if store.openFolder !== song.folder}
       <button class="opt press" onclick={() => store.goToFolder(song.folder)}>
-        <FolderOpen size={20} /> Ir a {folderName(song.folder) || "la carpeta"}
+        <FolderOpen size={20} /> Go to {folderName(song.folder) || "folder"}
       </button>
     {/if}
     {#if keeps}
-      <button class="opt press" onclick={addToList}><Library size={20} /> Agregar a lista…</button>
+      <button class="opt press" onclick={addToList}><Library size={20} /> Add to list…</button>
     {/if}
     {#if list && keeps}
-      <button class="opt press danger" onclick={removeFromList}><ListX size={20} /> Quitar de la lista</button>
+      <button class="opt press danger" onclick={removeFromList}><ListX size={20} /> Remove from list</button>
     {/if}
     {#if queueIndex !== undefined}
-      <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Quitar de la cola</button>
+      <button class="opt press danger" onclick={remove}><Trash2 size={20} /> Remove from queue</button>
     {/if}
     {#if keeps}
-      <button class="opt press danger" onclick={() => (confirming = true)}><EyeOff size={20} /> Dar de baja</button>
+      <button class="opt press danger" onclick={() => (confirming = true)}><EyeOff size={20} /> Remove everywhere</button>
     {/if}
   {/if}
 </div>

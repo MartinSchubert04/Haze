@@ -186,7 +186,7 @@ fn run(app: &AppHandle) -> Option<Report> {
                 return Some(Report {
                     status: "error".into(),
                     at: now_ms(),
-                    error: Some(format!("no se pudo leer la música: {e}")),
+                    error: Some(format!("couldn't read your music: {e}")),
                     ..Default::default()
                 })
             }
@@ -277,14 +277,14 @@ impl Store for MediaStoreDir {
 
     fn open(&self, path: &str) -> std::io::Result<Box<dyn Read + Send>> {
         if !syncable(path) {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "ruta invalida"));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid path"));
         }
         Ok(Box::new(std::fs::File::open(format!("{ROOT_PATH}/{path}"))?))
     }
 
     fn save(&self, tmp: &Path, path: &str, mtime: i64) -> std::io::Result<()> {
         if !syncable(path) {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "ruta invalida"));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid path"));
         }
         self.app.haze_player().sync_save(&tmp.to_string_lossy(), path, mtime).map_err(std::io::Error::other)
     }

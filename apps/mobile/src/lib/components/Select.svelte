@@ -1,19 +1,29 @@
 <script lang="ts" generics="T extends string">
   // Desplegable al estilo del Select de MUI (campo con borde y label flotante, menu que
-  // crece desde el campo), con los colores de Haze.
+  // crece desde el campo), con los colores de Haze. El campo es chico: una flecha, el
+  // nombre corto del orden y el chevron; el menu, mas ancho, dice cada opcion completa.
   import type { Component } from "svelte";
-  import { ChevronDown, Check } from "@lucide/svelte";
+  import { ArrowDownUp, ChevronDown, Check } from "@lucide/svelte";
   import { ripple } from "../ripple";
   import { store } from "../store.svelte";
 
-  type Option = { id: T; label: string; icon?: Component<{ size?: number }> };
+  /** `short`: lo que se ve en el campo (si no, `label`). */
+  type Option = { id: T; label: string; short?: string; icon?: Component<{ size?: number }> };
 
   let {
     label,
     value,
     options,
     onchange,
-  }: { label: string; value: T; options: Option[]; onchange: (id: T) => void } = $props();
+    align = "right",
+  }: {
+    label: string;
+    value: T;
+    options: Option[];
+    onchange: (id: T) => void;
+    /** De que lado del campo se abre el menu (el del borde de la pantalla mas cercano). */
+    align?: "left" | "right";
+  } = $props();
 
   let open = $state(false);
   let root: HTMLDivElement;
@@ -56,13 +66,19 @@
     <!-- El borde es un fieldset: el legend (invisible) le abre el hueco al label, como en MUI. -->
     <fieldset class="outline" aria-hidden="true"><legend><span>{label}</span></legend></fieldset>
     <span class="label" id="{id}-label">{label}</span>
-    {#if current.icon}<current.icon size={16} />{/if}
-    <span class="value" id="{id}-value">{current.label}</span>
-    <ChevronDown size={18} class="chev" />
+    <ArrowDownUp size={15} class="arrow" />
+    <!-- Todos los nombres apilados en la misma celda: el campo mide lo que el mas largo y
+         no salta al cambiar de opcion. -->
+    <span class="value" id="{id}-value">
+      {#each options as o (o.id)}
+        <span class:on={o.id === current.id} aria-hidden={o.id !== current.id}>{o.short ?? o.label}</span>
+      {/each}
+    </span>
+    <ChevronDown size={16} class="chev" />
   </button>
 
   {#if open}
-    <ul class="menu" role="listbox" aria-labelledby="{id}-label">
+    <ul class="menu {align}" role="listbox" aria-labelledby="{id}-label">
       {#each options as o (o.id)}
         <li role="option" aria-selected={o.id === value}>
           <button class="item ripple" class:on={o.id === value} use:ripple onclick={() => pick(o)}>
@@ -77,24 +93,22 @@
 </div>
 
 <style>
-  /* Ancho fijo: el campo y el menu miden lo mismo y no saltan al cambiar de opcion. */
   .select {
     position: relative;
     z-index: 5;
-    width: 172px;
+    width: max-content;
   }
   .field {
     position: relative;
-    width: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 40px;
-    padding: 0 10px 0 14px;
-    border-radius: calc(12px * var(--rs));
+    gap: 6px;
+    height: 34px;
+    padding: 0 8px 0 10px;
+    border-radius: calc(10px * var(--rs));
     background: rgb(var(--ov) / 0.04);
     color: var(--text);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 550;
     white-space: nowrap;
     transition: background 0.2s;
@@ -104,11 +118,11 @@
   }
   .outline {
     position: absolute;
-    inset: -6px 0 0;
+    inset: -5px 0 0;
     margin: 0;
-    padding: 0 8px;
+    padding: 0 6px;
     border: var(--border) solid var(--line-strong);
-    border-radius: calc(12px * var(--rs));
+    border-radius: calc(10px * var(--rs));
     text-align: left;
     pointer-events: none;
     transition: border-color 0.2s;
@@ -117,9 +131,9 @@
     border-color: var(--accent);
   }
   .outline legend {
-    height: 11px;
+    height: 10px;
     padding: 0;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -127,15 +141,15 @@
   }
   .outline legend span {
     display: inline-block;
-    padding: 0 4px;
+    padding: 0 3px;
   }
   /* El label se apoya sobre el borde, en el hueco que abre el legend. */
   .label {
     position: absolute;
     top: 0;
-    left: 13px;
+    left: 9px;
     transform: translateY(-50%);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.02em;
     line-height: 1;
@@ -145,12 +159,28 @@
   .open .label {
     color: var(--accent);
   }
+  .field :global(.arrow) {
+    flex: none;
+    color: var(--text-2);
+    transition: color 0.2s;
+  }
+  .open .field :global(.arrow) {
+    color: var(--accent);
+  }
   .value {
-    flex: 1;
+    display: grid;
     text-align: left;
   }
+  .value span {
+    grid-area: 1 / 1;
+    visibility: hidden;
+  }
+  .value span.on {
+    visibility: visible;
+  }
   .field :global(.chev) {
-    color: var(--text-2);
+    flex: none;
+    color: var(--text-3);
     transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .open .field :global(.chev) {
@@ -161,8 +191,7 @@
   .menu {
     position: absolute;
     top: calc(100% + 6px);
-    left: 0;
-    right: 0;
+    min-width: 200px;
     margin: 0;
     padding: 6px;
     list-style: none;
@@ -170,8 +199,15 @@
     background: var(--pop);
     border: var(--border) solid var(--line-strong);
     box-shadow: var(--pop-shadow);
-    transform-origin: top center;
     animation: grow 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .menu.right {
+    right: 0;
+    transform-origin: top right;
+  }
+  .menu.left {
+    left: 0;
+    transform-origin: top left;
   }
   @keyframes grow {
     from {
@@ -185,17 +221,19 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 46px;
+    height: 42px;
     padding: 0 10px 0 12px;
     border-radius: calc(10px * var(--rs));
-    font-size: 15px;
+    font-size: 14.5px;
     color: var(--text);
     text-align: left;
+    white-space: nowrap;
   }
   .item span {
     flex: 1;
   }
   .item :global(svg) {
+    flex: none;
     color: var(--text-2);
   }
   .item.on {

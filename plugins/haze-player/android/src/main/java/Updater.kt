@@ -42,7 +42,7 @@ internal object Updater {
         200 -> JSONObject(c.inputStream.bufferedReader().use { it.readText() })
         // Sin Releases todavia, o el ultimo salio sin APK (fallo la parte de Android).
         404 -> null
-        else -> throw IllegalStateException("GitHub respondio ${c.responseCode}")
+        else -> throw IllegalStateException("GitHub returned ${c.responseCode}")
       }
     } finally {
       c.disconnect()
@@ -59,7 +59,7 @@ internal object Updater {
     c.readTimeout = 60_000
     c.setRequestProperty("User-Agent", "Haze-Android")
     try {
-      if (c.responseCode != 200) throw IllegalStateException("GitHub respondio ${c.responseCode}")
+      if (c.responseCode != 200) throw IllegalStateException("GitHub returned ${c.responseCode}")
       val total = c.contentLengthLong
       val digest = MessageDigest.getInstance("SHA-256")
       var done = 0L
@@ -86,7 +86,7 @@ internal object Updater {
       val hex = digest.digest().joinToString("") { "%02x".format(it) }
       if (!hex.equals(sha256.trim(), ignoreCase = true)) {
         part.delete()
-        throw IllegalStateException("El APK bajado no coincide con el publicado")
+        throw IllegalStateException("The downloaded APK doesn't match the published one")
       }
       part.renameTo(dest)
       ready = dest

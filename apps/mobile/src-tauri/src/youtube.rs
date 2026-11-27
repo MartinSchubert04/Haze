@@ -27,7 +27,7 @@ async fn ytdlp_json(app: &AppHandle, args: Vec<String>) -> Result<Value, String>
 
 /// El error de yt-dlp llega con todo su stderr: se queda la linea que importa.
 fn clean_error(e: &str) -> String {
-    yt::error_line(e).unwrap_or_else(|| e.lines().last().unwrap_or("yt-dlp fallo").to_string())
+    yt::error_line(e).unwrap_or_else(|| e.lines().last().unwrap_or("yt-dlp failed").to_string())
 }
 
 #[tauri::command]
@@ -87,7 +87,7 @@ fn notify(app: &AppHandle, jobs: &[DownloadJob]) {
         detail.push(format!("{:.0}%", current.progress * 100.0));
     }
     if queued > 0 {
-        detail.push(format!("+{queued} en cola"));
+        detail.push(format!("+{queued} queued"));
     }
     app.haze_player().downloads_status(DownloadsStatus::Progress {
         title: current.title.clone(),
@@ -233,7 +233,7 @@ async fn worker(app: AppHandle) {
                 failed += 1;
                 update_job(&app, id, |j| {
                     j.status = "error".into();
-                    j.error = Some("No se guardó ningún archivo".into());
+                    j.error = Some("No file was saved".into());
                 });
             }
             Ok(_) => {

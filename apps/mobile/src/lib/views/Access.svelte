@@ -18,12 +18,12 @@
 
 <div class="access">
   <div class="icon"><Music size={40} strokeWidth={1.6} /></div>
-  <h2>Tu música</h2>
-  <p>Haze necesita permiso para ver la música guardada en el teléfono. No sube ni comparte nada.</p>
-  <button class="pill primary" disabled={asking} onclick={ask}>Dar permiso</button>
+  <h2>Your music</h2>
+  <p>Haze needs permission to see the music stored on your phone. It doesn't upload or share anything.</p>
+  <button class="pill primary" disabled={asking} onclick={ask}>Allow</button>
   {#if denied}
     <p class="hint">
-      Si Android ya no muestra el aviso, activalo a mano: Ajustes del teléfono › Apps › Haze › Permisos › Música y
+      If Android doesn't show the prompt anymore, turn it on by hand: phone Settings › Apps › Haze › Permissions › Music and
       audio.
     </p>
   {/if}

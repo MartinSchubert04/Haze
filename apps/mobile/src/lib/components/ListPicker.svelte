@@ -2,7 +2,7 @@
   // "Agregar a lista…": elegir la lista, o crear una nueva con estas canciones.
   import { Check, ListMusic, Plus } from "@lucide/svelte";
   import { fileKey } from "@haze/ui/library";
-  import { plural } from "@haze/ui/format";
+  import { songCount } from "../format";
   import type { List, Song } from "../api";
   import { store } from "../store.svelte";
 
@@ -26,15 +26,15 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
-<div class="sheet" role="dialog" aria-label="Agregar a lista">
+<div class="sheet" role="dialog" aria-label="Add to list">
   <div class="grip"></div>
   <div class="head">
-    <div class="title">Agregar a lista</div>
-    <div class="sub ellipsis">{songs.length === 1 ? songs[0].title : plural(songs.length, "canción", "canciones")}</div>
+    <div class="title">Add to list</div>
+    <div class="sub ellipsis">{songs.length === 1 ? songs[0].title : songCount(songs.length)}</div>
   </div>
   <div class="lists">
     <button class="opt press" onclick={create}>
-      <Plus size={20} /> {songs.length === 1 ? "Nueva lista con este tema" : "Nueva lista con estos temas"}
+      <Plus size={20} /> {songs.length === 1 ? "New list with this song" : "New list with these songs"}
     </button>
     {#each store.lists as l (l.id)}
       <button class="opt press" disabled={has(l)} onclick={() => add(l)}>

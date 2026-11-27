@@ -21,7 +21,7 @@
   </div>
   <button
     class="icon-btn"
-    aria-label="Anterior"
+    aria-label="Previous"
     onclick={(e) => {
       e.stopPropagation();
       api.control({ type: "previous" });
@@ -32,7 +32,7 @@
   <PlayButton size={44} />
   <button
     class="icon-btn"
-    aria-label="Siguiente"
+    aria-label="Next"
     onclick={(e) => {
       e.stopPropagation();
       api.control({ type: "next" });

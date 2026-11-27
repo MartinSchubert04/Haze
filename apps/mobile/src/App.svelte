@@ -48,7 +48,7 @@
 <Background />
 
 {#if fatal}
-  <div class="empty"><h3>No se pudo cargar</h3><p>{fatal}</p></div>
+  <div class="empty"><h3>Couldn't load</h3><p>{fatal}</p></div>
 {:else if !store.ready}
   <div class="boot"><LoaderCircle size={28} class="spin" /></div>
 {:else if !store.access}

@@ -56,7 +56,7 @@
         <Cover {song} size={46} radius={8} />
         <div class="text">
           <div class="title ellipsis">{song.title}</div>
-          <div class="sub ellipsis">{song.artist || "Artista desconocido"}</div>
+          <div class="sub ellipsis">{song.artist || "Unknown artist"}</div>
         </div>
         <div class="dur">{time(song.durationMs / 1000)}</div>
       </button>

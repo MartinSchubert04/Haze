@@ -24,7 +24,8 @@ export type Layer =
   | { kind: "folder"; path: string }
   | { kind: "list"; id: string }
   | { kind: "nowPlaying" }
-  | { kind: "settings" }
+  /** Con `section`, abre Ajustes con esa seccion desplegada. */
+  | { kind: "settings"; section?: string }
   /** Con `listId`, abierta desde esa lista: se puede quitar de ahi. */
   | { kind: "song"; song: Song; queueIndex?: number; listId?: string }
   /** Opciones de una carpeta: se abren al mantenerla apretada. */
@@ -47,7 +48,7 @@ type BackHandler = { level: "popup" | "page"; run: () => boolean };
 
 export type Folder = { path: string; name: string; songs: Song[]; coverSong: Song | null };
 
-export const ALL_SONGS = "Todas las canciones";
+export const ALL_SONGS = "All songs";
 
 const emptyState: PlayerState = {
   song: null,
@@ -127,23 +128,24 @@ class Store {
     listen<SyncReport>("sync://status", (e) => {
       this.syncReport = e.payload;
       if (e.payload.status !== "running") this.syncProgress = null;
+      this.syncDone(e.payload);
     });
     listen<{ done: number; total: number }>("sync://progress", (e) => (this.syncProgress = e.payload));
     listen<boolean>("library://scanning", (e) => (this.scanning = e.payload));
     listen<UpdateInfo | null>("update://status", (e) => {
       const was = this.update?.status;
       this.update = e.payload;
-      if (e.payload?.status === "ready" && was !== "ready") this.toast(`Haze ${e.payload.version} está lista: se instala al salir`);
+      if (e.payload?.status === "ready" && was !== "ready") this.toast(`Haze ${e.payload.version} is ready: it installs when you leave the app`);
     });
     listen<DownloadJob[]>("downloads://changed", (e) => {
       // Una descarga que acaba de fallar: se avisa, no solo en la lista de YouTube.
       const before = new Map(this.downloads.map((d) => [d.id, d]));
       for (const d of e.payload) {
-        if (d.error && !before.get(d.id)?.error) this.toast(`No se pudo bajar ${d.title}: ${d.error}`, "error");
+        if (d.error && !before.get(d.id)?.error) this.toast(`Couldn't download ${d.title}: ${d.error}`, "error");
       }
       this.downloads = e.payload;
     });
-    listen<string>("downloads://done", (e) => this.toast(`Bajada: ${e.payload}`));
+    listen<string>("downloads://done", (e) => this.toast(`Downloaded: ${e.payload}`));
     listen<string>("ha://status", (e) => (this.haStatus = e.payload));
     listen<string>("app://error", (e) => this.toast(e.payload, "error"));
     listen<boolean>("app://ready", (e) => {
@@ -288,13 +290,99 @@ class Store {
 
   sortSongs(list: Song[], sort = this.settings?.songSort ?? "date_desc"): Song[] {
     const out = [...list];
+    const byTitle = (a: Song, b: Song) => sortKey(a.title).localeCompare(sortKey(b.title));
     switch (sort) {
+      case "title_desc":
+        return out.sort((a, b) => byTitle(b, a));
       case "artist_asc":
-        return out.sort((a, b) => sortKey(a.artist || "~").localeCompare(sortKey(b.artist || "~")));
+        return out.sort((a, b) => sortKey(a.artist || "~").localeCompare(sortKey(b.artist || "~")) || byTitle(a, b));
       case "date_desc":
         return out.sort((a, b) => b.mtime - a.mtime);
+      case "date_asc":
+        return out.sort((a, b) => a.mtime - b.mtime);
+      case "duration_desc":
+        return out.sort((a, b) => b.durationMs - a.durationMs || byTitle(a, b));
+      case "duration_asc":
+        return out.sort((a, b) => a.durationMs - b.durationMs || byTitle(a, b));
       default:
-        return out.sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title)));
+        return out.sort(byTitle);
+    }
+  }
+
+  // ------------------------------------------------------------------ menu del engranaje
+
+  /** Secciones de Ajustes desplegadas: quedan como estaban al volver a entrar. */
+  settingsOpen = $state<Record<string, boolean>>({});
+
+  /** Se pidio a mano: al terminar la vuelta se avisa como salio. */
+  private syncAsked = 0;
+
+  /** "Sync" del menu: sincroniza ya y avisa con un toast como salio. */
+  async syncNow() {
+    const s = this.settings?.sync;
+    if (!s?.enabled || !s.server.trim()) {
+      this.toast("Sync is off. Set it up in Settings");
+      this.open({ kind: "settings", section: "sync" });
+      return;
+    }
+    if (this.syncReport.status === "running") {
+      this.toast("Already syncing…");
+      return;
+    }
+    if (this.syncReport.status === "network" && !(await api.requestLocalNetwork().catch(() => false))) {
+      this.toast("Haze needs the local network permission to sync", "error");
+      return;
+    }
+    // Si Rust no contesta (no pudo ni empezar), el aviso no queda pendiente para siempre.
+    const asked = Date.now();
+    this.syncAsked = asked;
+    setTimeout(() => this.syncAsked === asked && (this.syncAsked = 0), 5 * 60_000);
+    this.toast("Syncing…");
+    await api.syncNow();
+  }
+
+  /** Lo que se avisa al terminar una vuelta pedida desde el menu. */
+  private syncDone(r: SyncReport) {
+    if (!this.syncAsked || r.status === "running") return;
+    this.syncAsked = 0;
+    if (r.status === "ok") {
+      const parts = [
+        r.downloaded && `${r.downloaded} downloaded`,
+        r.uploaded && `${r.uploaded} uploaded`,
+      ].filter(Boolean);
+      this.toast(parts.length ? `Synced: ${parts.join(", ")}` : "Everything's up to date");
+    } else if (r.status === "away") this.toast("Couldn't find the server. Are you home?");
+    else if (r.status === "network") this.toast("Haze needs the local network permission to sync", "error");
+    else if (r.status === "error") this.toast(`Sync failed: ${r.error ?? "something went wrong"}`, "error");
+  }
+
+  checkingUpdate = $state(false);
+
+  /** "Update" del menu: busca ya; si no hay nada nuevo, lo dice con un toast. */
+  async checkUpdate() {
+    if (this.update?.status === "ready") return this.installUpdate();
+    if (this.update) {
+      this.toast(`Downloading Haze ${this.update.version}… ${Math.round(this.update.progress * 100)}%`);
+      return;
+    }
+    if (this.checkingUpdate) return;
+    this.checkingUpdate = true;
+    try {
+      const v = await api.updateCheck();
+      if (v) this.toast(`Downloading Haze ${v}…`);
+      else if (!this.update) this.toast(`You're on the latest version (${this.version})`);
+    } catch (e) {
+      this.toast(`Couldn't check for updates: ${e}`, "error");
+    } finally {
+      this.checkingUpdate = false;
+    }
+  }
+
+  async installUpdate() {
+    try {
+      if (!(await api.updateInstall())) this.toast('Allow "Install unknown apps" for Haze and tap again');
+    } catch (e) {
+      this.toast(String(e), "error");
     }
   }
 
@@ -314,14 +402,14 @@ class Store {
   async download(url: string, title: string, thumb: string | null, playlist = false): Promise<number | null> {
     // Encolar contesta enseguida: si no, algo quedo trabado y se avisa igual.
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject("la app no respondió"), 15000),
+      setTimeout(() => reject("the app didn't respond"), 15000),
     );
     try {
       const id = await Promise.race([api.ytDownload(url, title, thumb, playlist), timeout]);
-      this.toast("Bajando a Music/Haze");
+      this.toast("Downloading to Music/Haze");
       return id;
     } catch (e) {
-      this.toast(`No se pudo empezar a bajar ${title}: ${e}`, "error");
+      this.toast(`Couldn't start downloading ${title}: ${e}`, "error");
       return null;
     }
   }
@@ -344,7 +432,7 @@ class Store {
     this.layers = [];
     this.library = this.library.filter((s) => s.folder !== path);
     await this.saveSettings((x) => (x.hiddenFolders = [...new Set([...(x.hiddenFolders ?? []), path])]));
-    this.toast("Carpeta quitada. Se vuelve a mostrar desde Ajustes");
+    this.toast("Folder hidden. You can bring it back in Settings");
   }
 
   async showFolder(path: string) {
@@ -353,7 +441,7 @@ class Store {
 
   async enqueue(song: Song, next: boolean) {
     await api.enqueue(song, next);
-    this.toast(next ? "Suena a continuación" : "Agregada a la cola");
+    this.toast(next ? "Playing next" : "Added to queue");
   }
 
   // ------------------------------------------------------------------ listas y bajas
@@ -372,14 +460,14 @@ class Store {
     try {
       return await api.editUser(op);
     } catch (e) {
-      this.toast(`No se pudo guardar: ${e}`, "error");
+      this.toast(`Couldn't save: ${e}`, "error");
       return null;
     }
   }
 
   async createList(name: string, songs: Song[] = []) {
     const id = await this.editUser({ type: "create", name, files: songs.map(fileKey) });
-    if (id) this.toast(songs.length ? `Agregada a ${name.trim()}` : `Lista ${name.trim()} creada`);
+    if (id) this.toast(songs.length ? `Added to ${name.trim()}` : `Created ${name.trim()}`);
     return id;
   }
 
@@ -387,18 +475,18 @@ class Store {
   async deleteList(list: List) {
     this.layers = this.layers.filter((l) => !((l.kind === "list" || l.kind === "listOptions") && l.id === list.id));
     await this.editUser({ type: "delete", id: list.id });
-    this.toast(`Lista ${list.name} borrada`);
+    this.toast(`Deleted ${list.name}`);
   }
 
   async addToList(list: List, songs: Song[]) {
     await this.editUser({ type: "add", id: list.id, files: songs.map(fileKey) });
-    this.toast(`Agregada a ${list.name}`);
+    this.toast(`Added to ${list.name}`);
   }
 
   /** Oculta las canciones en todos los aparatos. El archivo no se borra. */
   async removeSongs(songs: Song[]) {
     await this.editUser({ type: "setRemoved", files: songs.map((s) => [fileKey(s), s.title]), removed: true });
-    this.toast("Dada de baja. Se restaura desde Ajustes");
+    this.toast("Removed. You can restore it in Settings");
   }
 
   async restore(file: number) {
@@ -416,7 +504,7 @@ function groupFolders(songs: Song[]): Folder[] {
   return [...map.entries()]
     .map(([path, list]) => ({
       path,
-      name: folderName(path) || "Almacenamiento",
+      name: folderName(path) || "Storage",
       songs: list,
       coverSong: list.find((s) => s.hasCover) ?? null,
     }))

@@ -433,7 +433,7 @@ async fn load_library(app: &AppHandle) {
             let _ = app.emit("library://changed", &lib.songs);
         }
         Ok(Err(e)) => {
-            let _ = app.emit("app://error", format!("No se pudo leer la musica: {e}"));
+            let _ = app.emit("app://error", format!("Couldn't read your music: {e}"));
         }
         Err(e) => log::error!("haze: la lectura de la biblioteca se corto: {e}"),
     }
@@ -475,7 +475,7 @@ async fn start(app: AppHandle) {
         Err(e) => Some(e.to_string()),
     };
     if let Some(e) = error {
-        let _ = app.emit("app://error", format!("No se pudo preparar el reproductor: {e}"));
+        let _ = app.emit("app://error", format!("Couldn't start the player: {e}"));
         return;
     }
     state.player.lock().await.attach(app.haze_player().engine());

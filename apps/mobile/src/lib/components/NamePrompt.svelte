@@ -34,18 +34,18 @@
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
 <form
   class="dialog"
-  aria-label={list ? "Renombrar lista" : "Nueva lista"}
+  aria-label={list ? "Rename list" : "New list"}
   onsubmit={(e) => {
     e.preventDefault();
     save();
   }}
 >
-  <h3>{list ? "Renombrar lista" : "Nueva lista"}</h3>
-  {#if !list && songs?.length === 1}<p class="hint ellipsis">Con {songs[0].title}</p>{/if}
-  <input type="text" bind:this={input} bind:value={name} placeholder="Nombre" maxlength="80" enterkeyhint="done" />
+  <h3>{list ? "Rename list" : "New list"}</h3>
+  {#if !list && songs?.length === 1}<p class="hint ellipsis">With {songs[0].title}</p>{/if}
+  <input type="text" bind:this={input} bind:value={name} placeholder="Name" maxlength="80" enterkeyhint="done" />
   <div class="buttons">
-    <button type="button" class="pill" onclick={() => store.close()}>Cancelar</button>
-    <button type="submit" class="pill primary" disabled={!name.trim()}>{list ? "Guardar" : "Crear"}</button>
+    <button type="button" class="pill" onclick={() => store.close()}>Cancel</button>
+    <button type="submit" class="pill primary" disabled={!name.trim()}>{list ? "Save" : "Create"}</button>
   </div>
 </form>
 

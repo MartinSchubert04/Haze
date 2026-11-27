@@ -217,7 +217,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         result.put("out", Youtube.run(context, args))
         invoke.resolve(result)
       } catch (e: Throwable) {
-        invoke.reject(e.message ?: "yt-dlp fallo")
+        invoke.reject(e.message ?: "yt-dlp failed")
       }
     }
   }
@@ -272,7 +272,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         val latest = Updater.latest()
         invoke.resolve(if (latest == null) JSObject() else JSObject(latest.toString()))
       } catch (e: Throwable) {
-        invoke.reject(e.message ?: "No se pudo consultar GitHub")
+        invoke.reject(e.message ?: "Couldn't reach GitHub")
       }
     }
   }
@@ -286,7 +286,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         Updater.download(context, a.url, a.sha256) { p -> Playback.update(p) }
         invoke.resolve()
       } catch (e: Throwable) {
-        invoke.reject(e.message ?: "No se pudo bajar la actualizacion")
+        invoke.reject(e.message ?: "Couldn't download the update")
       }
     }
   }
@@ -310,7 +310,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
         result.put("needsPermission", false)
         invoke.resolve(result)
       } catch (e: Throwable) {
-        invoke.reject(e.message ?: "No se pudo instalar")
+        invoke.reject(e.message ?: "Couldn't install the update")
       }
     }
   }

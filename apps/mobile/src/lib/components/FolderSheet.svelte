@@ -1,14 +1,14 @@
 <script lang="ts">
   // Opciones de una carpeta: se abre al mantenerla apretada o desde su pantalla.
   import { Folder, FolderOpen, EyeOff } from "@lucide/svelte";
-  import { folderName, plural } from "@haze/ui/format";
+  import { folderName, songCount } from "../format";
   import { store } from "../store.svelte";
   import Cover from "./Cover.svelte";
 
   let { path }: { path: string } = $props();
 
   const folder = $derived(store.folders.find((f) => f.path === path));
-  const name = $derived(folderName(path) || "Almacenamiento");
+  const name = $derived(folderName(path) || "Storage");
 
   // `path` sale de la capa: se lee antes de cerrarla (despues ya no existe).
   function open() {
@@ -18,7 +18,7 @@
 </script>
 
 <div class="backdrop" role="presentation" onclick={() => store.close()}></div>
-<div class="sheet" role="dialog" aria-label="Opciones de {name}">
+<div class="sheet" role="dialog" aria-label="{name} options">
   <div class="grip"></div>
   <div class="head">
     {#if folder?.coverSong}
@@ -28,16 +28,16 @@
     {/if}
     <div class="text">
       <div class="title ellipsis">{name}</div>
-      <div class="sub ellipsis">{plural(folder?.songs.length ?? 0, "canción", "canciones")} · {path || "/"}</div>
+      <div class="sub ellipsis">{songCount(folder?.songs.length ?? 0)} · {path || "/"}</div>
     </div>
   </div>
   {#if store.openFolder !== path}
-    <button class="opt press" onclick={open}><FolderOpen size={20} /> Abrir</button>
+    <button class="opt press" onclick={open}><FolderOpen size={20} /> Open</button>
   {/if}
   <button class="opt press danger" onclick={() => store.hideFolder(path)}>
-    <EyeOff size={20} /> Quitar de la biblioteca
+    <EyeOff size={20} /> Hide from library
   </button>
-  <p class="hint">No se borra nada del teléfono. Se vuelve a mostrar desde Ajustes.</p>
+  <p class="hint">Nothing is deleted from the phone. You can bring it back in Settings.</p>
 </div>
 
 <style>
