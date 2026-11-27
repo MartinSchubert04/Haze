@@ -56,7 +56,8 @@ export type Settings = {
     /** Vacio: el acento de la paleta. */
     folderColor: string;
   };
-  playback: { volume: number; shuffle: boolean; repeat: string; resume: boolean };
+  /** `boost`: dB extra por encima del volumen del telefono (Android). */
+  playback: { volume: number; shuffle: boolean; repeat: string; resume: boolean; boost: number };
   behavior: {
     closeToTray: boolean;
     startHidden: boolean;

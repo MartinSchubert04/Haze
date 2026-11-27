@@ -291,7 +291,7 @@ async fn queue_action(app: AppHandle, action: String, index: usize, to: Option<u
 
 #[tauri::command]
 async fn settings_set(app: AppHandle, settings: Settings) {
-    let (ha_changed, hidden_changed, sync_changed) = {
+    let (ha_changed, hidden_changed, sync_changed, boost) = {
         let state = app.state::<AppState>();
         let mut cur = state.settings.lock().unwrap();
         let mut new = settings;
@@ -299,11 +299,15 @@ async fn settings_set(app: AppHandle, settings: Settings) {
         // estar vieja.
         new.playback.shuffle = cur.playback.shuffle;
         new.playback.repeat = cur.playback.repeat.clone();
-        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders, new.sync != cur.sync);
+        let boost = (new.playback.boost != cur.playback.boost).then_some(new.playback.boost);
+        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders, new.sync != cur.sync, boost);
         *cur = new;
         cur.save(&state.settings_path);
         changed
     };
+    if let Some(db) = boost {
+        set_boost(&app, db).await;
+    }
     let sync_on = app.state::<AppState>().settings.lock().unwrap().sync.enabled;
     if hidden_changed {
         load_library(&app).await;
@@ -314,6 +318,12 @@ async fn settings_set(app: AppHandle, settings: Settings) {
     if sync_changed && sync_on {
         sync::start(&app);
     }
+}
+
+/// El refuerzo de volumen de Ajustes, en dB.
+async fn set_boost(app: &AppHandle, db: f64) {
+    let h = app.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || h.haze_player().set_boost(db.clamp(0.0, 12.0))).await;
 }
 
 /// "Atras" en la pantalla de inicio: la app queda en segundo plano en vez de cerrarse.
@@ -479,6 +489,8 @@ async fn start(app: AppHandle) {
         return;
     }
     state.player.lock().await.attach(app.haze_player().engine());
+    let boost = state.settings.lock().unwrap().playback.boost;
+    set_boost(&app, boost).await;
 
     let player = state.player.clone();
     let h = app.clone();

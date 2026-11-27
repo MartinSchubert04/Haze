@@ -74,6 +74,9 @@ pub struct Playback {
     pub repeat: String,
     /// Retomar la ultima cancion al abrir.
     pub resume: bool,
+    /// Ganancia extra en dB (Android, de 0 a 12) para auriculares que suenan bajos aun
+    /// con el volumen del telefono al maximo.
+    pub boost: f64,
     pub last_song: Option<String>,
     pub last_context: Option<String>,
     pub last_position: f64,
@@ -236,6 +239,7 @@ impl Default for Playback {
             shuffle: false,
             repeat: "all".into(),
             resume: true,
+            boost: 0.0,
             last_song: None,
             last_context: None,
             last_position: 0.0,

@@ -68,6 +68,11 @@ class VolumeArgs {
 }
 
 @InvokeArg
+class BoostArgs {
+  var db: Double = 0.0
+}
+
+@InvokeArg
 class CoverArgs {
   lateinit var uri: String
   var size: Int = 512
@@ -125,6 +130,12 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun setVolume(invoke: Invoke) {
     Playback.setVolume(context, invoke.parseArgs(VolumeArgs::class.java).volume)
+    invoke.resolve()
+  }
+
+  @Command
+  fun setBoost(invoke: Invoke) {
+    Boost.set(invoke.parseArgs(BoostArgs::class.java).db)
     invoke.resolve()
   }
 

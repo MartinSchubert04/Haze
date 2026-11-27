@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.annotation.OptIn
@@ -50,6 +51,10 @@ class PlaybackService : MediaSessionService() {
       .setHandleAudioBecomingNoisy(true)
       .setWakeMode(C.WAKE_MODE_LOCAL)
       .build()
+    // Una sesion de audio propia, para engancharle el refuerzo de volumen (ver [Boost]).
+    val audioSession = getSystemService(AudioManager::class.java).generateAudioSessionId()
+    exo.audioSessionId = audioSession
+    Boost.attach(audioSession)
 
     val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
       PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -71,6 +76,7 @@ class PlaybackService : MediaSessionService() {
   }
 
   override fun onDestroy() {
+    Boost.release()
     session?.run {
       player.release()
       release()

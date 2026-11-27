@@ -105,6 +105,15 @@
               : "On",
   );
 
+  // El numero cambia mientras se arrastra; se guarda (y se aplica al audio) al soltar.
+  let boost = $state(store.settings!.playback.boost ?? 0);
+  const boostLabel = (db: number) => (db > 0 ? `+${db} dB` : "Off");
+  const playbackSummary = $derived(
+    [s.playback.resume && "Resume on", s.playback.boost > 0 && `Boost ${boostLabel(s.playback.boost)}`]
+      .filter(Boolean)
+      .join(" · "),
+  );
+
   const removedList = $derived(store.userdata.removed.filter((r) => r.removed).sort((a, b) => b.updated - a.updated));
 
   async function saveHa() {
@@ -184,7 +193,7 @@
       </label>
     </Section>
 
-    <Section id="playback" title="Playback" icon={Play} summary={s.playback.resume ? "Resume on" : ""}>
+    <Section id="playback" title="Playback" icon={Play} summary={playbackSummary}>
       <label class="row">
         <span>Resume the last song when opening</span>
         <input
@@ -195,6 +204,19 @@
             store.saveSettings((x) => (x.playback.resume = v));
           }}
         />
+      </label>
+      <label class="slider">
+        <span class="row-top"><span>Volume boost</span><span class="value">{boostLabel(boost)}</span></span>
+        <input
+          type="range"
+          min="0"
+          max="12"
+          step="1"
+          bind:value={boost}
+          style:--fill="{(boost / 12) * 100}%"
+          onchange={() => store.saveSettings((x) => (x.playback.boost = boost))}
+        />
+        <span class="hint">For headphones that sound quiet even with the phone at full volume. Too much can distort.</span>
       </label>
     </Section>
 
@@ -513,6 +535,40 @@
     height: 22px;
     flex: none;
     accent-color: var(--accent);
+  }
+  .slider {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 0 6px;
+  }
+  .row-top {
+    display: flex;
+    justify-content: space-between;
+  }
+  .value {
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+  input[type="range"] {
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) var(--fill), rgb(var(--ov) / 0.15) var(--fill));
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: var(--accent);
   }
   .hint {
     font-size: 13px;

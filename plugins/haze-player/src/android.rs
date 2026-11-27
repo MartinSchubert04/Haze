@@ -172,6 +172,12 @@ impl<R: Runtime> HazePlayer<R> {
         Ok(self.call::<Access>("requestNotifications", ())?.granted)
     }
 
+    /// Sube la salida `db` decibeles por encima del volumen del sistema (0: tal cual).
+    pub fn set_boost(&self, db: f64) -> Result<(), PluginInvokeError> {
+        self.call::<Value>("setBoost", json!({ "db": db }))?;
+        Ok(())
+    }
+
     /// Manda la app al fondo (como el boton de inicio), sin cerrarla.
     pub fn minimize(&self) -> Result<(), PluginInvokeError> {
         self.call::<Value>("minimize", ())?;
