@@ -1,7 +1,6 @@
 // Estado global de la interfaz. Rust es la fuente de verdad: esto es un espejo que se
 // actualiza con los eventos que emite el backend.
 import { listen } from "@tauri-apps/api/event";
-import { onBackButtonPress } from "@tauri-apps/api/app";
 import { folderName, sortKey } from "@haze/ui/format";
 import { fileKey, listSongs, removedSet, uniqueFiles, visibleLists, visibleSongs } from "@haze/ui/library";
 import {
@@ -154,11 +153,12 @@ class Store {
       this.access = e.payload;
     });
 
-    // El boton "atras" de Android lo maneja la app (no el historial del WebView, que
-    // saltea entradas que no salieron de un toque y terminaba cerrando la app).
-    onBackButtonPress(() => this.back()).catch(() => {});
+    // El boton "atras" de Android lo atiende MainActivity y pregunta aca: si no habia nada
+    // que cerrar ni a donde volver, Haze se va al fondo. (No con onBackButtonPress de
+    // Tauri: queda atado a la primera Activity y al reabrir la app "atras" la cerraba.)
+    (window as unknown as { hazeBack: () => boolean }).hazeBack = () => this.back();
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") this.back();
+      if (e.key === "Escape" && !this.back()) api.minimize();
     });
 
     setInterval(() => this.tick(), 250);
@@ -218,18 +218,22 @@ class Store {
 
   /**
    * Boton "atras": cierra lo de mas arriba (desplegable, capa, busqueda), si no vuelve a
-   * la pestaña anterior, y solo desde Canciones sin nada abierto manda la app al fondo.
+   * la pestaña anterior. Devuelve false solo desde Canciones sin nada abierto: ahi quien
+   * llamo manda la app al fondo.
    */
-  back() {
-    if (this.runHandlers("popup")) return;
-    if (this.layers.length) return this.close();
-    if (this.runHandlers("page")) return;
+  back(): boolean {
+    if (this.runHandlers("popup")) return true;
+    if (this.layers.length) {
+      this.close();
+      return true;
+    }
+    if (this.runHandlers("page")) return true;
     if (this.tabs.length > 1) {
       this.tabs = this.tabs.slice(0, -1);
       this.tab = this.tabs.at(-1)!;
-      return;
+      return true;
     }
-    api.minimize();
+    return false;
   }
 
   /**

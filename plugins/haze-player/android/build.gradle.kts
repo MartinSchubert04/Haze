@@ -27,6 +27,8 @@ kotlin {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    // La misma que la app: para ver cual es la Activity viva (PluginManager.activity).
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-session:1.8.0")
     // yt-dlp con Python y ffmpeg adentro (lo que usa Seal).

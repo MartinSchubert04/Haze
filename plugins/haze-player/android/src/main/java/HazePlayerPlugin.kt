@@ -18,6 +18,7 @@ import app.tauri.plugin.Channel
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import app.tauri.plugin.PluginManager
 import java.util.concurrent.Executors
 
 /** `Manifest.permission.ACCESS_LOCAL_NETWORK`, que aparece recien en el SDK 37. */
@@ -92,6 +93,12 @@ class CoverArgs {
 )
 class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
   private val context get() = activity.applicationContext
+
+  /**
+   * La Activity que esta viva. El plugin se crea con la primera, pero el proceso sobrevive
+   * con el servicio de reproduccion y al volver a abrir Haze hay otra: la vieja ya no sirve.
+   */
+  private val current: Activity get() = PluginManager.activity ?: activity
 
   /** Leer MediaStore o una tapa puede tardar: fuera del hilo principal. */
   private val io = Executors.newSingleThreadExecutor()
@@ -269,7 +276,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
    */
   @Command
   fun minimize(invoke: Invoke) {
-    activity.moveTaskToBack(true)
+    current.moveTaskToBack(true)
     invoke.resolve()
   }
 
@@ -310,7 +317,7 @@ class HazePlayerPlugin(private val activity: Activity) : Plugin(activity) {
   fun updateInstall(invoke: Invoke) {
     val result = JSObject()
     if (!Updater.allowed(context)) {
-      Updater.openPermission(activity)
+      Updater.openPermission(current)
       result.put("needsPermission", true)
       invoke.resolve(result)
       return
