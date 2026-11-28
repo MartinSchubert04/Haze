@@ -69,7 +69,7 @@ export type Settings = {
   /** Bot de Discord (escritorio). */
   discord: { enabled: boolean; token: string; muteLocal: boolean };
   /** Sincronizar con el server de casa (`haze_core::sync`). `folder` es solo de escritorio. */
-  sync: { enabled: boolean; server: string; user: string; folder: string };
+  sync: { enabled: boolean; server: string; user: string; folder: string; interval: number };
   shortcuts: { toggle: string; next: string; previous: string; volumeUp: string; volumeDown: string; mini: string; random: string };
   songSort: string;
   folderSort: string;

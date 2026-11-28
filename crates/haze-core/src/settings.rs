@@ -176,6 +176,15 @@ pub struct Sync {
     pub user: String,
     /// La carpeta que se sincroniza (escritorio). En Android es siempre `Music/Haze`.
     pub folder: String,
+    /// Cada cuantos minutos se sincroniza solo (Android).
+    pub interval: u32,
+}
+
+impl Sync {
+    /// Cada cuanto toca la vuelta automatica: entre 1 minuto y una semana.
+    pub fn every(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(u64::from(self.interval.clamp(1, 7 * 24 * 60)) * 60)
+    }
 }
 
 impl Default for Sync {
@@ -186,6 +195,7 @@ impl Default for Sync {
             server: String::new(),
             user: "default".into(),
             folder: String::new(),
+            interval: 5,
         }
     }
 }

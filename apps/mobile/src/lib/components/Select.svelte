@@ -16,6 +16,7 @@
     options,
     onchange,
     align = "right",
+    icon: Icon = ArrowDownUp,
   }: {
     label: string;
     value: T;
@@ -23,10 +24,24 @@
     onchange: (id: T) => void;
     /** De que lado del campo se abre el menu (el del borde de la pantalla mas cercano). */
     align?: "left" | "right";
+    /** El icono del campo (por defecto, las flechas de ordenar). `null`: sin icono. */
+    icon?: Component<{ size?: number; class?: string }> | null;
   } = $props();
 
   let open = $state(false);
   let root: HTMLDivElement;
+  let menu = $state<HTMLUListElement>();
+  /** El menu se abre para arriba: abajo lo taparian el mini reproductor y las pestañas. */
+  let up = $state(false);
+
+  // Se mide con offsetHeight (sin la escala de la animacion de entrada).
+  $effect(() => {
+    if (!open || !menu) return;
+    const field = root.getBoundingClientRect();
+    const floor = document.querySelector(".dock")?.getBoundingClientRect().top ?? window.innerHeight;
+    const h = menu.offsetHeight + 6;
+    up = field.bottom + h > floor - 8 && field.top - h > 0;
+  });
   const id = `select-${Math.random().toString(36).slice(2, 8)}`;
   const current = $derived(options.find((o) => o.id === value) ?? options[0]);
 
@@ -60,13 +75,13 @@
     aria-haspopup="listbox"
     aria-expanded={open}
     aria-labelledby="{id}-label {id}-value"
-    onclick={() => (open = !open)}
+    onclick={() => ((up = false), (open = !open))}
   >
     <span class="ripple-host"></span>
     <!-- El borde es un fieldset: el legend (invisible) le abre el hueco al label, como en MUI. -->
     <fieldset class="outline" aria-hidden="true"><legend><span>{label}</span></legend></fieldset>
     <span class="label" id="{id}-label">{label}</span>
-    <ArrowDownUp size={15} class="arrow" />
+    {#if Icon}<Icon size={15} class="arrow" />{/if}
     <!-- Todos los nombres apilados en la misma celda: el campo mide lo que el mas largo y
          no salta al cambiar de opcion. -->
     <span class="value" id="{id}-value">
@@ -78,7 +93,7 @@
   </button>
 
   {#if open}
-    <ul class="menu {align}" role="listbox" aria-labelledby="{id}-label">
+    <ul class="menu {align}" class:up bind:this={menu} role="listbox" aria-labelledby="{id}-label">
       {#each options as o (o.id)}
         <li role="option" aria-selected={o.id === value}>
           <button class="item ripple" class:on={o.id === value} use:ripple onclick={() => pick(o)}>
@@ -208,6 +223,16 @@
   .menu.left {
     left: 0;
     transform-origin: top left;
+  }
+  .menu.up {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+  .menu.up.right {
+    transform-origin: bottom right;
+  }
+  .menu.up.left {
+    transform-origin: bottom left;
   }
   @keyframes grow {
     from {

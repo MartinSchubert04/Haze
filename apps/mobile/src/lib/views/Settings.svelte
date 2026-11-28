@@ -21,6 +21,7 @@
   import { api } from "../api";
   import { store } from "../store.svelte";
   import Section from "../components/Section.svelte";
+  import Select from "../components/Select.svelte";
 
   const BACKGROUNDS = ["#0f1720", "#000000", "#121212", "#1a1423", "#102019", "#1b1412", "#1d2328"];
 
@@ -52,6 +53,27 @@
     syncDraft.server.trim() !== s.sync.server || (syncDraft.user.trim() || "default") !== s.sync.user,
   );
   const syncing = $derived(store.syncReport.status === "running");
+
+  // Cada cuanto: un numero y la unidad. Se guarda en minutos; al abrir, si es un numero
+  // justo de horas se muestra en horas.
+  const UNITS = [
+    { id: "min" as const, label: "Minutes", short: "min" },
+    { id: "h" as const, label: "Hours", short: "h" },
+  ];
+  const startMin = store.settings!.sync.interval || 5;
+  const inHours = startMin % 60 === 0;
+  let unit = $state<"min" | "h">(inHours ? "h" : "min");
+  let amount = $state(inHours ? startMin / 60 : startMin);
+  const everyText = $derived(
+    s.sync.interval % 60 === 0 ? `${s.sync.interval / 60} h` : `${s.sync.interval} min`,
+  );
+
+  function saveInterval() {
+    const n = Math.max(1, Math.round(Number(amount) || 0));
+    amount = n;
+    const minutes = Math.min(n * (unit === "h" ? 60 : 1), 7 * 24 * 60);
+    if (minutes !== s.sync.interval) setSync({ interval: minutes });
+  }
 
   function setSync(patch: Partial<typeof s.sync>) {
     return store.saveSettings((x) => (x.sync = { ...x.sync, ...patch }));
@@ -222,8 +244,8 @@
 
     <Section id="sync" title="Sync" icon={RefreshCw} summary={syncSummary} ok={s.sync.enabled && store.syncReport.status === "ok"}>
       <p class="hint">
-        At home, when you open Haze and every 2 hours while it's open, it downloads to Music/Haze whatever the phone is
-        missing, uploads anything new to the server and merges your lists. It never deletes files. Away from home it does
+        At home, when you open Haze and every {everyText} while it's open, it downloads to Music/Haze whatever the phone
+        is missing, uploads anything new to the server and merges your lists. It never deletes files. Away from home it does
         nothing.
       </p>
       <label class="row">
@@ -243,6 +265,26 @@
         >
           Save
         </button>
+      </div>
+      <div class="row" class:off={!s.sync.enabled}>
+        <span>Sync every</span>
+        <div class="every">
+          <input
+            type="number"
+            inputmode="numeric"
+            min="1"
+            bind:value={amount}
+            onchange={saveInterval}
+            onkeydown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+          <Select
+            label="Unit"
+            icon={null}
+            value={unit}
+            options={UNITS}
+            onchange={(u) => ((unit = u), saveInterval())}
+          />
+        </div>
       </div>
       <div class="row">
         <span class="hint sync-line" class:err={store.syncReport.status === "error" && s.sync.enabled}>{syncLine}</span>
@@ -608,6 +650,31 @@
   }
   .save {
     align-self: flex-end;
+  }
+  .row.off {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .every {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .every input {
+    width: 64px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: calc(10px * var(--rs));
+    border: var(--border) solid var(--line-strong);
+    background: rgb(var(--ov) / 0.04);
+    color: var(--text);
+    font: inherit;
+    font-size: 15px;
+    text-align: center;
+  }
+  .every input:focus {
+    outline: none;
+    border-color: var(--accent);
   }
   .update {
     display: flex;

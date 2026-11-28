@@ -218,14 +218,26 @@ fn run(app: &AppHandle) -> Option<Report> {
     Some(report)
 }
 
-/// Al abrir (despues de la biblioteca) y cada 2 horas, mientras viva la app.
+/// Al abrir (despues de la biblioteca) y despues cada `sync.interval` minutos (Ajustes),
+/// mientras viva la app. Se cuenta desde la ultima vuelta, sea automatica o pedida a mano,
+/// y el intervalo se vuelve a leer en cada paso: si se cambia, vale sin reiniciar.
 pub fn schedule(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_secs(10)).await;
+        let mut last_ms = 0i64;
         loop {
-            start(&app);
-            tokio::time::sleep(core::EVERY).await;
+            let state = app.state::<AppState>();
+            let every = state.settings.lock().unwrap().sync.every();
+            let since = last_ms.max(state.sync.report.lock().unwrap().at);
+            let left = every.as_millis() as i64 - (now_ms() - since);
+            if left <= 0 {
+                last_ms = now_ms();
+                start(&app);
+                continue;
+            }
+            // Hasta que toque, pero de a 15 s como mucho: asi un intervalo nuevo vale enseguida.
+            tokio::time::sleep(Duration::from_millis(left.min(15_000) as u64)).await;
         }
     });
 }

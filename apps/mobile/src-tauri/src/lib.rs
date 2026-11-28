@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use haze_core::mqtt::{self, ALL_SONGS};
 use haze_core::player::{Listener, Player, PlayerState, QueueView, SharedPlayer};
-use haze_core::settings::Settings;
+use haze_core::settings::{Settings, Sync as SyncSettings};
 use haze_core::song::{unique_files, Song};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -300,7 +300,9 @@ async fn settings_set(app: AppHandle, settings: Settings) {
         new.playback.shuffle = cur.playback.shuffle;
         new.playback.repeat = cur.playback.repeat.clone();
         let boost = (new.playback.boost != cur.playback.boost).then_some(new.playback.boost);
-        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders, new.sync != cur.sync, boost);
+        // Cambiar solo el intervalo no arranca una vuelta: lo toma el proximo paso del reloj.
+        let sync_changed = new.sync != SyncSettings { interval: new.sync.interval, ..cur.sync.clone() };
+        let changed = (new.ha != cur.ha, new.hidden_folders != cur.hidden_folders, sync_changed, boost);
         *cur = new;
         cur.save(&state.settings_path);
         changed
