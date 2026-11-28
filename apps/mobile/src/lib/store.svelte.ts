@@ -135,7 +135,8 @@ class Store {
     listen<UpdateInfo | null>("update://status", (e) => {
       const was = this.update?.status;
       this.update = e.payload;
-      if (e.payload?.status === "ready" && was !== "ready") this.toast(`Haze ${e.payload.version} is ready: it installs when you leave the app`);
+      if (this.updateToast !== null) this.followUpdate(e.payload);
+      else if (e.payload?.status === "ready" && was !== "ready") this.toast(readyText(e.payload.version));
     });
     listen<DownloadJob[]>("downloads://changed", (e) => {
       // Una descarga que acaba de fallar: se avisa, no solo en la lista de YouTube.
@@ -284,6 +285,11 @@ class Store {
     return id;
   }
 
+  /** Cambia el texto de un aviso que sigue andando (el avance de una descarga). */
+  busyToast(id: number, text: string) {
+    this.toasts = this.toasts.map((t) => (t.id === id ? { ...t, text } : t));
+  }
+
   /** Cambia un aviso por otro en el mismo lugar (de "Syncing…" a como salio). */
   setToast(id: number, text: string, kind: "info" | "error" = "info") {
     if (!this.toasts.some((t) => t.id === id)) return void this.toast(text, kind);
@@ -397,23 +403,58 @@ class Store {
 
   checkingUpdate = $state(false);
 
-  /** "Update" del menu: busca ya; si no hay nada nuevo, lo dice con un toast. */
+  /**
+   * "Update" pedido desde el menu: un solo aviso que va de "Checking…" a "Downloading…
+   * 42%" y termina en "ready" (o en que no hay nada nuevo). Rust recien contesta
+   * `updateCheck` con el APK ya bajado: el avance llega por `update://status`.
+   */
+  private updateToast: number | null = null;
+
+  /** "Update" del menu: busca ya y muestra como va en un toast. */
   async checkUpdate() {
     if (this.update?.status === "ready") return this.installUpdate();
+    if (this.updateToast !== null && this.toasts.some((t) => t.id === this.updateToast)) return;
     if (this.update) {
-      this.toast(`Downloading Haze ${this.update.version}… ${Math.round(this.update.progress * 100)}%`);
+      // Ya se estaba bajando sola: el aviso la sigue hasta que este lista.
+      this.updateToast = this.toast("", "info", true);
+      this.followUpdate(this.update);
       return;
     }
     if (this.checkingUpdate) return;
     this.checkingUpdate = true;
+    const id = this.toast("Checking for updates…", "info", true);
+    this.updateToast = id;
+    const at = Date.now();
+    // Si contesta enseguida, "Checking…" se deja ver un momento antes de cambiar.
+    const settle = (text: string, kind: "info" | "error" = "info") => {
+      if (this.updateToast !== id) return;
+      this.updateToast = null;
+      setTimeout(() => this.setToast(id, text, kind), Math.max(0, 900 - (Date.now() - at)));
+    };
     try {
       const v = await api.updateCheck();
-      if (v) this.toast(`Downloading Haze ${v}…`);
-      else if (!this.update) this.toast(`You're on the latest version (${this.version})`);
+      if (!v && !this.update) settle(`You're on the latest version (${this.version})`);
     } catch (e) {
-      this.toast(`Couldn't check for updates: ${e}`, "error");
+      settle(`Couldn't update: ${e}`, "error");
     } finally {
       this.checkingUpdate = false;
+    }
+  }
+
+  /** Lleva el aviso de "Update" al estado de la descarga. */
+  private followUpdate(u: UpdateInfo | null) {
+    const id = this.updateToast;
+    if (id === null) return;
+    if (!u) {
+      // Fallo la descarga. Si la pidio este toque, el error con detalle llega por `updateCheck`.
+      if (!this.checkingUpdate) (this.updateToast = null), this.setToast(id, "Couldn't download the update", "error");
+      return;
+    }
+    if (u.status === "ready") {
+      this.updateToast = null;
+      this.setToast(id, readyText(u.version));
+    } else {
+      this.busyToast(id, `Downloading Haze ${u.version}… ${Math.round(u.progress * 100)}%`);
     }
   }
 
@@ -532,6 +573,8 @@ class Store {
     await this.editUser({ type: "setRemoved", files: [[file, ""]], removed: false });
   }
 }
+
+const readyText = (version: string) => `Haze ${version} is ready: it installs when you leave the app`;
 
 function groupFolders(songs: Song[]): Folder[] {
   const map = new Map<string, Song[]>();
